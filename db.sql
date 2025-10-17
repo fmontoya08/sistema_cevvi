@@ -1,127 +1,132 @@
+DROP DATABASE IF EXISTS universidad_db;
+CREATE DATABASE universidad_db;
+USE universidad_db;
 
- CREATE DATABASE IF NOT EXISTS universidad_db;
- USE universidad_db;
-
--- -----------------------------------------------------
--- Tabla de Catálogos (Tablas pequeñas para llenar selects/dropdowns)
--- -----------------------------------------------------
-
-CREATE TABLE IF NOT EXISTS planes_estudio (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  nombre_plan VARCHAR(255) NOT NULL UNIQUE,
-  descripcion TEXT
-) ENGINE=InnoDB;
-
-CREATE TABLE IF NOT EXISTS tipos_asignatura (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  tipo VARCHAR(100) NOT NULL UNIQUE
-) ENGINE=InnoDB;
-
-CREATE TABLE IF NOT EXISTS grados (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  nombre_grado VARCHAR(100) NOT NULL UNIQUE COMMENT 'Ej: 1er Semestre, 2do Cuatrimestre'
-) ENGINE=InnoDB;
-
-CREATE TABLE IF NOT EXISTS ciclos (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  nombre_ciclo VARCHAR(100) NOT NULL UNIQUE COMMENT 'Ej: 2025-1, 2025-2'
-) ENGINE=InnoDB;
-
-CREATE TABLE IF NOT EXISTS sedes (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  nombre_sede VARCHAR(255) NOT NULL UNIQUE,
-  direccion VARCHAR(255)
-) ENGINE=InnoDB;
-
-CREATE TABLE IF NOT EXISTS carreras (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  nombre_carrera VARCHAR(255) NOT NULL UNIQUE
-) ENGINE=InnoDB;
-
--- -----------------------------------------------------
--- Tabla Principal de Usuarios
--- Contiene a todos: admins, docentes, aspirantes y alumnos
--- -----------------------------------------------------
-CREATE TABLE IF NOT EXISTS usuarios (
+-- 1. Tabla de Usuarios y Roles
+CREATE TABLE usuarios (
   id INT AUTO_INCREMENT PRIMARY KEY,
   email VARCHAR(255) NOT NULL UNIQUE,
   password VARCHAR(255) NOT NULL,
-  rol ENUM('admin', 'docente', 'aspirante', 'alumno') NOT NULL,
-  
-  -- Datos personales
   nombre VARCHAR(100) NOT NULL,
   apellido_paterno VARCHAR(100) NOT NULL,
   apellido_materno VARCHAR(100),
-  genero ENUM('Masculino', 'Femenino', 'Otro'),
-  telefono VARCHAR(20),
-  curp VARCHAR(18) UNIQUE,
-  fecha_nacimiento DATE,
-  
-  -- Campos específicos para aspirantes/alumnos
-  carrera_id INT,
-  sede_id INT,
-  grupo_id INT, -- Se llena cuando un aspirante se convierte en alumno
+  rol ENUM('aspirante', 'alumno', 'docente', 'admin') NOT NULL DEFAULT 'aspirante'
+);
 
-  -- Timestamps
-  fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  fecha_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+-- Tablas Catálogo (independientes)
+CREATE TABLE planes_estudio (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  nombre_plan VARCHAR(255) NOT NULL UNIQUE
+);
 
-  FOREIGN KEY (carrera_id) REFERENCES carreras(id) ON DELETE SET NULL,
-  FOREIGN KEY (sede_id) REFERENCES sedes(id) ON DELETE SET NULL,
-  FOREIGN KEY (grupo_id) REFERENCES grupos(id) ON DELETE SET NULL
-) ENGINE=InnoDB;
+CREATE TABLE tipos_asignatura (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tipo VARCHAR(100) NOT NULL UNIQUE
+);
 
--- -----------------------------------------------------
--- Tabla de Asignaturas (Materias)
--- -----------------------------------------------------
-CREATE TABLE IF NOT EXISTS asignaturas (
+CREATE TABLE grados (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  nombre_grado VARCHAR(100) NOT NULL UNIQUE
+);
+
+CREATE TABLE ciclos (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  nombre_ciclo VARCHAR(100) NOT NULL UNIQUE -- ej. "2024-2025"
+);
+
+CREATE TABLE sedes (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  nombre_sede VARCHAR(255) NOT NULL UNIQUE,
+  direccion TEXT
+);
+
+CREATE TABLE carreras (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  nombre_carrera VARCHAR(255) NOT NULL UNIQUE
+);
+
+-- 2. Tabla Principal de Asignaturas
+CREATE TABLE asignaturas (
   id INT AUTO_INCREMENT PRIMARY KEY,
   nombre_asignatura VARCHAR(255) NOT NULL,
   clave_asignatura VARCHAR(50) NOT NULL UNIQUE,
   creditos INT NOT NULL,
-  calificacion_max DECIMAL(5, 2) DEFAULT 100.00,
-  calificacion_min DECIMAL(5, 2) DEFAULT 70.00,
-  
-  -- Relaciones con catálogos
-  plan_estudio_id INT NOT NULL,
-  tipo_asignatura_id INT NOT NULL,
-  grado_id INT NOT NULL,
-  
+  calificacion_min INT DEFAULT 70,
+  calificacion_max INT DEFAULT 100,
+  plan_estudio_id INT,
+  tipo_asignatura_id INT,
+  grado_id INT,
   FOREIGN KEY (plan_estudio_id) REFERENCES planes_estudio(id),
   FOREIGN KEY (tipo_asignatura_id) REFERENCES tipos_asignatura(id),
   FOREIGN KEY (grado_id) REFERENCES grados(id)
-) ENGINE=InnoDB;
+);
 
--- -----------------------------------------------------
--- Tabla de Grupos
--- -----------------------------------------------------
-CREATE TABLE IF NOT EXISTS grupos (
+-- 3. Tabla Principal de Grupos
+CREATE TABLE grupos (
   id INT AUTO_INCREMENT PRIMARY KEY,
   nombre_grupo VARCHAR(100) NOT NULL,
   cupo INT NOT NULL,
-  
-  -- Relaciones con catálogos
-  ciclo_id INT NOT NULL,
-  sede_id INT NOT NULL,
-  plan_estudio_id INT NOT NULL,
-  grado_id INT NOT NULL,
-  
+  ciclo_id INT,
+  sede_id INT,
+  plan_estudio_id INT,
+  grado_id INT,
   FOREIGN KEY (ciclo_id) REFERENCES ciclos(id),
   FOREIGN KEY (sede_id) REFERENCES sedes(id),
   FOREIGN KEY (plan_estudio_id) REFERENCES planes_estudio(id),
   FOREIGN KEY (grado_id) REFERENCES grados(id)
-) ENGINE=InnoDB;
+);
+
+-- 4. Tabla de Unión para Asignaturas y Docentes en un Grupo
+CREATE TABLE grupo_asignaturas_docentes (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    grupo_id INT NOT NULL,
+    asignatura_id INT NOT NULL,
+    docente_id INT, -- Puede ser NULL si no hay docente asignado
+    FOREIGN KEY (grupo_id) REFERENCES grupos(id) ON DELETE CASCADE,
+    FOREIGN KEY (asignatura_id) REFERENCES asignaturas(id),
+    FOREIGN KEY (docente_id) REFERENCES usuarios(id),
+    UNIQUE KEY (grupo_id, asignatura_id) -- No se puede repetir la misma materia en el mismo grupo
+);
+
+-- 5. Tabla de Unión para Alumnos en un Grupo
+CREATE TABLE grupo_alumnos (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    grupo_id INT NOT NULL,
+    alumno_id INT NOT NULL,
+    FOREIGN KEY (grupo_id) REFERENCES grupos(id) ON DELETE CASCADE,
+    FOREIGN KEY (alumno_id) REFERENCES usuarios(id),
+    UNIQUE KEY (grupo_id, alumno_id)
+);
+
+-- 6. Tabla para Calificaciones
+CREATE TABLE calificaciones (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    alumno_id INT NOT NULL,
+    asignatura_id INT NOT NULL,
+    calificacion DECIMAL(5, 2),
+    FOREIGN KEY (alumno_id) REFERENCES usuarios(id),
+    FOREIGN KEY (asignatura_id) REFERENCES asignaturas(id),
+    UNIQUE KEY (alumno_id, asignatura_id) -- Un alumno solo puede tener una calificación por materia
+);
+
+-- 7. Tabla para Expedientes de Aspirantes
+CREATE TABLE expediente_aspirantes (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    aspirante_id INT NOT NULL,
+    tipo_documento VARCHAR(100) NOT NULL, -- ej: 'acta_nacimiento', 'curp'
+    ruta_archivo VARCHAR(255) NOT NULL,
+    nombre_original VARCHAR(255) NOT NULL,
+    fecha_carga TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (aspirante_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+    UNIQUE KEY (aspirante_id, tipo_documento) -- Un aspirante solo puede tener un tipo de documento
+);
 
 
--- -----------------------------------------------------
--- Tabla para el Expediente de los Aspirantes/Alumnos
--- -----------------------------------------------------
-CREATE TABLE IF NOT EXISTS expedientes (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  usuario_id INT NOT NULL,
-  nombre_documento VARCHAR(255) NOT NULL COMMENT 'Ej: Acta de Nacimiento, CURP',
-  url_documento VARCHAR(1024) NOT NULL COMMENT 'Ruta donde se guarda el archivo',
-  fecha_carga TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  
-  FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
-) ENGINE=InnoDB;
+-- INSERCIONES DE EJEMPLO (CATÁLOGOS)
+INSERT INTO planes_estudio (nombre_plan) VALUES ('Plan 2020'), ('Plan 2024');
+INSERT INTO tipos_asignatura (tipo) VALUES ('Básica'), ('Avanzada'), ('Optativa');
+INSERT INTO grados (nombre_grado) VALUES ('1er Semestre'), ('2do Semestre'), ('3er Semestre');
+INSERT INTO ciclos (nombre_ciclo) VALUES ('2024-A'), ('2024-B');
+INSERT INTO sedes (nombre_sede, direccion) VALUES ('Campus Central', 'Av. Universidad 123'), ('Campus Norte', 'Blvd. Norte 456');
+INSERT INTO carreras (nombre_carrera) VALUES ('Ingeniería de Software'), ('Diseño Gráfico');
+

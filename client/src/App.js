@@ -33,6 +33,8 @@ import {
   ArrowLeft,
   UserPlus,
   Save,
+  Upload,
+  File as FileIcon,
 } from "lucide-react";
 
 // --- CONFIGURACIÓN DE AXIOS ---
@@ -59,7 +61,6 @@ const AuthContext = createContext(null);
 const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -389,10 +390,11 @@ const UsuariosPage = () => {
   const [usuarios, setUsuarios] = useState([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
+  const navigate = useNavigate();
 
   const fetchUsuarios = useCallback(async () => {
     try {
-      const response = await api.get("/usuarios");
+      const response = await api.get("/admin/usuarios");
       setUsuarios(response.data);
     } catch (error) {
       console.error("Error al obtener usuarios", error);
@@ -410,7 +412,7 @@ const UsuariosPage = () => {
       )
     ) {
       try {
-        await api.delete(`/usuarios/${id}`);
+        await api.delete(`/admin/usuarios/${id}`);
         fetchUsuarios();
       } catch (error) {
         console.error("Error al eliminar usuario", error);
@@ -427,6 +429,12 @@ const UsuariosPage = () => {
   const closeModal = () => {
     setModalOpen(false);
     setCurrentUser(null);
+  };
+
+  const handleRowClick = (user) => {
+    if (user.rol === "aspirante") {
+      navigate(`/usuarios/aspirante/${user.id}`);
+    }
   };
 
   return (
@@ -455,19 +463,33 @@ const UsuariosPage = () => {
           </thead>
           <tbody>
             {usuarios.map((user) => (
-              <tr key={user.id} className="border-b">
+              <tr
+                key={user.id}
+                className={`border-b ${
+                  user.rol === "aspirante"
+                    ? "cursor-pointer hover:bg-gray-50"
+                    : ""
+                }`}
+                onClick={() => handleRowClick(user)}
+              >
                 <td className="px-4 py-2">{`${user.nombre} ${user.apellido_paterno}`}</td>
                 <td className="px-4 py-2">{user.email}</td>
                 <td className="px-4 py-2 capitalize">{user.rol}</td>
                 <td className="px-4 py-2 flex items-center space-x-2">
                   <button
-                    onClick={() => openModal(user)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openModal(user);
+                    }}
                     className="text-secundario hover:text-principal"
                   >
                     <Edit size={18} />
                   </button>
                   <button
-                    onClick={() => handleDelete(user.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDelete(user.id);
+                    }}
                     className="text-red-500 hover:text-red-700"
                   >
                     <Trash2 size={18} />
@@ -513,9 +535,9 @@ const UsuarioModal = ({ usuario, onClose, onSave }) => {
         if (!dataToSend.password) {
           delete dataToSend.password;
         }
-        await api.put(`/usuarios/${usuario.id}`, dataToSend);
+        await api.put(`/admin/usuarios/${usuario.id}`, dataToSend);
       } else {
-        await api.post("/usuarios", formData);
+        await api.post("/admin/usuarios", formData);
       }
       onSave();
       onClose();
@@ -628,7 +650,7 @@ const AsignaturasPage = () => {
 
   const fetchAsignaturas = useCallback(async () => {
     try {
-      const response = await api.get("/asignaturas");
+      const response = await api.get("/admin/asignaturas");
       setAsignaturas(response.data);
     } catch (error) {
       console.error("Error al obtener asignaturas", error);
@@ -644,7 +666,7 @@ const AsignaturasPage = () => {
       window.confirm("¿Estás seguro de que quieres eliminar esta asignatura?")
     ) {
       try {
-        await api.delete(`/asignaturas/${id}`);
+        await api.delete(`/admin/asignaturas/${id}`);
         fetchAsignaturas();
       } catch (error) {
         console.error("Error al eliminar asignatura", error);
@@ -743,9 +765,9 @@ const AsignaturaModal = ({ asignatura, onClose, onSave }) => {
     e.preventDefault();
     try {
       if (asignatura) {
-        await api.put(`/asignaturas/${asignatura.id}`, formData);
+        await api.put(`/admin/asignaturas/${asignatura.id}`, formData);
       } else {
-        await api.post("/asignaturas", formData);
+        await api.post("/admin/asignaturas", formData);
       }
       onSave();
       onClose();
@@ -798,7 +820,6 @@ const AsignaturaModal = ({ asignatura, onClose, onSave }) => {
             required
             className="w-full px-3 py-2 border rounded-md focus:ring-principal focus:border-principal"
           />
-          {/* TODO: Reemplazar inputs de ID con Selects que carguen datos de las tablas catálogo */}
           <div className="flex justify-end space-x-4 mt-8">
             <button
               type="button"
@@ -827,7 +848,7 @@ const GruposPage = () => {
 
   const fetchGrupos = useCallback(async () => {
     try {
-      const response = await api.get("/grupos");
+      const response = await api.get("/admin/grupos");
       setGrupos(response.data);
     } catch (error) {
       console.error("Error al obtener grupos", error);
@@ -841,7 +862,7 @@ const GruposPage = () => {
   const handleDelete = async (id) => {
     if (window.confirm("¿Estás seguro de que quieres eliminar este grupo?")) {
       try {
-        await api.delete(`/grupos/${id}`);
+        await api.delete(`/admin/grupos/${id}`);
         fetchGrupos();
       } catch (error) {
         console.error("Error al eliminar grupo", error);
@@ -952,10 +973,10 @@ const GrupoModal = ({ grupo, onClose, onSave }) => {
     const fetchCatalogos = async () => {
       try {
         const [ciclosRes, sedesRes, planesRes, gradosRes] = await Promise.all([
-          api.get("/ciclos"),
-          api.get("/sedes"),
-          api.get("/planes-estudio"),
-          api.get("/grados"),
+          api.get("/admin/ciclos"),
+          api.get("/admin/sedes"),
+          api.get("/admin/planes_estudio"),
+          api.get("/admin/grados"),
         ]);
         setCatalogos({
           ciclos: ciclosRes.data,
@@ -988,9 +1009,9 @@ const GrupoModal = ({ grupo, onClose, onSave }) => {
     e.preventDefault();
     try {
       if (isEditing) {
-        await api.put(`/grupos/${grupo.id}`, formData);
+        await api.put(`/admin/grupos/${grupo.id}`, formData);
       } else {
-        await api.post("/grupos", formData);
+        await api.post("/admin/grupos", formData);
       }
       onSave();
       onClose();
@@ -1117,7 +1138,7 @@ const DetalleGrupoPage = () => {
 
   const fetchDetalles = useCallback(async () => {
     try {
-      const { data } = await api.get(`/grupos/${id}`);
+      const { data } = await api.get(`/admin/grupos/${id}`);
       setGrupo(data);
     } catch (error) {
       console.error("Error al cargar detalles del grupo", error);
@@ -1143,7 +1164,7 @@ const DetalleGrupoPage = () => {
       window.confirm("¿Estás seguro de dar de baja a este alumno del grupo?")
     ) {
       try {
-        await api.delete(`/grupos/${id}/dar-baja/${alumnoId}`);
+        await api.delete(`/admin/grupos/${id}/dar-baja/${alumnoId}`);
         fetchDetalles();
       } catch (error) {
         console.error("Error al dar de baja al alumno", error);
@@ -1273,7 +1294,7 @@ const AsignarDocenteModal = ({ grupoId, asignatura, onClose, onSave }) => {
   useEffect(() => {
     const fetchDocentes = async () => {
       try {
-        const { data } = await api.get("/docentes");
+        const { data } = await api.get("/admin/docentes");
         setDocentes(data);
         if (!asignatura.docente_id && data.length > 0) {
           setSelectedDocente(data[0].id);
@@ -1288,7 +1309,7 @@ const AsignarDocenteModal = ({ grupoId, asignatura, onClose, onSave }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await api.post(`/grupos/${grupoId}/asignar-docente`, {
+      await api.post(`/admin/grupos/${grupoId}/asignar-docente`, {
         asignatura_id: asignatura.id,
         docente_id: selectedDocente,
       });
@@ -1358,7 +1379,7 @@ const InscribirAlumnoModal = ({ grupoId, onClose, onSave }) => {
   useEffect(() => {
     const fetchAspirantes = async () => {
       try {
-        const { data } = await api.get("/aspirantes");
+        const { data } = await api.get("/admin/aspirantes");
         setAspirantes(data);
         if (data.length > 0) {
           setSelectedAspirante(data[0].id);
@@ -1377,7 +1398,7 @@ const InscribirAlumnoModal = ({ grupoId, onClose, onSave }) => {
       return;
     }
     try {
-      await api.post(`/grupos/${grupoId}/inscribir-alumno`, {
+      await api.post(`/admin/grupos/${grupoId}/inscribir-alumno`, {
         alumno_id: selectedAspirante,
       });
       onSave();
@@ -1449,7 +1470,7 @@ const CatalogoPage = ({ title, apiEndpoint, fields, columns }) => {
 
   const fetchData = useCallback(async () => {
     try {
-      const response = await api.get(`/${apiEndpoint}`);
+      const response = await api.get(`/admin/${apiEndpoint}`);
       setItems(response.data);
     } catch (error) {
       console.error(`Error al obtener ${title}`, error);
@@ -1463,7 +1484,7 @@ const CatalogoPage = ({ title, apiEndpoint, fields, columns }) => {
   const handleDelete = async (id) => {
     if (window.confirm("¿Estás seguro?")) {
       try {
-        await api.delete(`/${apiEndpoint}/${id}`);
+        await api.delete(`/admin/${apiEndpoint}/${id}`);
         fetchData();
       } catch (error) {
         console.error(`Error al eliminar ${title}`, error);
@@ -1572,9 +1593,9 @@ const CatalogoModal = ({
     e.preventDefault();
     try {
       if (isEditing) {
-        await api.put(`/${apiEndpoint}/${item.id}`, formData);
+        await api.put(`/admin/${apiEndpoint}/${item.id}`, formData);
       } else {
-        await api.post(`/${apiEndpoint}`, formData);
+        await api.post(`/admin/${apiEndpoint}`, formData);
       }
       onSave();
       onClose();
@@ -1633,13 +1654,6 @@ const CatalogoModal = ({
   );
 };
 
-const PlaceholderPage = ({ title }) => (
-  <div className="bg-white p-6 rounded-lg shadow">
-    <h2 className="text-xl font-bold mb-4">{title}</h2>
-    <p>Módulo en construcción.</p>
-  </div>
-);
-
 const DocenteDashboardPage = () => {
   const [cursos, setCursos] = useState([]);
   const navigate = useNavigate();
@@ -1647,7 +1661,7 @@ const DocenteDashboardPage = () => {
   useEffect(() => {
     const fetchCursos = async () => {
       try {
-        const { data } = await api.get("/mis-cursos");
+        const { data } = await api.get("/docente/mis-cursos");
         setCursos(data);
       } catch (error) {
         console.error("Error al cargar los cursos del docente", error);
@@ -1805,7 +1819,7 @@ const AlumnoDashboardPage = () => {
   useEffect(() => {
     const fetchMiGrupo = async () => {
       try {
-        const { data } = await api.get("/mi-grupo");
+        const { data } = await api.get("/alumno/mi-grupo");
         setMiGrupo(data);
       } catch (error) {
         console.error("Error al cargar la información del grupo", error);
@@ -1863,6 +1877,170 @@ const AlumnoDashboardPage = () => {
   );
 };
 
+const DetalleAspirantePage = () => {
+  const { id } = useParams();
+  const [aspirante, setAspirante] = useState(null);
+  const [expediente, setExpediente] = useState([]);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [tipoDocumento, setTipoDocumento] = useState("acta_nacimiento");
+
+  const fetchAspirante = useCallback(async () => {
+    try {
+      const [aspiranteRes, expedienteRes] = await Promise.all([
+        api.get(`/admin/usuarios/${id}`),
+        api.get(`/admin/aspirantes/${id}/expediente`),
+      ]);
+      setAspirante(aspiranteRes.data);
+      setExpediente(expedienteRes.data);
+    } catch (error) {
+      console.error("Error al cargar datos del aspirante", error);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    fetchAspirante();
+  }, [fetchAspirante]);
+
+  const handleFileChange = (e) => {
+    setSelectedFile(e.target.files[0]);
+  };
+
+  const handleUpload = async (e) => {
+    e.preventDefault();
+    if (!selectedFile) {
+      alert("Por favor, selecciona un archivo.");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("documento", selectedFile);
+    formData.append("tipo_documento", tipoDocumento);
+
+    try {
+      await api.post(`/admin/aspirantes/${id}/upload`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      fetchAspirante(); // Recargar datos
+    } catch (error) {
+      console.error("Error al subir el archivo", error);
+      alert(
+        "Error al subir archivo: " +
+          (error.response?.data?.message || "Error desconocido")
+      );
+    }
+  };
+
+  const handleDelete = async (docId) => {
+    if (window.confirm("¿Estás seguro de eliminar este documento?")) {
+      try {
+        await api.delete(`/admin/expedientes/${docId}`);
+        fetchAspirante();
+      } catch (error) {
+        console.error("Error al eliminar documento", error);
+        alert("Error al eliminar");
+      }
+    }
+  };
+
+  if (!aspirante) return <p>Cargando aspirante...</p>;
+
+  return (
+    <div>
+      <Link
+        to="/usuarios"
+        className="flex items-center text-principal mb-6 hover:underline"
+      >
+        <ArrowLeft size={18} className="mr-2" />
+        Volver a Usuarios
+      </Link>
+      <h2 className="text-3xl font-bold text-gray-800 mb-4">{`${aspirante.nombre} ${aspirante.apellido_paterno}`}</h2>
+
+      <div className="bg-white p-6 rounded-lg shadow mt-6">
+        <h3 className="text-xl font-bold mb-4">Subir Documento</h3>
+        <form onSubmit={handleUpload} className="flex items-end space-x-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Tipo de Documento
+            </label>
+            <select
+              value={tipoDocumento}
+              onChange={(e) => setTipoDocumento(e.target.value)}
+              className="w-full px-3 py-2 mt-1 border rounded-md"
+            >
+              <option value="acta_nacimiento">Acta de Nacimiento</option>
+              <option value="curp">CURP</option>
+              <option value="certificado_bachillerato">
+                Certificado de Bachillerato
+              </option>
+              <option value="comprobante_domicilio">
+                Comprobante de Domicilio
+              </option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Archivo
+            </label>
+            <input
+              type="file"
+              onChange={handleFileChange}
+              className="w-full px-3 py-1 mt-1 border rounded-md"
+            />
+          </div>
+          <button
+            type="submit"
+            className="flex items-center h-10 px-4 py-2 font-semibold text-white bg-principal rounded-md hover:opacity-90"
+          >
+            <Upload size={18} className="mr-2" />
+            Subir
+          </button>
+        </form>
+      </div>
+
+      <div className="bg-white p-6 rounded-lg shadow mt-6">
+        <h3 className="text-xl font-bold mb-4">Documentos del Expediente</h3>
+        <table className="w-full table-auto">
+          <thead className="text-left bg-gray-50">
+            <tr>
+              <th className="px-4 py-2">Tipo de Documento</th>
+              <th className="px-4 py-2">Nombre del Archivo</th>
+              <th className="px-4 py-2">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {expediente.map((doc) => (
+              <tr key={doc.id} className="border-b">
+                <td className="px-4 py-2 capitalize">
+                  {doc.tipo_documento.replace(/_/g, " ")}
+                </td>
+                <td className="px-4 py-2">
+                  <a
+                    href={`http://localhost:3001/uploads/${doc.ruta_archivo}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center text-blue-600 hover:underline"
+                  >
+                    <FileIcon size={16} className="mr-2" />{" "}
+                    {doc.nombre_original}
+                  </a>
+                </td>
+                <td className="px-4 py-2">
+                  <button
+                    onClick={() => handleDelete(doc.id)}
+                    className="text-red-500 hover:text-red-700"
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
 // --- COMPONENTE PRINCIPAL DE LA APP ---
 function App() {
   return (
@@ -1883,9 +2061,14 @@ function App() {
           {/* Rutas de Administrador */}
           <Route element={<ProtectedRoute allowedRoles={["admin"]} />}>
             <Route element={<AdminLayout />}>
+              <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/asignaturas" element={<AsignaturasPage />} />
               <Route path="/usuarios" element={<UsuariosPage />} />
+              <Route
+                path="/usuarios/aspirante/:id"
+                element={<DetalleAspirantePage />}
+              />
               <Route path="/grupos" element={<GruposPage />} />
               <Route path="/grupos/:id" element={<DetalleGrupoPage />} />
               <Route
@@ -1952,8 +2135,7 @@ function App() {
             </Route>
           </Route>
 
-          <Route path="/" element={<Navigate to="/login" replace />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       </AuthProvider>
     </BrowserRouter>

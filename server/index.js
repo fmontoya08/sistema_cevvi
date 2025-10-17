@@ -3,30 +3,76 @@ const mysql = require("mysql2/promise");
 const cors = require("cors");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const multer = require("multer");
+const path = require("path");
+const fs = require("fs");
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
+const JWT_SECRET = "tu_clave_secreta_super_segura_y_larga";
+
+// --- SERVIR ARCHIVOS ESTÁTICOS ---
+const uploadsDir = path.join(__dirname, "uploads");
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir);
+}
+app.use("/uploads", express.static(uploadsDir));
+
+// --- CONFIGURACIÓN DE MULTER (PARA SUBIDA DE ARCHIVOS) ---
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, "uploads/");
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    cb(
+      null,
+      file.fieldname + "-" + uniqueSuffix + path.extname(file.originalname)
+    );
+  },
+});
+
+const upload = multer({ storage: storage });
+
+// --- CONFIGURACIÓN DE LA BASE DE DATOS ---
 const dbConfig = {
   host: "localhost",
   user: "root",
   password: "root",
   database: "universidad_db",
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0,
 };
 
+let db;
+
+async function connectToDatabase() {
+  try {
+    db = await mysql.createPool(dbConfig);
+    console.log("Conectado exitosamente a la base de datos MySQL.");
+  } catch (err) {
+    console.error("Error al conectar a la base de datos:", err);
+    process.exit(1);
+  }
+}
+
+connectToDatabase();
+
+// --- MIDDLEWARE DE AUTENTICACIÓN ---
 const verifyToken = (req, res, next) => {
   const authHeader = req.headers["authorization"];
   const token = authHeader && authHeader.split(" ")[1];
   if (!token)
     return res
       .status(403)
-      .json({ message: "Se requiere un token para la autenticación" });
+      .send({ message: "Se requiere un token para la autenticación." });
 
-  jwt.verify(token, "tu_clave_secreta", (err, user) => {
-    if (err)
-      return res.status(401).json({ message: "Token inválido o expirado" });
-    req.user = user;
+  jwt.verify(token, JWT_SECRET, (err, decoded) => {
+    if (err) return res.status(401).send({ message: "Token inválido." });
+    req.user = decoded;
     next();
   });
 };
@@ -35,7 +81,7 @@ const isAdmin = (req, res, next) => {
   if (req.user.rol !== "admin") {
     return res
       .status(403)
-      .json({ message: "Acceso denegado. Se requiere rol de administrador." });
+      .send({ message: "Acceso denegado. Se requiere rol de administrador." });
   }
   next();
 };
@@ -44,7 +90,7 @@ const isDocente = (req, res, next) => {
   if (req.user.rol !== "docente") {
     return res
       .status(403)
-      .json({ message: "Acceso denegado. Se requiere rol de docente." });
+      .send({ message: "Acceso denegado. Se requiere rol de docente." });
   }
   next();
 };
@@ -53,199 +99,198 @@ const isAlumno = (req, res, next) => {
   if (req.user.rol !== "alumno") {
     return res
       .status(403)
-      .json({ message: "Acceso denegado. Se requiere rol de alumno." });
+      .send({ message: "Acceso denegado. Se requiere rol de alumno." });
   }
   next();
 };
 
 const apiRouter = express.Router();
 
+// --- RUTA PÚBLICA ---
 apiRouter.post("/login", async (req, res) => {
   const { email, password } = req.body;
-  let connection;
   try {
-    connection = await mysql.createConnection(dbConfig);
-    const [results] = await connection.execute(
-      "SELECT * FROM usuarios WHERE email = ?",
-      [email]
-    );
+    const [results] = await db.query("SELECT * FROM usuarios WHERE email = ?", [
+      email,
+    ]);
     if (results.length === 0) {
       return res
         .status(401)
-        .json({ message: "Email o contraseña incorrectos" });
+        .send({ message: "Email o contraseña incorrectos" });
     }
-
     const user = results[0];
     const isPasswordCorrect = await bcrypt.compare(password, user.password);
     if (!isPasswordCorrect) {
       return res
         .status(401)
-        .json({ message: "Email o contraseña incorrectos" });
+        .send({ message: "Email o contraseña incorrectos" });
     }
-
     const payload = {
       id: user.id,
       email: user.email,
       rol: user.rol,
       nombre: user.nombre,
     };
-    const token = jwt.sign(payload, "tu_clave_secreta", { expiresIn: "8h" });
+    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "8h" });
     res.json({ token, user: payload });
   } catch (error) {
-    console.error("Login error:", error);
-    res.status(500).json({ message: "Error del servidor al iniciar sesión" });
-  } finally {
-    if (connection) await connection.end();
+    console.error(error);
+    res.status(500).send({ message: "Error en el servidor durante el login." });
   }
 });
 
-// --- CRUD de Usuarios ---
-apiRouter.get("/usuarios", verifyToken, isAdmin, async (req, res) => {
-  let connection;
-  try {
-    connection = await mysql.createConnection(dbConfig);
-    const [usuarios] = await connection.execute(
-      "SELECT id, nombre, apellido_paterno, apellido_materno, email, rol FROM usuarios"
+// --- RUTAS PROTEGIDAS (TODAS REQUIEREN TOKEN)---
+apiRouter.use(verifyToken);
+
+// --- RUTAS DE ADMIN ---
+const adminRouter = express.Router();
+adminRouter.use(isAdmin);
+
+// CRUD Genérico para Catálogos
+function createCatalogCrudRoutes(router, tableName, fields) {
+  router.get(`/${tableName}`, async (req, res) =>
+    res.json((await db.query(`SELECT * FROM ${tableName}`))[0])
+  );
+  router.post(`/${tableName}`, async (req, res) => {
+    const values = fields.map((f) => req.body[f]);
+    const placeholders = fields.map(() => "?").join(", ");
+    await db.query(
+      `INSERT INTO ${tableName} (${fields.join(",")}) VALUES (${placeholders})`,
+      values
     );
-    res.json(usuarios);
-  } catch (error) {
-    res.status(500).json({ message: "Error al obtener usuarios" });
-  } finally {
-    if (connection) await connection.end();
-  }
-});
+    res.status(201).send({ message: "Creado con éxito" });
+  });
+  router.put(`/${tableName}/:id`, async (req, res) => {
+    const values = fields.map((f) => req.body[f]);
+    const setClause = fields.map((f) => `${f} = ?`).join(", ");
+    await db.query(`UPDATE ${tableName} SET ${setClause} WHERE id = ?`, [
+      ...values,
+      req.params.id,
+    ]);
+    res.send({ message: "Actualizado con éxito" });
+  });
+  router.delete(`/${tableName}/:id`, async (req, res) => {
+    await db.query(`DELETE FROM ${tableName} WHERE id = ?`, [req.params.id]);
+    res.send({ message: "Eliminado con éxito" });
+  });
+}
+createCatalogCrudRoutes(adminRouter, "planes_estudio", ["nombre_plan"]);
+createCatalogCrudRoutes(adminRouter, "tipos_asignatura", ["tipo"]);
+createCatalogCrudRoutes(adminRouter, "grados", ["nombre_grado"]);
+createCatalogCrudRoutes(adminRouter, "ciclos", ["nombre_ciclo"]);
+createCatalogCrudRoutes(adminRouter, "sedes", ["nombre_sede", "direccion"]);
+createCatalogCrudRoutes(adminRouter, "carreras", ["nombre_carrera"]);
 
-apiRouter.get("/docentes", verifyToken, isAdmin, async (req, res) => {
-  let connection;
-  try {
-    connection = await mysql.createConnection(dbConfig);
-    const [docentes] = await connection.execute(
-      "SELECT id, nombre, apellido_paterno FROM usuarios WHERE rol = 'docente'"
-    );
-    res.json(docentes);
-  } catch (error) {
-    res.status(500).json({ message: "Error al obtener docentes" });
-  } finally {
-    if (connection) await connection.end();
-  }
-});
-
-apiRouter.get("/aspirantes", verifyToken, isAdmin, async (req, res) => {
-  let connection;
-  try {
-    connection = await mysql.createConnection(dbConfig);
-    const sql = `
-            SELECT u.id, u.nombre, u.apellido_paterno 
-            FROM usuarios u
-            LEFT JOIN grupo_alumnos ga ON u.id = ga.alumno_id
-            WHERE u.rol = 'aspirante' AND ga.id IS NULL
-        `;
-    const [aspirantes] = await connection.execute(sql);
-    res.json(aspirantes);
-  } catch (error) {
-    res
-      .status(500)
-      .json({ message: "Error al obtener aspirantes", error: error.message });
-  } finally {
-    if (connection) await connection.end();
-  }
-});
-
-apiRouter.post("/usuarios", verifyToken, isAdmin, async (req, res) => {
-  const { email, password, nombre, apellido_paterno, apellido_materno, rol } =
+// CRUD USUARIOS
+adminRouter.get("/usuarios", async (req, res) =>
+  res.json(
+    (
+      await db.query(
+        "SELECT id, nombre, apellido_paterno, email, rol FROM usuarios"
+      )
+    )[0]
+  )
+);
+adminRouter.post("/usuarios", async (req, res) => {
+  const { email, password, nombre, rol, apellido_paterno, apellido_materno } =
     req.body;
-  let connection;
+  if (!["aspirante", "alumno", "docente", "admin"].includes(rol))
+    return res.status(400).send({ message: "Rol no válido" });
   try {
-    connection = await mysql.createConnection(dbConfig);
     const hashedPassword = await bcrypt.hash(password, 10);
-    const sql =
-      "INSERT INTO usuarios (email, password, nombre, apellido_paterno, apellido_materno, rol) VALUES (?, ?, ?, ?, ?, ?)";
-    await connection.execute(sql, [
-      email,
-      hashedPassword,
+    await db.query(
+      "INSERT INTO usuarios (email, password, nombre, rol, apellido_paterno, apellido_materno) VALUES (?, ?, ?, ?, ?, ?)",
+      [
+        email,
+        hashedPassword,
+        nombre,
+        rol,
+        apellido_paterno,
+        apellido_materno || null,
+      ]
+    );
+    res.status(201).send({ message: "Usuario registrado" });
+  } catch (error) {
+    if (error.code === "ER_DUP_ENTRY")
+      return res
+        .status(409)
+        .send({ message: "El correo electrónico ya está en uso." });
+    res.status(500).send({ message: "Error al registrar el usuario" });
+  }
+});
+adminRouter.get("/usuarios/:id", async (req, res) =>
+  res.json(
+    (
+      await db.query("SELECT * FROM usuarios WHERE id = ?", [req.params.id])
+    )[0][0]
+  )
+);
+adminRouter.put("/usuarios/:id", async (req, res) => {
+  const { nombre, apellido_paterno, apellido_materno, email, password, rol } =
+    req.body;
+  let sql, params;
+  if (password) {
+    const hashedPassword = await bcrypt.hash(password, 10);
+    sql =
+      "UPDATE usuarios SET nombre=?, apellido_paterno=?, apellido_materno=?, email=?, password=?, rol=? WHERE id=?";
+    params = [
       nombre,
       apellido_paterno,
       apellido_materno,
+      email,
+      hashedPassword,
       rol,
-    ]);
-    res.status(201).json({ message: "Usuario creado exitosamente" });
-  } catch (error) {
-    if (error.code === "ER_DUP_ENTRY") {
-      return res
-        .status(409)
-        .json({ message: "El correo electrónico ya está en uso." });
-    }
-    res.status(500).json({ message: "Error al crear el usuario" });
-  } finally {
-    if (connection) await connection.end();
+      req.params.id,
+    ];
+  } else {
+    sql =
+      "UPDATE usuarios SET nombre=?, apellido_paterno=?, apellido_materno=?, email=?, rol=? WHERE id=?";
+    params = [
+      nombre,
+      apellido_paterno,
+      apellido_materno,
+      email,
+      rol,
+      req.params.id,
+    ];
   }
-});
-
-apiRouter.put("/usuarios/:id", verifyToken, isAdmin, async (req, res) => {
-  const { id } = req.params;
-  const { email, nombre, apellido_paterno, apellido_materno, rol, password } =
-    req.body;
-  let connection;
   try {
-    connection = await mysql.createConnection(dbConfig);
-    let sql;
-    let params;
-    if (password) {
-      const hashedPassword = await bcrypt.hash(password, 10);
-      sql =
-        "UPDATE usuarios SET email = ?, nombre = ?, apellido_paterno = ?, apellido_materno = ?, rol = ?, password = ? WHERE id = ?";
-      params = [
-        email,
-        nombre,
-        apellido_paterno,
-        apellido_materno,
-        rol,
-        hashedPassword,
-        id,
-      ];
-    } else {
-      sql =
-        "UPDATE usuarios SET email = ?, nombre = ?, apellido_paterno = ?, apellido_materno = ?, rol = ? WHERE id = ?";
-      params = [email, nombre, apellido_paterno, apellido_materno, rol, id];
-    }
-    await connection.execute(sql, params);
-    res.json({ message: "Usuario actualizado exitosamente" });
+    await db.query(sql, params);
+    res.send({ message: "Usuario actualizado" });
   } catch (error) {
-    res.status(500).json({ message: "Error al actualizar el usuario" });
-  } finally {
-    if (connection) await connection.end();
+    if (error.code === "ER_DUP_ENTRY")
+      return res.status(409).send({ message: "El email ya está en uso." });
+    res.status(500).send({ message: "Error al actualizar usuario" });
   }
 });
-
-apiRouter.delete("/usuarios/:id", verifyToken, isAdmin, async (req, res) => {
-  const { id } = req.params;
-  let connection;
-  try {
-    connection = await mysql.createConnection(dbConfig);
-    await connection.execute("DELETE FROM usuarios WHERE id = ?", [id]);
-    res.json({ message: "Usuario eliminado exitosamente" });
-  } catch (error) {
-    res.status(500).json({ message: "Error al eliminar el usuario" });
-  } finally {
-    if (connection) await connection.end();
-  }
+adminRouter.delete("/usuarios/:id", async (req, res) => {
+  await db.query("DELETE FROM usuarios WHERE id = ?", [req.params.id]);
+  res.send({ message: "Usuario eliminado" });
 });
+adminRouter.get("/aspirantes", async (req, res) =>
+  res.json(
+    (
+      await db.query(
+        "SELECT id, nombre, apellido_paterno FROM usuarios WHERE rol = 'aspirante'"
+      )
+    )[0]
+  )
+);
+adminRouter.get("/docentes", async (req, res) =>
+  res.json(
+    (
+      await db.query(
+        "SELECT id, nombre, apellido_paterno FROM usuarios WHERE rol = 'docente'"
+      )
+    )[0]
+  )
+);
 
-// --- CRUD de Asignaturas ---
-apiRouter.get("/asignaturas", verifyToken, isAdmin, async (req, res) => {
-  let connection;
-  try {
-    connection = await mysql.createConnection(dbConfig);
-    const [asignaturas] = await connection.execute("SELECT * FROM asignaturas");
-    res.json(asignaturas);
-  } catch (error) {
-    res.status(500).json({ message: "Error al obtener asignaturas" });
-  } finally {
-    if (connection) await connection.end();
-  }
-});
-
-apiRouter.post("/asignaturas", verifyToken, isAdmin, async (req, res) => {
+// CRUD ASIGNATURAS y GRUPOS
+adminRouter.get("/asignaturas", async (req, res) =>
+  res.json((await db.query("SELECT * FROM asignaturas"))[0])
+);
+adminRouter.post("/asignaturas", async (req, res) => {
   const {
     nombre_asignatura,
     clave_asignatura,
@@ -254,572 +299,302 @@ apiRouter.post("/asignaturas", verifyToken, isAdmin, async (req, res) => {
     tipo_asignatura_id,
     grado_id,
   } = req.body;
-  let connection;
-  try {
-    connection = await mysql.createConnection(dbConfig);
-    const sql =
-      "INSERT INTO asignaturas (nombre_asignatura, clave_asignatura, creditos, plan_estudio_id, tipo_asignatura_id, grado_id) VALUES (?, ?, ?, ?, ?, ?)";
-    await connection.execute(sql, [
+  await db.query(
+    "INSERT INTO asignaturas (nombre_asignatura, clave_asignatura, creditos, plan_estudio_id, tipo_asignatura_id, grado_id) VALUES (?,?,?,?,?,?)",
+    [
       nombre_asignatura,
       clave_asignatura,
       creditos,
       plan_estudio_id,
       tipo_asignatura_id,
       grado_id,
-    ]);
-    res.status(201).json({ message: "Asignatura creada" });
-  } catch (error) {
-    res
-      .status(500)
-      .json({ message: "Error al crear la asignatura", error: error.message });
-  } finally {
-    if (connection) await connection.end();
-  }
+    ]
+  );
+  res.status(201).send({ message: "Asignatura creada" });
 });
-
-apiRouter.put("/asignaturas/:id", verifyToken, isAdmin, async (req, res) => {
-  const { id } = req.params;
-  const { nombre_asignatura, clave_asignatura, creditos } = req.body;
-  let connection;
-  try {
-    connection = await mysql.createConnection(dbConfig);
-    const sql =
-      "UPDATE asignaturas SET nombre_asignatura = ?, clave_asignatura = ?, creditos = ? WHERE id = ?";
-    await connection.execute(sql, [
+adminRouter.put("/asignaturas/:id", async (req, res) => {
+  const {
+    nombre_asignatura,
+    clave_asignatura,
+    creditos,
+    plan_estudio_id,
+    tipo_asignatura_id,
+    grado_id,
+  } = req.body;
+  await db.query(
+    "UPDATE asignaturas SET nombre_asignatura=?, clave_asignatura=?, creditos=?, plan_estudio_id=?, tipo_asignatura_id=?, grado_id=? WHERE id=?",
+    [
       nombre_asignatura,
       clave_asignatura,
       creditos,
-      id,
-    ]);
-    res.json({ message: "Asignatura actualizada" });
-  } catch (error) {
-    res.status(500).json({ message: "Error al actualizar la asignatura" });
-  } finally {
-    if (connection) await connection.end();
-  }
+      plan_estudio_id,
+      tipo_asignatura_id,
+      grado_id,
+      req.params.id,
+    ]
+  );
+  res.send({ message: "Asignatura actualizada" });
 });
-
-apiRouter.delete("/asignaturas/:id", verifyToken, isAdmin, async (req, res) => {
-  const { id } = req.params;
-  let connection;
-  try {
-    connection = await mysql.createConnection(dbConfig);
-    await connection.execute("DELETE FROM asignaturas WHERE id = ?", [id]);
-    res.json({ message: "Asignatura eliminada" });
-  } catch (error) {
-    res.status(500).json({ message: "Error al eliminar la asignatura" });
-  } finally {
-    if (connection) await connection.end();
-  }
+adminRouter.delete("/asignaturas/:id", async (req, res) => {
+  await db.query("DELETE FROM asignaturas WHERE id = ?", [req.params.id]);
+  res.send({ message: "Asignatura eliminada" });
 });
-
-// --- CRUD de Grupos ---
-apiRouter.get("/grupos", verifyToken, isAdmin, async (req, res) => {
-  let connection;
-  try {
-    connection = await mysql.createConnection(dbConfig);
-    const sql = `
-            SELECT g.id, g.nombre_grupo, g.cupo, c.nombre_ciclo, s.nombre_sede, p.nombre_plan, gr.nombre_grado
-            FROM grupos g
-            LEFT JOIN ciclos c ON g.ciclo_id = c.id
-            LEFT JOIN sedes s ON g.sede_id = s.id
-            LEFT JOIN planes_estudio p ON g.plan_estudio_id = p.id
-            LEFT JOIN grados gr ON g.grado_id = gr.id
-        `;
-    const [grupos] = await connection.execute(sql);
-    res.json(grupos);
-  } catch (error) {
-    res
-      .status(500)
-      .json({ message: "Error al obtener grupos", error: error.message });
-  } finally {
-    if (connection) await connection.end();
-  }
+adminRouter.get("/grupos", async (req, res) => {
+  const sql = `
+        SELECT g.*, c.nombre_ciclo, s.nombre_sede, p.nombre_plan, gr.nombre_grado 
+        FROM grupos g
+        JOIN ciclos c ON g.ciclo_id = c.id
+        JOIN sedes s ON g.sede_id = s.id
+        JOIN planes_estudio p ON g.plan_estudio_id = p.id
+        JOIN grados gr ON g.grado_id = gr.id
+    `;
+  res.json((await db.query(sql))[0]);
 });
-
-apiRouter.get("/grupos/:id", verifyToken, async (req, res) => {
-  const { id } = req.params;
-  let connection;
+adminRouter.get("/grupos/:id", async (req, res) => {
+  const grupoId = req.params.id;
+  const [grupoRes] = await db.query("SELECT * FROM grupos WHERE id = ?", [
+    grupoId,
+  ]);
+  if (grupoRes.length === 0)
+    return res.status(404).send({ message: "Grupo no encontrado" });
+  const asignaturasSql = `
+        SELECT a.id, a.nombre_asignatura, a.clave_asignatura, u.id as docente_id, u.nombre as docente_nombre, u.apellido_paterno as docente_apellido
+        FROM asignaturas a
+        LEFT JOIN grupo_asignaturas_docentes gad ON a.id = gad.asignatura_id AND gad.grupo_id = ?
+        LEFT JOIN usuarios u ON gad.docente_id = u.id
+        WHERE a.grado_id = ? AND a.plan_estudio_id = ?`;
+  const [asignaturas] = await db.query(asignaturasSql, [
+    grupoId,
+    grupoRes[0].grado_id,
+    grupoRes[0].plan_estudio_id,
+  ]);
+  const alumnosSql = `
+        SELECT u.id, u.nombre, u.apellido_paterno, u.email 
+        FROM usuarios u
+        JOIN grupo_alumnos ga ON u.id = ga.alumno_id
+        WHERE ga.grupo_id = ?`;
+  const [alumnos] = await db.query(alumnosSql, [grupoId]);
+  res.json({ ...grupoRes[0], asignaturas, alumnos });
+});
+adminRouter.post("/grupos", async (req, res) => {
+  const { nombre_grupo, cupo, ciclo_id, sede_id, plan_estudio_id, grado_id } =
+    req.body;
+  await db.query(
+    "INSERT INTO grupos (nombre_grupo, cupo, ciclo_id, sede_id, plan_estudio_id, grado_id) VALUES (?,?,?,?,?,?)",
+    [nombre_grupo, cupo, ciclo_id, sede_id, plan_estudio_id, grado_id]
+  );
+  res.status(201).send({ message: "Grupo creado" });
+});
+adminRouter.put("/grupos/:id", async (req, res) => {
+  const { nombre_grupo, cupo, ciclo_id, sede_id, plan_estudio_id, grado_id } =
+    req.body;
+  await db.query(
+    "UPDATE grupos SET nombre_grupo=?, cupo=?, ciclo_id=?, sede_id=?, plan_estudio_id=?, grado_id=? WHERE id=?",
+    [
+      nombre_grupo,
+      cupo,
+      ciclo_id,
+      sede_id,
+      plan_estudio_id,
+      grado_id,
+      req.params.id,
+    ]
+  );
+  res.send({ message: "Grupo actualizado" });
+});
+adminRouter.delete("/grupos/:id", async (req, res) => {
+  await db.query("DELETE FROM grupos WHERE id = ?", [req.params.id]);
+  res.send({ message: "Grupo eliminado" });
+});
+adminRouter.post("/grupos/:id/asignar-docente", async (req, res) => {
+  const { asignatura_id, docente_id } = req.body;
+  const grupo_id = req.params.id;
+  await db.query(
+    "INSERT INTO grupo_asignaturas_docentes (grupo_id, asignatura_id, docente_id) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE docente_id = ?",
+    [grupo_id, asignatura_id, docente_id, docente_id]
+  );
+  res.send({ message: "Docente asignado" });
+});
+adminRouter.post("/grupos/:id/inscribir-alumno", async (req, res) => {
+  const grupo_id = req.params.id;
+  const { alumno_id } = req.body;
+  const connection = await db.getConnection();
   try {
-    connection = await mysql.createConnection(dbConfig);
-    const [grupoDetails] = await connection.execute(
-      "SELECT * FROM grupos WHERE id = ?",
-      [id]
+    await connection.beginTransaction();
+    await connection.query(
+      "INSERT INTO grupo_alumnos (grupo_id, alumno_id) VALUES (?, ?)",
+      [grupo_id, alumno_id]
     );
-    if (grupoDetails.length === 0)
-      return res.status(404).json({ message: "Grupo no encontrado" });
-
-    const grupo = grupoDetails[0];
-
-    const sqlAsignaturas = `
-            SELECT a.id, a.nombre_asignatura, a.clave_asignatura, gda.docente_id,
-                   u.nombre AS docente_nombre, u.apellido_paterno AS docente_apellido
-            FROM asignaturas a
-            LEFT JOIN grupo_asignaturas_docentes gda ON a.id = gda.asignatura_id AND gda.grupo_id = ?
-            LEFT JOIN usuarios u ON gda.docente_id = u.id
-            WHERE a.plan_estudio_id = ? AND a.grado_id = ?
-        `;
-    const [asignaturas] = await connection.execute(sqlAsignaturas, [
-      id,
-      grupo.plan_estudio_id,
-      grupo.grado_id,
+    await connection.query("UPDATE usuarios SET rol = 'alumno' WHERE id = ?", [
+      alumno_id,
     ]);
-
-    const sqlAlumnos = `
-            SELECT u.id, u.nombre, u.apellido_paterno, u.email
-            FROM grupo_alumnos ga
-            JOIN usuarios u ON ga.alumno_id = u.id
-            WHERE ga.grupo_id = ?
-        `;
-    const [alumnos] = await connection.execute(sqlAlumnos, [id]);
-
-    res.json({ ...grupo, asignaturas, alumnos });
+    await connection.commit();
+    res.status(201).send({ message: "Alumno inscrito" });
   } catch (error) {
-    res.status(500).json({
-      message: "Error al obtener detalles del grupo",
-      error: error.message,
-    });
+    await connection.rollback();
+    if (error.code === "ER_DUP_ENTRY")
+      return res
+        .status(409)
+        .send({ message: "El alumno ya está inscrito en este grupo." });
+    res.status(500).send({ message: "Error al inscribir alumno" });
   } finally {
-    if (connection) await connection.end();
+    connection.release();
   }
 });
-
-apiRouter.post(
-  "/grupos/:grupoId/asignar-docente",
-  verifyToken,
-  isAdmin,
-  async (req, res) => {
-    const { grupoId } = req.params;
-    const { asignatura_id, docente_id } = req.body;
-    let connection;
-    try {
-      connection = await mysql.createConnection(dbConfig);
-      const sql = `
-            INSERT INTO grupo_asignaturas_docentes (grupo_id, asignatura_id, docente_id)
-            VALUES (?, ?, ?)
-            ON DUPLICATE KEY UPDATE docente_id = ?
-        `;
-      await connection.execute(sql, [
-        grupoId,
-        asignatura_id,
-        docente_id,
-        docente_id,
-      ]);
-      res.status(201).json({ message: "Docente asignado correctamente." });
-    } catch (error) {
-      res
-        .status(500)
-        .json({ message: "Error al asignar docente.", error: error.message });
-    } finally {
-      if (connection) await connection.end();
-    }
-  }
-);
-
-apiRouter.post(
-  "/grupos/:grupoId/inscribir-alumno",
-  verifyToken,
-  isAdmin,
-  async (req, res) => {
-    const { grupoId } = req.params;
-    const { alumno_id } = req.body;
-    let connection;
-    try {
-      connection = await mysql.createConnection(dbConfig);
-      await connection.beginTransaction();
-
-      await connection.execute(
-        "INSERT INTO grupo_alumnos (grupo_id, alumno_id) VALUES (?, ?)",
-        [grupoId, alumno_id]
-      );
-      await connection.execute(
-        "UPDATE usuarios SET rol = 'alumno' WHERE id = ?",
-        [alumno_id]
-      );
-
-      await connection.commit();
-      res.status(201).json({ message: "Alumno inscrito correctamente." });
-    } catch (error) {
-      if (connection) await connection.rollback();
-      if (error.code === "ER_DUP_ENTRY") {
-        return res
-          .status(409)
-          .json({ message: "Este alumno ya está inscrito en un grupo." });
-      }
-      res
-        .status(500)
-        .json({ message: "Error al inscribir alumno.", error: error.message });
-    } finally {
-      if (connection) await connection.end();
-    }
-  }
-);
-
-apiRouter.delete(
-  "/grupos/:grupoId/dar-baja/:alumnoId",
-  verifyToken,
-  isAdmin,
-  async (req, res) => {
-    const { grupoId, alumnoId } = req.params;
-    let connection;
-    try {
-      connection = await mysql.createConnection(dbConfig);
-      await connection.beginTransaction();
-
-      await connection.execute(
-        "DELETE FROM grupo_alumnos WHERE grupo_id = ? AND alumno_id = ?",
-        [grupoId, alumnoId]
-      );
-      // CORRECCIÓN: Cambiar el rol del alumno de vuelta a 'aspirante'
-      await connection.execute(
-        "UPDATE usuarios SET rol = 'aspirante' WHERE id = ?",
-        [alumnoId]
-      );
-
-      await connection.commit();
-      res.json({ message: "Alumno dado de baja del grupo." });
-    } catch (error) {
-      if (connection) await connection.rollback();
-      res.status(500).json({
-        message: "Error al dar de baja al alumno.",
-        error: error.message,
-      });
-    } finally {
-      if (connection) await connection.end();
-    }
-  }
-);
-
-apiRouter.post("/grupos", verifyToken, isAdmin, async (req, res) => {
-  const { nombre_grupo, cupo, ciclo_id, sede_id, plan_estudio_id, grado_id } =
-    req.body;
-  let connection;
+adminRouter.delete("/grupos/:id/dar-baja/:alumnoId", async (req, res) => {
+  const { id: grupo_id, alumnoId } = req.params;
+  const connection = await db.getConnection();
   try {
-    connection = await mysql.createConnection(dbConfig);
-    const sql =
-      "INSERT INTO grupos (nombre_grupo, cupo, ciclo_id, sede_id, plan_estudio_id, grado_id) VALUES (?, ?, ?, ?, ?, ?)";
-    await connection.execute(sql, [
-      nombre_grupo,
-      cupo,
-      ciclo_id,
-      sede_id,
-      plan_estudio_id,
-      grado_id,
-    ]);
-    res.status(201).json({ message: "Grupo creado exitosamente" });
-  } catch (error) {
-    res
-      .status(500)
-      .json({ message: "Error al crear el grupo", error: error.message });
-  } finally {
-    if (connection) await connection.end();
-  }
-});
-
-apiRouter.put("/grupos/:id", verifyToken, isAdmin, async (req, res) => {
-  const { id } = req.params;
-  const { nombre_grupo, cupo, ciclo_id, sede_id, plan_estudio_id, grado_id } =
-    req.body;
-  let connection;
-  try {
-    connection = await mysql.createConnection(dbConfig);
-    const sql =
-      "UPDATE grupos SET nombre_grupo = ?, cupo = ?, ciclo_id = ?, sede_id = ?, plan_estudio_id = ?, grado_id = ? WHERE id = ?";
-    await connection.execute(sql, [
-      nombre_grupo,
-      cupo,
-      ciclo_id,
-      sede_id,
-      plan_estudio_id,
-      grado_id,
-      id,
-    ]);
-    res.json({ message: "Grupo actualizado exitosamente" });
-  } catch (error) {
-    res.status(500).json({ message: "Error al actualizar el grupo" });
-  } finally {
-    if (connection) await connection.end();
-  }
-});
-
-apiRouter.delete("/grupos/:id", verifyToken, isAdmin, async (req, res) => {
-  const { id } = req.params;
-  let connection;
-  try {
-    connection = await mysql.createConnection(dbConfig);
-    await connection.execute("DELETE FROM grupos WHERE id = ?", [id]);
-    res.json({ message: "Grupo eliminado exitosamente" });
-  } catch (error) {
-    res.status(500).json({ message: "Error al eliminar el grupo" });
-  } finally {
-    if (connection) await connection.end();
-  }
-});
-
-// --- RUTAS DOCENTE ---
-apiRouter.get("/mis-cursos", verifyToken, isDocente, async (req, res) => {
-  const docenteId = req.user.id;
-  let connection;
-  try {
-    connection = await mysql.createConnection(dbConfig);
-    const sql = `
-            SELECT
-                g.id as grupo_id,
-                g.nombre_grupo,
-                a.id as asignatura_id,
-                a.nombre_asignatura,
-                c.nombre_ciclo,
-                (SELECT COUNT(*) FROM grupo_alumnos ga WHERE ga.grupo_id = g.id) as total_alumnos
-            FROM grupo_asignaturas_docentes gad
-            JOIN grupos g ON gad.grupo_id = g.id
-            JOIN asignaturas a ON gad.asignatura_id = a.id
-            JOIN ciclos c ON g.ciclo_id = c.id
-            WHERE gad.docente_id = ?
-        `;
-    const [cursos] = await connection.execute(sql, [docenteId]);
-    res.json(cursos);
-  } catch (error) {
-    res.status(500).json({
-      message: "Error al obtener los cursos del docente",
-      error: error.message,
-    });
-  } finally {
-    if (connection) await connection.end();
-  }
-});
-
-// --- RUTA ALUMNO ---
-apiRouter.get("/mi-grupo", verifyToken, isAlumno, async (req, res) => {
-  const alumnoId = req.user.id;
-  let connection;
-  try {
-    connection = await mysql.createConnection(dbConfig);
-
-    // 1. Encontrar el grupo del alumno
-    const [grupoAlumno] = await connection.execute(
-      "SELECT grupo_id FROM grupo_alumnos WHERE alumno_id = ?",
+    await connection.beginTransaction();
+    await connection.query(
+      "DELETE FROM grupo_alumnos WHERE grupo_id = ? AND alumno_id = ?",
+      [grupo_id, alumnoId]
+    );
+    await connection.query(
+      "UPDATE usuarios SET rol = 'aspirante' WHERE id = ?",
       [alumnoId]
     );
-    if (grupoAlumno.length === 0) {
-      return res
-        .status(404)
-        .json({ message: "No estás inscrito en ningún grupo." });
-    }
-    const grupoId = grupoAlumno[0].grupo_id;
-
-    // 2. Obtener los detalles del grupo
-    const [grupoDetails] = await connection.execute(
-      "SELECT g.nombre_grupo, c.nombre_ciclo FROM grupos g JOIN ciclos c ON g.ciclo_id = c.id WHERE g.id = ?",
-      [grupoId]
-    );
-
-    // 3. Obtener las asignaturas y docentes de ese grupo
-    const sqlAsignaturas = `
-            SELECT 
-                a.nombre_asignatura, a.clave_asignatura,
-                u.nombre AS docente_nombre, u.apellido_paterno AS docente_apellido
-            FROM grupo_asignaturas_docentes gad
-            JOIN asignaturas a ON gad.asignatura_id = a.id
-            LEFT JOIN usuarios u ON gad.docente_id = u.id
-            WHERE gad.grupo_id = ?
-        `;
-    const [asignaturas] = await connection.execute(sqlAsignaturas, [grupoId]);
-
-    res.json({
-      grupo: grupoDetails[0],
-      asignaturas: asignaturas,
+    await connection.commit();
+    res.send({ message: "Alumno dado de baja" });
+  } catch (error) {
+    await connection.rollback();
+    res.status(500).send({ message: "Error al dar de baja" });
+  } finally {
+    connection.release();
+  }
+});
+// RUTAS EXPEDIENTE
+adminRouter.get("/aspirantes/:id/expediente", async (req, res) => {
+  const { id } = req.params;
+  const [docs] = await db.query(
+    "SELECT * FROM expediente_aspirantes WHERE aspirante_id = ?",
+    [id]
+  );
+  res.json(docs);
+});
+adminRouter.post(
+  "/aspirantes/:id/upload",
+  upload.single("documento"),
+  async (req, res) => {
+    const { id: aspirante_id } = req.params;
+    const { tipo_documento } = req.body;
+    const { filename, originalname } = req.file;
+    const sql = `
+        INSERT INTO expediente_aspirantes (aspirante_id, tipo_documento, ruta_archivo, nombre_original)
+        VALUES (?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE ruta_archivo = ?, nombre_original = ?`;
+    await db.query(sql, [
+      aspirante_id,
+      tipo_documento,
+      filename,
+      originalname,
+      filename,
+      originalname,
+    ]);
+    res
+      .status(201)
+      .send({ message: "Documento subido con éxito", filePath: filename });
+  }
+);
+adminRouter.delete("/expedientes/:id", async (req, res) => {
+  const { id } = req.params;
+  const [[doc]] = await db.query(
+    "SELECT * FROM expediente_aspirantes WHERE id = ?",
+    [id]
+  );
+  if (doc) {
+    fs.unlink(path.join(uploadsDir, doc.ruta_archivo), (err) => {
+      if (err) console.error("Error al borrar archivo físico:", err);
     });
-  } catch (error) {
-    res.status(500).json({
-      message: "Error al obtener la información de tu grupo.",
-      error: error.message,
-    });
-  } finally {
-    if (connection) await connection.end();
+    await db.query("DELETE FROM expediente_aspirantes WHERE id = ?", [id]);
+    res.send({ message: "Documento eliminado" });
+  } else {
+    res.status(404).send({ message: "Documento no encontrado" });
   }
 });
+apiRouter.use("/admin", adminRouter);
 
-// --- CRUD Catálogos (Carreras, Sedes, etc.) ---
-
-// Carreras
-apiRouter.post("/carreras", verifyToken, isAdmin, async (req, res) => {
-  const { nombre_carrera } = req.body;
-  let connection;
-  try {
-    connection = await mysql.createConnection(dbConfig);
-    await connection.execute(
-      "INSERT INTO carreras (nombre_carrera) VALUES (?)",
-      [nombre_carrera]
-    );
-    res.status(201).json({ message: "Carrera creada" });
-  } catch (error) {
-    res.status(500).json({ message: "Error al crear carrera" });
-  } finally {
-    if (connection) await connection.end();
-  }
+// --- RUTAS DE DOCENTE ---
+const docenteRouter = express.Router();
+docenteRouter.use(isDocente);
+docenteRouter.get("/mis-cursos", async (req, res) => {
+  const docente_id = req.user.id;
+  const sql = `
+        SELECT 
+            g.id as grupo_id, g.nombre_grupo, a.id as asignatura_id,
+            a.nombre_asignatura, c.nombre_ciclo,
+            (SELECT COUNT(*) FROM grupo_alumnos WHERE grupo_id = g.id) as total_alumnos
+        FROM grupo_asignaturas_docentes gad
+        JOIN grupos g ON gad.grupo_id = g.id
+        JOIN asignaturas a ON gad.asignatura_id = a.id
+        JOIN ciclos c ON g.ciclo_id = c.id
+        WHERE gad.docente_id = ?`;
+  res.json((await db.query(sql, [docente_id]))[0]);
 });
-
-apiRouter.put("/carreras/:id", verifyToken, isAdmin, async (req, res) => {
-  const { id } = req.params;
-  const { nombre_carrera } = req.body;
-  let connection;
-  try {
-    connection = await mysql.createConnection(dbConfig);
-    await connection.execute(
-      "UPDATE carreras SET nombre_carrera = ? WHERE id = ?",
-      [nombre_carrera, id]
-    );
-    res.json({ message: "Carrera actualizada" });
-  } catch (error) {
-    res.status(500).json({ message: "Error al actualizar carrera" });
-  } finally {
-    if (connection) await connection.end();
+docenteRouter.get(
+  "/grupo/:grupoId/asignatura/:asignaturaId/alumnos",
+  async (req, res) => {
+    const { grupoId, asignaturaId } = req.params;
+    const cursoSql = `SELECT g.nombre_grupo, a.nombre_asignatura FROM grupos g, asignaturas a WHERE g.id = ? AND a.id = ?`;
+    const [[cursoInfo]] = await db.query(cursoSql, [grupoId, asignaturaId]);
+    const alumnosSql = `
+        SELECT u.id, CONCAT(u.nombre, ' ', u.apellido_paterno) as nombre_completo, c.calificacion
+        FROM grupo_alumnos ga JOIN usuarios u ON ga.alumno_id = u.id
+        LEFT JOIN calificaciones c ON c.alumno_id = u.id AND c.asignatura_id = ?
+        WHERE ga.grupo_id = ? AND u.rol = 'alumno'`;
+    const [alumnos] = await db.query(alumnosSql, [asignaturaId, grupoId]);
+    res.json({ cursoInfo, alumnos });
   }
+);
+docenteRouter.post("/calificar", async (req, res) => {
+  const { alumno_id, asignatura_id, calificacion } = req.body;
+  await db.query(
+    "INSERT INTO calificaciones (alumno_id, asignatura_id, calificacion) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE calificacion = ?",
+    [alumno_id, asignatura_id, calificacion, calificacion]
+  );
+  res.send({ message: "Calificación guardada" });
 });
+apiRouter.use("/docente", docenteRouter);
 
-apiRouter.delete("/carreras/:id", verifyToken, isAdmin, async (req, res) => {
-  const { id } = req.params;
-  let connection;
-  try {
-    connection = await mysql.createConnection(dbConfig);
-    await connection.execute("DELETE FROM carreras WHERE id = ?", [id]);
-    res.json({ message: "Carrera eliminada" });
-  } catch (error) {
-    res.status(500).json({ message: "Error al eliminar carrera" });
-  } finally {
-    if (connection) await connection.end();
-  }
+// --- RUTAS DE ALUMNO ---
+const alumnoRouter = express.Router();
+alumnoRouter.use(isAlumno);
+alumnoRouter.get("/mi-grupo", async (req, res) => {
+  const alumno_id = req.user.id;
+  const [[miGrupo]] = await db.query(
+    "SELECT * FROM grupo_alumnos WHERE alumno_id = ?",
+    [alumno_id]
+  );
+  if (!miGrupo)
+    return res.status(404).send({ message: "No estás inscrito en un grupo." });
+
+  const grupoId = miGrupo.grupo_id;
+  const [[grupo]] = await db.query(
+    `SELECT g.*, c.nombre_ciclo FROM grupos g JOIN ciclos c ON g.ciclo_id = c.id WHERE g.id = ?`,
+    [grupoId]
+  );
+
+  const asignaturasSql = `
+        SELECT a.nombre_asignatura, a.clave_asignatura, u.nombre as docente_nombre, u.apellido_paterno as docente_apellido, cal.calificacion
+        FROM asignaturas a
+        LEFT JOIN grupo_asignaturas_docentes gad ON a.id = gad.asignatura_id AND gad.grupo_id = ?
+        LEFT JOIN usuarios u ON gad.docente_id = u.id
+        LEFT JOIN calificaciones cal ON cal.asignatura_id = a.id AND cal.alumno_id = ?
+        WHERE a.grado_id = ? AND a.plan_estudio_id = ?`;
+
+  const [asignaturas] = await db.query(asignaturasSql, [
+    grupoId,
+    alumno_id,
+    grupo.grado_id,
+    grupo.plan_estudio_id,
+  ]);
+  res.json({ grupo, asignaturas });
 });
+apiRouter.use("/alumno", alumnoRouter);
 
-// Sedes
-apiRouter.post("/sedes", verifyToken, isAdmin, async (req, res) => {
-  const { nombre_sede, direccion } = req.body;
-  let connection;
-  try {
-    connection = await mysql.createConnection(dbConfig);
-    await connection.execute(
-      "INSERT INTO sedes (nombre_sede, direccion) VALUES (?, ?)",
-      [nombre_sede, direccion]
-    );
-    res.status(201).json({ message: "Sede creada" });
-  } catch (error) {
-    res.status(500).json({ message: "Error al crear sede" });
-  } finally {
-    if (connection) await connection.end();
-  }
-});
-
-apiRouter.put("/sedes/:id", verifyToken, isAdmin, async (req, res) => {
-  const { id } = req.params;
-  const { nombre_sede, direccion } = req.body;
-  let connection;
-  try {
-    connection = await mysql.createConnection(dbConfig);
-    await connection.execute(
-      "UPDATE sedes SET nombre_sede = ?, direccion = ? WHERE id = ?",
-      [nombre_sede, direccion, id]
-    );
-    res.json({ message: "Sede actualizada" });
-  } catch (error) {
-    res.status(500).json({ message: "Error al actualizar sede" });
-  } finally {
-    if (connection) await connection.end();
-  }
-});
-
-apiRouter.delete("/sedes/:id", verifyToken, isAdmin, async (req, res) => {
-  const { id } = req.params;
-  let connection;
-  try {
-    connection = await mysql.createConnection(dbConfig);
-    await connection.execute("DELETE FROM sedes WHERE id = ?", [id]);
-    res.json({ message: "Sede eliminada" });
-  } catch (error) {
-    res.status(500).json({ message: "Error al eliminar sede" });
-  } finally {
-    if (connection) await connection.end();
-  }
-});
-
-// --- Rutas para obtener catálogos ---
-apiRouter.get("/carreras", verifyToken, isAdmin, async (req, res) => {
-  let connection;
-  try {
-    connection = await mysql.createConnection(dbConfig);
-    const [rows] = await connection.execute(
-      "SELECT id, nombre_carrera FROM carreras"
-    );
-    res.json(rows);
-  } catch (err) {
-    res.status(500).json({ message: "Error al obtener carreras" });
-  } finally {
-    if (connection) await connection.end();
-  }
-});
-
-apiRouter.get("/sedes", verifyToken, isAdmin, async (req, res) => {
-  let connection;
-  try {
-    connection = await mysql.createConnection(dbConfig);
-    const [rows] = await connection.execute(
-      "SELECT id, nombre_sede, direccion FROM sedes"
-    );
-    res.json(rows);
-  } catch (err) {
-    res.status(500).json({ message: "Error al obtener sedes" });
-  } finally {
-    if (connection) await connection.end();
-  }
-});
-
-apiRouter.get("/ciclos", verifyToken, isAdmin, async (req, res) => {
-  let connection;
-  try {
-    connection = await mysql.createConnection(dbConfig);
-    const [rows] = await connection.execute(
-      "SELECT id, nombre_ciclo FROM ciclos"
-    );
-    res.json(rows);
-  } catch (err) {
-    res.status(500).json({ message: "Error al obtener ciclos" });
-  } finally {
-    if (connection) await connection.end();
-  }
-});
-
-apiRouter.get("/planes-estudio", verifyToken, isAdmin, async (req, res) => {
-  let connection;
-  try {
-    connection = await mysql.createConnection(dbConfig);
-    const [rows] = await connection.execute(
-      "SELECT id, nombre_plan FROM planes_estudio"
-    );
-    res.json(rows);
-  } catch (err) {
-    res.status(500).json({ message: "Error al obtener planes de estudio" });
-  } finally {
-    if (connection) await connection.end();
-  }
-});
-
-apiRouter.get("/grados", verifyToken, isAdmin, async (req, res) => {
-  let connection;
-  try {
-    connection = await mysql.createConnection(dbConfig);
-    const [rows] = await connection.execute(
-      "SELECT id, nombre_grado FROM grados"
-    );
-    res.json(rows);
-  } catch (err) {
-    res.status(500).json({ message: "Error al obtener grados" });
-  } finally {
-    if (connection) await connection.end();
-  }
-});
-
-// Prefijo para todas las rutas de la API
 app.use("/api", apiRouter);
 
+// --- INICIO DEL SERVIDOR ---
 const PORT = 3001;
 app.listen(PORT, () => {
   console.log(`Servidor corriendo en http://localhost:${PORT}`);
