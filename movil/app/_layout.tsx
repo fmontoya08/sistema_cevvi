@@ -4,58 +4,60 @@ import {
   ThemeProvider,
 } from "@react-navigation/native";
 import { useFonts } from "expo-font";
-import { Stack, useRouter, useSegments } from "expo-router";
+import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
 import "react-native-reanimated";
-import { AuthProvider, useAuth } from "../context/AuthContext";
-import { useColorScheme } from "../hooks/useColorScheme";
+import { useColorScheme, ActivityIndicator, View, Text } from "react-native";
 
+// --- PASO 1: Importa el AuthProvider ---
+import { AuthProvider } from "../context/AuthContext"; // Ajusta la ruta si es necesario
+
+// Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
-function RootLayout() {
-  const { user, loading } = useAuth();
-  const segments = useSegments();
-  const router = useRouter();
+export default function RootLayoutNav() {
+  // Cambié el nombre para claridad, pero puedes dejar RootLayout
   const colorScheme = useColorScheme();
-
-  // const [loaded] = useFonts({
-  //   SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
-  // });
+  const [fontsLoaded, fontError] = useFonts({
+    SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
+  });
 
   useEffect(() => {
-    if (loading || !loaded) return;
-
-    SplashScreen.hideAsync();
-
-    const inAuthGroup = segments[0] === "(tabs)";
-
-    if (!user && inAuthGroup) {
-      router.replace("/login");
-    } else if (user && !inAuthGroup) {
-      router.replace("/(tabs)");
+    if (fontsLoaded || fontError) {
+      // Hide the splash screen after the fonts have loaded (or an error was returned)
+      SplashScreen.hideAsync();
     }
-  }, [user, loading, segments, router, loaded]);
+    if (fontError) {
+      console.error("Error cargando fuentes:", fontError);
+    }
+  }, [fontsLoaded, fontError]);
 
-  if (!loaded || loading) {
-    return null;
+  // Prevent rendering until the font load is complete
+  if (!fontsLoaded && !fontError) {
+    return (
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+        <ActivityIndicator size="large" />
+      </View>
+    );
   }
 
-  return (
-    <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="login" options={{ headerShown: false }} />
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="+not-found" />
-      </Stack>
-    </ThemeProvider>
-  );
-}
-
-export default function AppLayout() {
+  // --- PASO 2: Envuelve la navegación con AuthProvider ---
   return (
     <AuthProvider>
-      <RootLayout />
+      <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
+        <Stack>
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="login" options={{ headerShown: false }} />{" "}
+          {/* Asegúrate que login esté definido si lo usas */}
+          <Stack.Screen name="modal" options={{ presentation: "modal" }} />
+          <Stack.Screen name="+not-found" />
+        </Stack>
+      </ThemeProvider>
     </AuthProvider>
   );
 }
+
+// Nota: Si tenías alguna lógica dentro de RootLayout que dependiera de useAuth,
+// necesitarás moverla a un componente hijo que esté DENTRO de AuthProvider.
+// Pero en este caso, RootLayoutNav solo configura el layout y los providers.
