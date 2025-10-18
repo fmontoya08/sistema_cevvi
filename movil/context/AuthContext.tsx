@@ -1,4 +1,3 @@
-// Ruta del archivo: sistema_cevvi/movil/context/AuthContext.tsx
 import React, {
   createContext,
   useState,
@@ -7,36 +6,49 @@ import React, {
   useCallback,
 } from "react";
 import * as SecureStore from "expo-secure-store";
-import axios from "axios";
+import axios, { AxiosInstance } from "axios";
 
-// --- IMPORTANTE ---
-// Reemplaza esta IP con la dirección IP de la computadora donde corre tu servidor.
-// No uses 'localhost' o '127.0.0.1' porque el teléfono no podrá encontrarlo.
-// Para encontrar tu IP, en Windows usa 'ipconfig' en la terminal. En Mac/Linux usa 'ifconfig'.
-const API_URL = "http://192.168.100.87:3001/api";
+// --- ¡MUY IMPORTANTE! ---
+// Reemplaza esta IP con la dirección IP de la computadora donde está corriendo tu servidor.
+const API_URL = "http://192.168.100.87:3001/api"; // <--- CAMBIA ESTA LÍNEA
 
 const api = axios.create({
   baseURL: API_URL,
 });
 
-// Interceptor para añadir el token a todas las peticiones
-api.interceptors.request.use(
-  async (config) => {
-    const token = await SecureStore.getItemAsync("token");
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
+api.interceptors.request.use(async (config) => {
+  const token = await SecureStore.getItemAsync("token");
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
   }
-);
+  return config;
+});
 
-const AuthContext = createContext(null);
+// Definimos los tipos de datos para que TypeScript nos ayude
+type User = {
+  id: number;
+  email: string;
+  nombre: string;
+  rol: "alumno" | "docente" | "admin" | "aspirante";
+};
 
-export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
+type AuthContextType = {
+  user: User | null;
+  loading: boolean;
+  login: (
+    email: string,
+    password: string
+  ) => Promise<{ success: boolean; user?: User; error?: string }>;
+  logout: () => void;
+  API_URL: string;
+  api: AxiosInstance;
+};
+
+// Creamos el contexto con un valor inicial nulo, pero con el tipo correcto
+const AuthContext = createContext<AuthContextType | null>(null);
+
+export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -44,21 +56,19 @@ export const AuthProvider = ({ children }) => {
       try {
         const token = await SecureStore.getItemAsync("token");
         const userData = await SecureStore.getItemAsync("user");
-
         if (token && userData) {
           setUser(JSON.parse(userData));
         }
       } catch (e) {
-        console.error("Failed to load user from storage", e);
+        console.error("Fallo al cargar el usuario desde el almacenamiento", e);
       } finally {
         setLoading(false);
       }
     };
-
     loadUser();
   }, []);
 
-  const login = useCallback(async (email, password) => {
+  const login = useCallback(async (email: string, password: string) => {
     try {
       const response = await api.post("/login", { email, password });
       const { token, user: userData } = response.data;
@@ -67,17 +77,11 @@ export const AuthProvider = ({ children }) => {
       await SecureStore.setItemAsync("token", token);
 
       setUser(userData);
-
       return { success: true, user: userData };
-    } catch (error) {
-      console.error(
-        "Login failed",
-        error.response?.data?.message || error.message
-      );
-      return {
-        success: false,
-        error: error.response?.data?.message || "Error en el servidor",
-      };
+    } catch (error: any) {
+      const message = error.response?.data?.message || "Error en el servidor";
+      console.error("Fallo el login", message);
+      return { success: false, error: message };
     }
   }, []);
 
@@ -87,23 +91,19 @@ export const AuthProvider = ({ children }) => {
       await SecureStore.deleteItemAsync("token");
       setUser(null);
     } catch (e) {
-      console.error("Logout failed", e);
+      console.error("Fallo el logout", e);
     }
   }, []);
 
-  return (
-    <AuthContext.Provider
-      value={{ user, loading, login, logout, API_URL, api }}
-    >
-      {children}
-    </AuthContext.Provider>
-  );
+  const value = { user, loading, login, logout, API_URL, api };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
-    throw new Error("useAuth must be used within an AuthProvider");
+    throw new Error("useAuth debe ser usado dentro de un AuthProvider");
   }
   return context;
 };

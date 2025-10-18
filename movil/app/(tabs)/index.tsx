@@ -1,4 +1,3 @@
-// Ruta del archivo: sistema_cevvi/movil/app/(tabs)/index.tsx
 import React, { useState, useEffect, useCallback } from "react";
 import {
   StyleSheet,
@@ -8,44 +7,77 @@ import {
   RefreshControl,
   ActivityIndicator,
 } from "react-native";
-import { useAuth } from "@/context/AuthContext";
-import { ThemedView } from "@/components/ThemedView";
-import { ThemedText } from "@/components/ThemedText";
+import { useAuth } from "../../context/AuthContext";
 import { Redirect, useNavigation } from "expo-router";
+
+// Definimos los tipos de datos que esperamos de la API
+interface Asignatura {
+  nombre_asignatura: string;
+  docente_nombre: string | null;
+  docente_apellido: string | null;
+  calificacion: number | null;
+  clave_asignatura: string;
+}
+interface GrupoInfo {
+  grupo: {
+    nombre_grupo: string;
+    nombre_ciclo: string;
+  };
+  asignaturas: Asignatura[];
+}
 
 export default function AlumnoDashboardScreen() {
   const { user, api } = useAuth();
-  const [miGrupo, setMiGrupo] = useState(null);
+  const [miGrupo, setMiGrupo] = useState<GrupoInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const navigation = useNavigation();
 
-  const fetchMiGrupo = useCallback(async () => {
-    if (!user || user.rol !== "alumno") return;
-    try {
-      const response = await api.get("/alumno/mi-grupo");
-      setMiGrupo(response.data);
-    } catch (error) {
-      console.error(
-        "Error al cargar la información del grupo:",
-        error.response?.data?.message || error.message
-      );
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [user, api]);
+  const fetchMiGrupo = useCallback(
+    async (isMounted: boolean) => {
+      if (!user || user.rol !== "alumno") {
+        if (isMounted) setLoading(false);
+        return;
+      }
+      try {
+        const response = await api.get<GrupoInfo>("/alumno/mi-grupo");
+        if (isMounted) {
+          setMiGrupo(response.data);
+        }
+      } catch (error: any) {
+        console.error(
+          "Error al cargar la información del grupo:",
+          error.response?.data?.message || error.message
+        );
+        if (isMounted) {
+          setMiGrupo(null);
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+          setRefreshing(false);
+        }
+      }
+    },
+    [user, api]
+  );
 
   useEffect(() => {
+    let isMounted = true;
     if (user?.rol === "alumno") {
       navigation.setOptions({ title: `Portal de ${user.nombre}` });
-      fetchMiGrupo();
+      fetchMiGrupo(isMounted);
+    } else if (isMounted) {
+      setLoading(false);
     }
-  }, [fetchMiGrupo, user, navigation]);
+    return () => {
+      isMounted = false;
+    };
+  }, [user, navigation, fetchMiGrupo]);
 
   const onRefresh = () => {
     setRefreshing(true);
-    fetchMiGrupo();
+    fetchMiGrupo(true); // Pasamos true porque el componente está montado
   };
 
   if (loading && !refreshing) {
@@ -56,7 +88,6 @@ export default function AlumnoDashboardScreen() {
     );
   }
 
-  // Si el usuario no es un alumno, redirigir a la pestaña de docente
   if (user && user.rol !== "alumno") {
     return <Redirect href="/(tabs)/explore" />;
   }
@@ -69,13 +100,13 @@ export default function AlumnoDashboardScreen() {
       }
     >
       {miGrupo ? (
-        <ThemedView style={styles.card}>
-          <ThemedText style={styles.cardTitle}>
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>
             Grupo: {miGrupo.grupo.nombre_grupo}
-          </ThemedText>
-          <ThemedText style={styles.cardSubtitle}>
+          </Text>
+          <Text style={styles.cardSubtitle}>
             Ciclo Escolar: {miGrupo.grupo.nombre_ciclo}
-          </ThemedText>
+          </Text>
 
           <View style={styles.tableHeader}>
             <Text style={[styles.headerText, { flex: 2 }]}>Asignatura</Text>
@@ -85,14 +116,16 @@ export default function AlumnoDashboardScreen() {
             </Text>
           </View>
 
-          {miGrupo.asignaturas.map((asig, index) => (
+          {miGrupo.asignaturas.map((asig: Asignatura, index: number) => (
             <View key={index} style={styles.tableRow}>
               <Text style={[styles.cellText, { flex: 2 }]}>
                 {asig.nombre_asignatura}
               </Text>
               <Text style={[styles.cellText, { flex: 2 }]}>
                 {asig.docente_nombre
-                  ? `${asig.docente_nombre} ${asig.docente_apellido}`
+                  ? `${asig.docente_nombre} ${
+                      asig.docente_apellido || ""
+                    }`.trim()
                   : "N/A"}
               </Text>
               <Text style={[styles.cellText, styles.calificacion, { flex: 1 }]}>
@@ -100,11 +133,11 @@ export default function AlumnoDashboardScreen() {
               </Text>
             </View>
           ))}
-        </ThemedView>
+        </View>
       ) : (
-        <ThemedView style={styles.centered}>
-          <ThemedText>No estás inscrito en ningún grupo.</ThemedText>
-        </ThemedView>
+        <View style={styles.centeredCard}>
+          <Text>No estás inscrito en ningún grupo.</Text>
+        </View>
       )}
     </ScrollView>
   );
@@ -114,16 +147,19 @@ const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
     backgroundColor: "#f0f0f7",
+    paddingVertical: 10,
   },
   centered: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    padding: 20,
   },
-  title: {
-    fontSize: 22,
-    fontWeight: "bold",
+  centeredCard: {
+    backgroundColor: "white",
+    borderRadius: 10,
+    padding: 20,
+    margin: 15,
+    alignItems: "center",
   },
   card: {
     backgroundColor: "white",
@@ -152,16 +188,18 @@ const styles = StyleSheet.create({
   headerText: {
     fontWeight: "bold",
     fontSize: 14,
+    color: "#333",
   },
   tableRow: {
     flexDirection: "row",
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderTopWidth: 1,
     borderTopColor: "#f0f0f0",
     alignItems: "center",
   },
   cellText: {
     fontSize: 14,
+    color: "#555",
   },
   calificacion: {
     fontWeight: "bold",

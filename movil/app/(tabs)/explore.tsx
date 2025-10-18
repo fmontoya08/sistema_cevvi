@@ -1,4 +1,3 @@
-// Ruta del archivo: sistema_cevvi/movil/app/(tabs)/explore.tsx
 import React, { useState, useEffect, useCallback } from "react";
 import {
   StyleSheet,
@@ -7,46 +6,71 @@ import {
   RefreshControl,
   ActivityIndicator,
   TouchableOpacity,
+  Text,
 } from "react-native";
-import { useAuth } from "@/context/AuthContext";
-import { ThemedView } from "@/components/ThemedView";
-import { ThemedText } from "@/components/ThemedText";
+import { useAuth } from "../../context/AuthContext";
 import { Ionicons } from "@expo/vector-icons";
 import { Redirect, useNavigation } from "expo-router";
 
+// Definimos el tipo de dato para un curso
+interface Curso {
+  grupo_id: number;
+  asignatura_id: number;
+  nombre_asignatura: string;
+  nombre_grupo: string;
+  nombre_ciclo: string;
+  total_alumnos: number;
+}
+
 export default function DocenteDashboardScreen() {
   const { user, api } = useAuth();
-  const [cursos, setCursos] = useState([]);
+  const [cursos, setCursos] = useState<Curso[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const navigation = useNavigation();
 
-  const fetchCursos = useCallback(async () => {
-    if (!user || user.rol !== "docente") return;
-    try {
-      const response = await api.get("/docente/mis-cursos");
-      setCursos(response.data);
-    } catch (error) {
-      console.error(
-        "Error al cargar los cursos del docente:",
-        error.response?.data?.message || error.message
-      );
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [user, api]);
+  const fetchCursos = useCallback(
+    async (isMounted: boolean) => {
+      if (!user || user.rol !== "docente") {
+        if (isMounted) setLoading(false);
+        return;
+      }
+      try {
+        const response = await api.get<Curso[]>("/docente/mis-cursos");
+        if (isMounted) {
+          setCursos(response.data);
+        }
+      } catch (error: any) {
+        console.error(
+          "Error al cargar los cursos del docente:",
+          error.response?.data?.message || error.message
+        );
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+          setRefreshing(false);
+        }
+      }
+    },
+    [user, api]
+  );
 
   useEffect(() => {
-    if (user?.rol === "docente") {
+    let isMounted = true;
+    if (user && user.rol === "docente") {
       navigation.setOptions({ title: `Portal de ${user.nombre}` });
-      fetchCursos();
+      fetchCursos(isMounted);
+    } else {
+      if (isMounted) setLoading(false);
     }
-  }, [fetchCursos, user, navigation]);
+    return () => {
+      isMounted = false;
+    };
+  }, [user, navigation, fetchCursos]);
 
   const onRefresh = () => {
     setRefreshing(true);
-    fetchCursos();
+    fetchCursos(true);
   };
 
   if (loading && !refreshing) {
@@ -57,7 +81,6 @@ export default function DocenteDashboardScreen() {
     );
   }
 
-  // Si el usuario no es un docente, redirigir a la pestaña de alumno
   if (user && user.rol !== "docente") {
     return <Redirect href="/(tabs)" />;
   }
@@ -69,35 +92,33 @@ export default function DocenteDashboardScreen() {
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
       }
     >
-      <ThemedText style={styles.sectionTitle}>Mis Cursos Asignados</ThemedText>
+      <Text style={styles.sectionTitle}>Mis Cursos Asignados</Text>
 
       {cursos.length > 0 ? (
-        cursos.map((curso) => (
+        cursos.map((curso: Curso) => (
           <TouchableOpacity
             key={`${curso.grupo_id}-${curso.asignatura_id}`}
             style={styles.card}
           >
             <View style={{ flex: 1 }}>
-              <ThemedText style={styles.cardTitle}>
-                {curso.nombre_asignatura}
-              </ThemedText>
-              <ThemedText style={styles.cardSubtitle}>
+              <Text style={styles.cardTitle}>{curso.nombre_asignatura}</Text>
+              <Text style={styles.cardSubtitle}>
                 Grupo: {curso.nombre_grupo} | Ciclo: {curso.nombre_ciclo}
-              </ThemedText>
+              </Text>
               <View style={styles.cardFooter}>
                 <Ionicons name="people-outline" size={16} color="#555" />
-                <ThemedText style={styles.footerText}>
+                <Text style={styles.footerText}>
                   {curso.total_alumnos} Alumnos
-                </ThemedText>
+                </Text>
               </View>
             </View>
             <Ionicons name="chevron-forward-outline" size={24} color="#ccc" />
           </TouchableOpacity>
         ))
       ) : (
-        <ThemedView style={styles.centeredCard}>
-          <ThemedText>No tienes cursos asignados actualmente.</ThemedText>
-        </ThemedView>
+        <View style={styles.centeredCard}>
+          <Text>No tienes cursos asignados actualmente.</Text>
+        </View>
       )}
     </ScrollView>
   );

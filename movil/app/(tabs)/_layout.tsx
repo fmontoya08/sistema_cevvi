@@ -1,12 +1,10 @@
-// Ruta del archivo: sistema_cevvi/movil/app/(tabs)/_layout.tsx
 import { Tabs, Redirect } from "expo-router";
 import React from "react";
-import { Button } from "react-native";
-import { TabBarIcon } from "@/components/navigation/TabBarIcon";
-import { Colors } from "@/constants/Colors";
-import { useColorScheme } from "@/hooks/useColorScheme";
-import { useAuth } from "@/context/AuthContext";
-import { ActivityIndicator, View } from "react-native";
+import { Button, ActivityIndicator, View, StyleSheet } from "react-native";
+import { TabBarIcon } from "../../components/navigation/TabBarIcon";
+import { Colors } from "../../constants/Colors";
+import { useColorScheme } from "../../hooks/useColorScheme";
+import { useAuth } from "../../context/AuthContext";
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
@@ -14,8 +12,8 @@ export default function TabLayout() {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-        <ActivityIndicator />
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" />
       </View>
     );
   }
@@ -24,6 +22,7 @@ export default function TabLayout() {
     return <Redirect href="/login" />;
   }
 
+  // AHORA TypeScript sabe que user NO es null en este punto
   const isAlumno = user.rol === "alumno";
   const isDocente = user.rol === "docente";
 
@@ -47,6 +46,7 @@ export default function TabLayout() {
               color={color}
             />
           ),
+          // Muestra esta pestaña solo si el usuario es Alumno
           href: isAlumno ? "/(tabs)" : null,
         }}
       />
@@ -60,9 +60,18 @@ export default function TabLayout() {
               color={color}
             />
           ),
+          // Muestra esta pestaña solo si el usuario es Docente
           href: isDocente ? "/(tabs)/explore" : null,
         }}
       />
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  centered: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+});

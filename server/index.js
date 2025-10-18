@@ -62,51 +62,61 @@ async function connectToDatabase() {
 connectToDatabase();
 
 // --- MIDDLEWARE DE AUTENTICACIÓN ---
+// Este middleware verifica el token y adjunta 'req.user' si es válido
+// No bloquea rutas, solo identifica al usuario
 const verifyToken = (req, res, next) => {
   const authHeader = req.headers["authorization"];
   const token = authHeader && authHeader.split(" ")[1];
-  if (!token)
-    return res
-      .status(403)
-      .send({ message: "Se requiere un token para la autenticación." });
+
+  if (!token) {
+    // No hay token, pero continuamos. Las rutas que requieran auth fallarán después.
+    return next();
+  }
 
   jwt.verify(token, JWT_SECRET, (err, decoded) => {
-    if (err) return res.status(401).send({ message: "Token inválido." });
-    req.user = decoded;
+    if (decoded) {
+      req.user = decoded; // Adjuntamos el usuario si el token es válido
+    }
+    // Si hay un error (token expirado/inválido), no adjuntamos nada
     next();
   });
 };
 
+// --- MIDDLEWARES DE AUTORIZACIÓN (ROL) ---
+// Estos middlewares SÍ bloquean la ruta si no se cumple el rol
+
 const isAdmin = (req, res, next) => {
-  if (req.user && req.user.rol !== "admin") {
-    return res
-      .status(403)
-      .send({ message: "Acceso denegado. Se requiere rol de administrador." });
+  if (req.user && req.user.rol === "admin") {
+    return next();
   }
-  next();
+  return res
+    .status(403)
+    .send({ message: "Acceso denegado. Se requiere rol de administrador." });
 };
 
 const isDocente = (req, res, next) => {
-  if (req.user && req.user.rol !== "docente") {
-    return res
-      .status(403)
-      .send({ message: "Acceso denegado. Se requiere rol de docente." });
+  if (req.user && req.user.rol === "docente") {
+    return next();
   }
-  next();
+  return res
+    .status(403)
+    .send({ message: "Acceso denegado. Se requiere rol de docente." });
 };
 
 const isAlumno = (req, res, next) => {
-  if (req.user && req.user.rol !== "alumno") {
-    return res
-      .status(403)
-      .send({ message: "Acceso denegado. Se requiere rol de alumno." });
+  if (req.user && req.user.rol === "alumno") {
+    return next();
   }
-  next();
+  return res
+    .status(403)
+    .send({ message: "Acceso denegado. Se requiere rol de alumno." });
 };
 
 const apiRouter = express.Router();
+app.use("/api", apiRouter); // Montamos el router principal en /api
 
-// --- RUTA PÚBLICA ---
+// --- RUTA PÚBLICA DE LOGIN ---
+// Esta ruta no usa 'verifyToken' porque es para obtener el token
 apiRouter.post("/login", async (req, res) => {
   const { email, password } = req.body;
   try {
@@ -139,14 +149,15 @@ apiRouter.post("/login", async (req, res) => {
   }
 });
 
-// --- RUTAS PROTEGIDAS (TODAS REQUIEREN TOKEN)---
+// --- A PARTIR DE AQUÍ, TODAS LAS RUTAS REQUIEREN UN TOKEN VÁLIDO ---
+// Usamos el middleware 'verifyToken' para todas las rutas que siguen
 apiRouter.use(verifyToken);
 
 // --- RUTAS DE ADMIN ---
+// Usan el middleware 'isAdmin' para asegurar que solo los admins entren
 const adminRouter = express.Router();
-adminRouter.use(isAdmin);
+adminRouter.use(isAdmin); // ¡Importante! 'isAdmin' se aplica a todas las rutas de 'adminRouter'
 
-// CRUD Genérico para Catálogos
 function createCatalogCrudRoutes(router, tableName, fields) {
   router.get(`/${tableName}`, async (req, res) =>
     res.json((await db.query(`SELECT * FROM ${tableName}`))[0])
@@ -181,7 +192,6 @@ createCatalogCrudRoutes(adminRouter, "ciclos", ["nombre_ciclo"]);
 createCatalogCrudRoutes(adminRouter, "sedes", ["nombre_sede", "direccion"]);
 createCatalogCrudRoutes(adminRouter, "carreras", ["nombre_carrera"]);
 
-// CRUD USUARIOS
 adminRouter.get("/usuarios", async (req, res) =>
   res.json(
     (
@@ -221,7 +231,10 @@ adminRouter.post("/usuarios", async (req, res) => {
 adminRouter.get("/usuarios/:id", async (req, res) =>
   res.json(
     (
-      await db.query("SELECT * FROM usuarios WHERE id = ?", [req.params.id])
+      await db.query(
+        "SELECT id, nombre, apellido_paterno, email, rol, apellido_materno FROM usuarios WHERE id = ?",
+        [req.params.id]
+      )
     )[0][0]
   )
 );
@@ -285,8 +298,6 @@ adminRouter.get("/docentes", async (req, res) =>
     )[0]
   )
 );
-
-// CRUD ASIGNATURAS y GRUPOS
 adminRouter.get("/asignaturas", async (req, res) =>
   res.json((await db.query("SELECT * FROM asignaturas"))[0])
 );
@@ -463,7 +474,6 @@ adminRouter.delete("/grupos/:id/dar-baja/:alumnoId", async (req, res) => {
     connection.release();
   }
 });
-// RUTAS EXPEDIENTE
 adminRouter.get("/aspirantes/:id/expediente", async (req, res) => {
   const { id } = req.params;
   const [docs] = await db.query(
@@ -478,6 +488,9 @@ adminRouter.post(
   async (req, res) => {
     const { id: aspirante_id } = req.params;
     const { tipo_documento } = req.body;
+    if (!req.file) {
+      return res.status(400).send({ message: "No se subió ningún archivo." });
+    }
     const { filename, originalname } = req.file;
     const sql = `
         INSERT INTO expediente_aspirantes (aspirante_id, tipo_documento, ruta_archivo, nombre_original)
@@ -512,11 +525,11 @@ adminRouter.delete("/expedientes/:id", async (req, res) => {
     res.status(404).send({ message: "Documento no encontrado" });
   }
 });
-apiRouter.use("/admin", adminRouter);
+apiRouter.use("/admin", adminRouter); // Registra el router de admin en /api/admin
 
 // --- RUTAS DE DOCENTE ---
 const docenteRouter = express.Router();
-docenteRouter.use(isDocente);
+docenteRouter.use(isDocente); // Se asegura que solo docentes entren
 docenteRouter.get("/mis-cursos", async (req, res) => {
   const docente_id = req.user.id;
   const sql = `
@@ -554,11 +567,11 @@ docenteRouter.post("/calificar", async (req, res) => {
   );
   res.send({ message: "Calificación guardada" });
 });
-apiRouter.use("/docente", docenteRouter);
+apiRouter.use("/docente", docenteRouter); // Registra el router de docente en /api/docente
 
 // --- RUTAS DE ALUMNO ---
 const alumnoRouter = express.Router();
-alumnoRouter.use(isAlumno);
+alumnoRouter.use(isAlumno); // Se asegura que solo alumnos entren
 alumnoRouter.get("/mi-grupo", async (req, res) => {
   const alumno_id = req.user.id;
   const [[miGrupo]] = await db.query(
@@ -590,9 +603,7 @@ alumnoRouter.get("/mi-grupo", async (req, res) => {
   ]);
   res.json({ grupo, asignaturas });
 });
-apiRouter.use("/alumno", alumnoRouter);
-
-app.use("/api", apiRouter);
+apiRouter.use("/alumno", alumnoRouter); // Registra el router de alumno en /api/alumno
 
 // --- INICIO DEL SERVIDOR ---
 const PORT = 3001;

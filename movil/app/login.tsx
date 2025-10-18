@@ -1,4 +1,3 @@
-// Ruta del archivo: sistema_cevvi/movil/app/login.tsx
 import { useState } from "react";
 import {
   View,
@@ -10,9 +9,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { useAuth } from "@/context/AuthContext";
-import { ThemedView } from "@/components/ThemedView";
-import { ThemedText } from "@/components/ThemedText";
+import { useAuth } from "../context/AuthContext";
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
@@ -27,7 +24,7 @@ export default function LoginScreen() {
     setIsLoading(false);
 
     if (result.success) {
-      if (result.user.rol === "admin" || result.user.rol === "aspirante") {
+      if (result.user?.rol === "admin" || result.user?.rol === "aspirante") {
         Alert.alert(
           "Acceso Denegado",
           "Esta aplicación es solo para alumnos y docentes."
@@ -44,8 +41,8 @@ export default function LoginScreen() {
   };
 
   return (
-    <ThemedView style={styles.container}>
-      <ThemedText style={styles.title}>Iniciar Sesión</ThemedText>
+    <View style={styles.container}>
+      <Text style={styles.title}>Iniciar Sesión</Text>
       <TextInput
         style={styles.input}
         placeholder="Email"
@@ -66,7 +63,7 @@ export default function LoginScreen() {
       ) : (
         <Button title="Entrar" onPress={handleLogin} />
       )}
-    </ThemedView>
+    </View>
   );
 }
 

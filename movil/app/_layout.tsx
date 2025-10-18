@@ -1,4 +1,3 @@
-// Ruta del archivo: sistema_cevvi/movil/app/_layout.tsx
 import {
   DarkTheme,
   DefaultTheme,
@@ -9,9 +8,8 @@ import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
 import "react-native-reanimated";
-import { AuthProvider, useAuth } from "@/context/AuthContext";
-
-import { useColorScheme } from "@/hooks/useColorScheme";
+import { AuthProvider, useAuth } from "../context/AuthContext";
+import { useColorScheme } from "../hooks/useColorScheme";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -21,27 +19,23 @@ function RootLayout() {
   const router = useRouter();
   const colorScheme = useColorScheme();
 
-  const [loaded] = useFonts({
-    SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
-  });
+  // const [loaded] = useFonts({
+  //   SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
+  // });
 
   useEffect(() => {
-    if (!loaded || loading) return;
+    if (loading || !loaded) return;
 
     SplashScreen.hideAsync();
 
-    const inTabsGroup = segments[0] === "(tabs)";
+    const inAuthGroup = segments[0] === "(tabs)";
 
-    if (!user && inTabsGroup) {
+    if (!user && inAuthGroup) {
       router.replace("/login");
-    } else if (user && !inTabsGroup) {
-      if (user.rol === "alumno" || user.rol === "docente") {
-        router.replace("/(tabs)");
-      } else {
-        router.replace("/login");
-      }
+    } else if (user && !inAuthGroup) {
+      router.replace("/(tabs)");
     }
-  }, [loaded, user, loading, segments, router]);
+  }, [user, loading, segments, router, loaded]);
 
   if (!loaded || loading) {
     return null;
