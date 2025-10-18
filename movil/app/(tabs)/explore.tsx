@@ -1,112 +1,159 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+// Ruta del archivo: sistema_cevvi/movil/app/(tabs)/explore.tsx
+import React, { useState, useEffect, useCallback } from "react";
+import {
+  StyleSheet,
+  View,
+  ScrollView,
+  RefreshControl,
+  ActivityIndicator,
+  TouchableOpacity,
+} from "react-native";
+import { useAuth } from "@/context/AuthContext";
+import { ThemedView } from "@/components/ThemedView";
+import { ThemedText } from "@/components/ThemedText";
+import { Ionicons } from "@expo/vector-icons";
+import { Redirect, useNavigation } from "expo-router";
 
-import { Collapsible } from '@/components/ui/collapsible';
-import { ExternalLink } from '@/components/external-link';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Fonts } from '@/constants/theme';
+export default function DocenteDashboardScreen() {
+  const { user, api } = useAuth();
+  const [cursos, setCursos] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const navigation = useNavigation();
 
-export default function TabTwoScreen() {
+  const fetchCursos = useCallback(async () => {
+    if (!user || user.rol !== "docente") return;
+    try {
+      const response = await api.get("/docente/mis-cursos");
+      setCursos(response.data);
+    } catch (error) {
+      console.error(
+        "Error al cargar los cursos del docente:",
+        error.response?.data?.message || error.message
+      );
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [user, api]);
+
+  useEffect(() => {
+    if (user?.rol === "docente") {
+      navigation.setOptions({ title: `Portal de ${user.nombre}` });
+      fetchCursos();
+    }
+  }, [fetchCursos, user, navigation]);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchCursos();
+  };
+
+  if (loading && !refreshing) {
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" />
+      </View>
+    );
+  }
+
+  // Si el usuario no es un docente, redirigir a la pestaña de alumno
+  if (user && user.rol !== "docente") {
+    return <Redirect href="/(tabs)" />;
+  }
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#D0D0D0', dark: '#353636' }}
-      headerImage={
-        <IconSymbol
-          size={310}
-          color="#808080"
-          name="chevron.left.forwardslash.chevron.right"
-          style={styles.headerImage}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText
-          type="title"
-          style={{
-            fontFamily: Fonts.rounded,
-          }}>
-          Explore
-        </ThemedText>
-      </ThemedView>
-      <ThemedText>This app includes example code to help you get started.</ThemedText>
-      <Collapsible title="File-based routing">
-        <ThemedText>
-          This app has two screens:{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> and{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/explore.tsx</ThemedText>
-        </ThemedText>
-        <ThemedText>
-          The layout file in <ThemedText type="defaultSemiBold">app/(tabs)/_layout.tsx</ThemedText>{' '}
-          sets up the tab navigator.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/router/introduction">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Android, iOS, and web support">
-        <ThemedText>
-          You can open this project on Android, iOS, and the web. To open the web version, press{' '}
-          <ThemedText type="defaultSemiBold">w</ThemedText> in the terminal running this project.
-        </ThemedText>
-      </Collapsible>
-      <Collapsible title="Images">
-        <ThemedText>
-          For static images, you can use the <ThemedText type="defaultSemiBold">@2x</ThemedText> and{' '}
-          <ThemedText type="defaultSemiBold">@3x</ThemedText> suffixes to provide files for
-          different screen densities
-        </ThemedText>
-        <Image
-          source={require('@/assets/images/react-logo.png')}
-          style={{ width: 100, height: 100, alignSelf: 'center' }}
-        />
-        <ExternalLink href="https://reactnative.dev/docs/images">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Light and dark mode components">
-        <ThemedText>
-          This template has light and dark mode support. The{' '}
-          <ThemedText type="defaultSemiBold">useColorScheme()</ThemedText> hook lets you inspect
-          what the user&apos;s current color scheme is, and so you can adjust UI colors accordingly.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/develop/user-interface/color-themes/">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Animations">
-        <ThemedText>
-          This template includes an example of an animated component. The{' '}
-          <ThemedText type="defaultSemiBold">components/HelloWave.tsx</ThemedText> component uses
-          the powerful{' '}
-          <ThemedText type="defaultSemiBold" style={{ fontFamily: Fonts.mono }}>
-            react-native-reanimated
-          </ThemedText>{' '}
-          library to create a waving hand animation.
-        </ThemedText>
-        {Platform.select({
-          ios: (
-            <ThemedText>
-              The <ThemedText type="defaultSemiBold">components/ParallaxScrollView.tsx</ThemedText>{' '}
-              component provides a parallax effect for the header image.
-            </ThemedText>
-          ),
-        })}
-      </Collapsible>
-    </ParallaxScrollView>
+    <ScrollView
+      style={styles.container}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+      }
+    >
+      <ThemedText style={styles.sectionTitle}>Mis Cursos Asignados</ThemedText>
+
+      {cursos.length > 0 ? (
+        cursos.map((curso) => (
+          <TouchableOpacity
+            key={`${curso.grupo_id}-${curso.asignatura_id}`}
+            style={styles.card}
+          >
+            <View style={{ flex: 1 }}>
+              <ThemedText style={styles.cardTitle}>
+                {curso.nombre_asignatura}
+              </ThemedText>
+              <ThemedText style={styles.cardSubtitle}>
+                Grupo: {curso.nombre_grupo} | Ciclo: {curso.nombre_ciclo}
+              </ThemedText>
+              <View style={styles.cardFooter}>
+                <Ionicons name="people-outline" size={16} color="#555" />
+                <ThemedText style={styles.footerText}>
+                  {curso.total_alumnos} Alumnos
+                </ThemedText>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward-outline" size={24} color="#ccc" />
+          </TouchableOpacity>
+        ))
+      ) : (
+        <ThemedView style={styles.centeredCard}>
+          <ThemedText>No tienes cursos asignados actualmente.</ThemedText>
+        </ThemedView>
+      )}
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  headerImage: {
-    color: '#808080',
-    bottom: -90,
-    left: -35,
-    position: 'absolute',
+  container: {
+    flex: 1,
+    backgroundColor: "#f0f0f7",
   },
-  titleContainer: {
-    flexDirection: 'row',
-    gap: 8,
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    marginTop: 20,
+    marginLeft: 15,
+    marginBottom: 10,
+  },
+  centered: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  centeredCard: {
+    backgroundColor: "white",
+    borderRadius: 10,
+    padding: 20,
+    margin: 15,
+    alignItems: "center",
+  },
+  card: {
+    backgroundColor: "white",
+    borderRadius: 10,
+    padding: 15,
+    marginHorizontal: 15,
+    marginBottom: 10,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  cardSubtitle: {
+    fontSize: 14,
+    color: "gray",
+    marginTop: 4,
+  },
+  cardFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 10,
+  },
+  footerText: {
+    marginLeft: 5,
+    fontSize: 12,
+    color: "#555",
   },
 });

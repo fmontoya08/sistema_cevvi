@@ -1,37 +1,51 @@
-import React, { useState } from "react";
-import { StyleSheet, Text, View, TextInput, Button, Alert } from "react-native";
-import axios from "axios";
+// Ruta del archivo: sistema_cevvi/movil/app/login.tsx
+import { useState } from "react";
+import {
+  View,
+  TextInput,
+  Button,
+  StyleSheet,
+  Text,
+  Alert,
+  ActivityIndicator,
+} from "react-native";
+import { useRouter } from "expo-router";
+import { useAuth } from "@/context/AuthContext";
+import { ThemedView } from "@/components/ThemedView";
+import { ThemedText } from "@/components/ThemedText";
 
-// 💡 ¡Paso importante! Reemplaza 'localhost' con la IP de tu computadora.
-const API_URL = "http://192.168.1.100:3001"; // <-- CAMBIA ESTA IP
-
-export default function App() {
+export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const { login } = useAuth();
+  const router = useRouter();
 
   const handleLogin = async () => {
-    if (!email || !password) {
-      Alert.alert("Error", "Por favor, ingresa tu email y contraseña.");
-      return;
-    }
+    setIsLoading(true);
+    const result = await login(email, password);
+    setIsLoading(false);
 
-    try {
-      const response = await axios.post(`${API_URL}/login`, {
-        email,
-        password,
-      });
-      console.log("Token:", response.data.token);
-      Alert.alert("¡Éxito!", "Has iniciado sesión correctamente.");
-      // Aquí guardarías el token de forma segura (AsyncStorage)
-    } catch (error) {
-      console.error("Error en el login:", error);
-      Alert.alert("Error", "Email o contraseña incorrectos.");
+    if (result.success) {
+      if (result.user.rol === "admin" || result.user.rol === "aspirante") {
+        Alert.alert(
+          "Acceso Denegado",
+          "Esta aplicación es solo para alumnos y docentes."
+        );
+        return;
+      }
+      router.replace("/(tabs)");
+    } else {
+      Alert.alert(
+        "Error de Login",
+        result.error || "No se pudo iniciar sesión."
+      );
     }
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Iniciar Sesión (Móvil)</Text>
+    <ThemedView style={styles.container}>
+      <ThemedText style={styles.title}>Iniciar Sesión</ThemedText>
       <TextInput
         style={styles.input}
         placeholder="Email"
@@ -45,33 +59,39 @@ export default function App() {
         placeholder="Contraseña"
         value={password}
         onChangeText={setPassword}
-        secureTextEntry // Oculta la contraseña
+        secureTextEntry
       />
-      <Button title="Entrar" onPress={handleLogin} />
-    </View>
+      {isLoading ? (
+        <ActivityIndicator size="large" />
+      ) : (
+        <Button title="Entrar" onPress={handleLogin} />
+      )}
+    </ThemedView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fff",
-    alignItems: "center",
     justifyContent: "center",
-    padding: 20,
+    padding: 16,
+    backgroundColor: "#f5f5f5",
   },
   title: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: "bold",
-    marginBottom: 20,
+    textAlign: "center",
+    marginBottom: 32,
+    color: "#333",
   },
   input: {
-    width: "100%",
-    height: 40,
-    borderColor: "gray",
+    height: 50,
+    backgroundColor: "white",
+    borderColor: "#ddd",
     borderWidth: 1,
-    borderRadius: 5,
-    marginBottom: 15,
-    paddingHorizontal: 10,
+    marginBottom: 16,
+    paddingHorizontal: 15,
+    borderRadius: 8,
+    fontSize: 16,
   },
 });

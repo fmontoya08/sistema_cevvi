@@ -78,7 +78,7 @@ const verifyToken = (req, res, next) => {
 };
 
 const isAdmin = (req, res, next) => {
-  if (req.user.rol !== "admin") {
+  if (req.user && req.user.rol !== "admin") {
     return res
       .status(403)
       .send({ message: "Acceso denegado. Se requiere rol de administrador." });
@@ -87,7 +87,7 @@ const isAdmin = (req, res, next) => {
 };
 
 const isDocente = (req, res, next) => {
-  if (req.user.rol !== "docente") {
+  if (req.user && req.user.rol !== "docente") {
     return res
       .status(403)
       .send({ message: "Acceso denegado. Se requiere rol de docente." });
@@ -96,7 +96,7 @@ const isDocente = (req, res, next) => {
 };
 
 const isAlumno = (req, res, next) => {
-  if (req.user.rol !== "alumno") {
+  if (req.user && req.user.rol !== "alumno") {
     return res
       .status(403)
       .send({ message: "Acceso denegado. Se requiere rol de alumno." });
