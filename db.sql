@@ -123,10 +123,10 @@ CREATE TABLE expediente_aspirantes (
 
 
 -- INSERCIONES DE EJEMPLO (CATÁLOGOS)
-INSERT INTO planes_estudio (nombre_plan) VALUES ('Plan 2020'), ('Plan 2024');
-INSERT INTO tipos_asignatura (tipo) VALUES ('Básica'), ('Avanzada'), ('Optativa');
-INSERT INTO grados (nombre_grado) VALUES ('1er Semestre'), ('2do Semestre'), ('3er Semestre');
-INSERT INTO ciclos (nombre_ciclo) VALUES ('2024-A'), ('2024-B');
-INSERT INTO sedes (nombre_sede, direccion) VALUES ('Campus Central', 'Av. Universidad 123'), ('Campus Norte', 'Blvd. Norte 456');
-INSERT INTO carreras (nombre_carrera) VALUES ('Ingeniería de Software'), ('Diseño Gráfico');
+-- INSERT INTO planes_estudio (nombre_plan) VALUES ('Plan 2020'), ('Plan 2024');
+-- INSERT INTO tipos_asignatura (tipo) VALUES ('Básica'), ('Avanzada'), ('Optativa');
+-- INSERT INTO grados (nombre_grado) VALUES ('1er Semestre'), ('2do Semestre'), ('3er Semestre');
+-- INSERT INTO ciclos (nombre_ciclo) VALUES ('2024-A'), ('2024-B');
+-- INSERT INTO sedes (nombre_sede, direccion) VALUES ('Campus Central', 'Av. Universidad 123'), ('Campus Norte', 'Blvd. Norte 456');
+-- INSERT INTO carreras (nombre_carrera) VALUES ('Ingeniería de Software'), ('Diseño Gráfico');
 
