@@ -12,6 +12,8 @@ app.use(cors());
 app.use(express.json());
 
 const JWT_SECRET = "tu_clave_secreta_super_segura_y_larga";
+const CURP_REGEX =
+  /^[A-Z]{1}[AEIOU]{1}[A-Z]{2}[0-9]{2}(0[1-9]|1[0-2])(0[1-9]|1[0-9]|2[0-9]|3[0-1])[HM]{1}(AS|BC|BS|CC|CS|CH|CL|CM|DF|DG|GT|GR|HG|JC|MC|MN|MS|NT|NL|OC|PL|QT|QR|SP|SL|SR|TC|TS|TL|VZ|YN|ZS|NE)[B-DF-HJ-NP-TV-Z]{3}[A-Z0-9]{1}[0-9]{1}$/;
 
 // --- SERVIR ARCHIVOS ESTÁTICOS ---
 const uploadsDir = path.join(__dirname, "uploads");
@@ -196,27 +198,46 @@ adminRouter.get("/usuarios", async (req, res) =>
   res.json(
     (
       await db.query(
-        "SELECT id, nombre, apellido_paterno, email, rol FROM usuarios"
+        "SELECT id, nombre, apellido_paterno, apellido_materno, email, rol, telefono, curp, genero, DATE_FORMAT(fecha_nacimiento, '%Y-%m-%d') as fecha_nacimiento FROM usuarios"
       )
     )[0]
   )
 );
 adminRouter.post("/usuarios", async (req, res) => {
-  const { email, password, nombre, rol, apellido_paterno, apellido_materno } =
-    req.body;
+  const {
+    email,
+    password,
+    nombre,
+    rol,
+    apellido_paterno,
+    apellido_materno,
+    genero,
+    telefono,
+    curp,
+    fecha_nacimiento,
+  } = req.body;
+  if (curp && !CURP_REGEX.test(curp)) {
+    return res
+      .status(400)
+      .send({ message: "El formato de la CURP no es válido." });
+  }
   if (!["aspirante", "alumno", "docente", "admin"].includes(rol))
     return res.status(400).send({ message: "Rol no válido" });
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
     await db.query(
-      "INSERT INTO usuarios (email, password, nombre, rol, apellido_paterno, apellido_materno) VALUES (?, ?, ?, ?, ?, ?)",
+      "INSERT INTO usuarios (email, password, nombre, rol, apellido_paterno, apellido_materno, genero, telefono, curp, fecha_nacimiento) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", // <-- Campos agregados
       [
         email,
         hashedPassword,
         nombre,
         rol,
-        apellido_paterno,
+        apellido_paterno || null,
         apellido_materno || null,
+        genero || null, // <-- Valor agregado
+        telefono || null, // <-- Valor agregado
+        curp || null, // <-- Valor agregado
+        fecha_nacimiento || null, // <-- Valor agregado
       ]
     );
     res.status(201).send({ message: "Usuario registrado" });
@@ -232,20 +253,35 @@ adminRouter.get("/usuarios/:id", async (req, res) =>
   res.json(
     (
       await db.query(
-        "SELECT id, nombre, apellido_paterno, email, rol, apellido_materno FROM usuarios WHERE id = ?",
+        "SELECT id, nombre, apellido_paterno, email, rol, apellido_materno, genero, telefono, curp, fecha_nacimiento FROM usuarios WHERE id = ?", // <-- Campos agregados
         [req.params.id]
       )
     )[0][0]
   )
 );
 adminRouter.put("/usuarios/:id", async (req, res) => {
-  const { nombre, apellido_paterno, apellido_materno, email, password, rol } =
-    req.body;
+  const {
+    nombre,
+    apellido_paterno,
+    apellido_materno,
+    email,
+    password,
+    rol,
+    genero,
+    telefono,
+    curp,
+    fecha_nacimiento,
+  } = req.body;
+  if (curp && !CURP_REGEX.test(curp)) {
+    return res
+      .status(400)
+      .send({ message: "El formato de la CURP no es válido." });
+  }
   let sql, params;
   if (password) {
     const hashedPassword = await bcrypt.hash(password, 10);
     sql =
-      "UPDATE usuarios SET nombre=?, apellido_paterno=?, apellido_materno=?, email=?, password=?, rol=? WHERE id=?";
+      "UPDATE usuarios SET nombre=?, apellido_paterno=?, apellido_materno=?, email=?, password=?, rol=?, genero=?, telefono=?, curp=?, fecha_nacimiento=? WHERE id=?"; // <-- Campos agregados
     params = [
       nombre,
       apellido_paterno,
@@ -253,17 +289,25 @@ adminRouter.put("/usuarios/:id", async (req, res) => {
       email,
       hashedPassword,
       rol,
+      genero, // <-- Valor agregado
+      telefono, // <-- Valor agregado
+      curp, // <-- Valor agregado
+      fecha_nacimiento, // <-- Valor agregado
       req.params.id,
     ];
   } else {
     sql =
-      "UPDATE usuarios SET nombre=?, apellido_paterno=?, apellido_materno=?, email=?, rol=? WHERE id=?";
+      "UPDATE usuarios SET nombre=?, apellido_paterno=?, apellido_materno=?, email=?, rol=?, genero=?, telefono=?, curp=?, fecha_nacimiento=? WHERE id=?"; // <-- Campos agregados
     params = [
       nombre,
       apellido_paterno,
       apellido_materno,
       email,
       rol,
+      genero, // <-- Valor agregado
+      telefono, // <-- Valor agregado
+      curp, // <-- Valor agregado
+      fecha_nacimiento, // <-- Valor agregado
       req.params.id,
     ];
   }
@@ -298,9 +342,15 @@ adminRouter.get("/docentes", async (req, res) =>
     )[0]
   )
 );
-adminRouter.get("/asignaturas", async (req, res) =>
-  res.json((await db.query("SELECT * FROM asignaturas"))[0])
-);
+adminRouter.get("/asignaturas", async (req, res) => {
+  const sql = `
+    SELECT a.*, p.nombre_plan, g.nombre_grado
+    FROM asignaturas a
+    LEFT JOIN planes_estudio p ON a.plan_estudio_id = p.id
+    LEFT JOIN grados g ON a.grado_id = g.id
+  `;
+  res.json((await db.query(sql))[0]);
+});
 adminRouter.post("/asignaturas", async (req, res) => {
   const {
     nombre_asignatura,
@@ -352,7 +402,7 @@ adminRouter.delete("/asignaturas/:id", async (req, res) => {
 });
 adminRouter.get("/grupos", async (req, res) => {
   const sql = `
-        SELECT g.*, c.nombre_ciclo, s.nombre_sede, p.nombre_plan, gr.nombre_grado 
+        SELECT g.*, g.estatus, c.nombre_ciclo, s.nombre_sede, p.nombre_plan, gr.nombre_grado 
         FROM grupos g
         JOIN ciclos c ON g.ciclo_id = c.id
         JOIN sedes s ON g.sede_id = s.id
@@ -388,19 +438,17 @@ adminRouter.get("/grupos/:id", async (req, res) => {
   res.json({ ...grupoRes[0], asignaturas, alumnos });
 });
 adminRouter.post("/grupos", async (req, res) => {
-  const { nombre_grupo, cupo, ciclo_id, sede_id, plan_estudio_id, grado_id } =
-    req.body;
+  const {
+    nombre_grupo,
+    cupo,
+    ciclo_id,
+    sede_id,
+    plan_estudio_id,
+    grado_id,
+    estatus,
+  } = req.body;
   await db.query(
-    "INSERT INTO grupos (nombre_grupo, cupo, ciclo_id, sede_id, plan_estudio_id, grado_id) VALUES (?,?,?,?,?,?)",
-    [nombre_grupo, cupo, ciclo_id, sede_id, plan_estudio_id, grado_id]
-  );
-  res.status(201).send({ message: "Grupo creado" });
-});
-adminRouter.put("/grupos/:id", async (req, res) => {
-  const { nombre_grupo, cupo, ciclo_id, sede_id, plan_estudio_id, grado_id } =
-    req.body;
-  await db.query(
-    "UPDATE grupos SET nombre_grupo=?, cupo=?, ciclo_id=?, sede_id=?, plan_estudio_id=?, grado_id=? WHERE id=?",
+    "INSERT INTO grupos (nombre_grupo, cupo, ciclo_id, sede_id, plan_estudio_id, grado_id, estatus) VALUES (?,?,?,?,?,?,?)",
     [
       nombre_grupo,
       cupo,
@@ -408,6 +456,31 @@ adminRouter.put("/grupos/:id", async (req, res) => {
       sede_id,
       plan_estudio_id,
       grado_id,
+      estatus || "activo",
+    ]
+  );
+  res.status(201).send({ message: "Grupo creado" });
+});
+adminRouter.put("/grupos/:id", async (req, res) => {
+  const {
+    nombre_grupo,
+    cupo,
+    ciclo_id,
+    sede_id,
+    plan_estudio_id,
+    grado_id,
+    estatus,
+  } = req.body;
+  await db.query(
+    "UPDATE grupos SET nombre_grupo=?, cupo=?, ciclo_id=?, sede_id=?, plan_estudio_id=?, grado_id=?, estatus=? WHERE id=?",
+    [
+      nombre_grupo,
+      cupo,
+      ciclo_id,
+      sede_id,
+      plan_estudio_id,
+      grado_id,
+      estatus, // <-- Agregado
       req.params.id,
     ]
   );

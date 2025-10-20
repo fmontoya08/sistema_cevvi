@@ -35,6 +35,9 @@ import {
   Save,
   Upload,
   File as FileIcon,
+  Calendar, // <-- NUEVO
+  FileText, // <-- NUEVO
+  TrendingUp, // <-- NUEVO
 } from "lucide-react";
 
 // --- CONFIGURACIÓN DE AXIOS ---
@@ -151,10 +154,17 @@ const AdminLayout = () => {
   const navItems = [
     { icon: Home, label: "Dashboard", path: "/dashboard" },
     { icon: Users, label: "Usuarios", path: "/usuarios" },
-    { icon: Book, label: "Asignaturas", path: "/asignaturas" },
-    { icon: Group, label: "Grupos", path: "/grupos" },
+
+    // --- NUEVA SECCIÓN DE CATÁLOGOS ---
+    { icon: Calendar, label: "Ciclos Escolares", path: "/ciclos" },
+    { icon: FileText, label: "Planes de Estudio", path: "/planes-estudio" },
+    { icon: TrendingUp, label: "Grados/Semestres", path: "/grados" },
     { icon: GraduationCap, label: "Carreras", path: "/carreras" },
     { icon: Building, label: "Sedes", path: "/sedes" },
+    // --- FIN DE CATÁLOGOS ---
+
+    { icon: Book, label: "Asignaturas", path: "/asignaturas" },
+    { icon: Group, label: "Grupos", path: "/grupos" },
   ];
 
   return (
@@ -458,6 +468,11 @@ const UsuariosPage = () => {
               <th className="px-4 py-2">Nombre Completo</th>
               <th className="px-4 py-2">Email</th>
               <th className="px-4 py-2">Rol</th>
+              {/* --- NUEVAS CABECERAS --- */}
+              <th className="px-4 py-2">Teléfono</th>
+              <th className="px-4 py-2">CURP</th>
+              <th className="px-4 py-2">Género</th>
+              {/* --- FIN NUEVAS CABECERAS --- */}
               <th className="px-4 py-2">Acciones</th>
             </tr>
           </thead>
@@ -475,6 +490,13 @@ const UsuariosPage = () => {
                 <td className="px-4 py-2">{`${user.nombre} ${user.apellido_paterno}`}</td>
                 <td className="px-4 py-2">{user.email}</td>
                 <td className="px-4 py-2 capitalize">{user.rol}</td>
+
+                {/* --- NUEVAS CELDAS --- */}
+                <td className="px-4 py-2">{user.telefono || "N/A"}</td>
+                <td className="px-4 py-2">{user.curp || "N/A"}</td>
+                <td className="px-4 py-2">{user.genero || "N/A"}</td>
+                {/* --- FIN NUEVAS CELDAS --- */}
+
                 <td className="px-4 py-2 flex items-center space-x-2">
                   <button
                     onClick={(e) => {
@@ -520,15 +542,41 @@ const UsuarioModal = ({ usuario, onClose, onSave }) => {
     email: usuario?.email || "",
     password: "",
     rol: usuario?.rol || "aspirante",
+    genero: usuario?.genero || "",
+    telefono: usuario?.telefono || "",
+    curp: usuario?.curp || "",
+    fecha_nacimiento: usuario?.fecha_nacimiento || "",
   });
+
+  const [formErrors, setFormErrors] = useState({});
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    if (name === "curp") {
+      setFormData((prev) => ({ ...prev, [name]: value.toUpperCase() }));
+      // Limpia el error de CURP si el usuario está corrigiendo
+      if (formErrors.curp) {
+        setFormErrors((prev) => ({ ...prev, curp: null }));
+      }
+    } else {
+      setFormData((prev) => ({ ...prev, [name]: value }));
+    }
+  };
+
+  const validateCurp = (curp) => {
+    if (!curp || curp.length === 0) return true; // Permite CURP vacía (opcional)
+    const curpRegex =
+      /^[A-Z]{1}[AEIOU]{1}[A-Z]{2}[0-9]{2}(0[1-9]|1[0-2])(0[1-9]|1[0-9]|2[0-9]|3[0-1])[HM]{1}(AS|BC|BS|CC|CS|CH|CL|CM|DF|DG|GT|GR|HG|JC|MC|MN|MS|NT|NL|OC|PL|QT|QR|SP|SL|SR|TC|TS|TL|VZ|YN|ZS|NE)[B-DF-HJ-NP-TV-Z]{3}[A-Z0-9]{1}[0-9]{1}$/;
+    return curpRegex.test(curp);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setFormErrors({});
+    if (!validateCurp(formData.curp)) {
+      setFormErrors({ curp: "El formato de la CURP no es válido." });
+      return; // Detiene el envío
+    }
     try {
       if (isEditing) {
         const dataToSend = { ...formData };
@@ -547,6 +595,9 @@ const UsuarioModal = ({ usuario, onClose, onSave }) => {
         "Error al guardar: " +
           (error.response?.data?.message || "Error desconocido")
       );
+      setFormErrors({
+        submit: error.response?.data?.message || "Error desconocido",
+      });
     }
   };
 
@@ -590,7 +641,59 @@ const UsuarioModal = ({ usuario, onClose, onSave }) => {
               placeholder="Apellido Materno"
               className="w-full px-3 py-2 border rounded-md"
             />
+            <input
+              type="text"
+              name="telefono"
+              value={formData.telefono}
+              onChange={handleChange}
+              placeholder="Teléfono"
+              className="w-full px-3 py-2 border rounded-md"
+            />
+            <input
+              type="text"
+              name="curp"
+              value={formData.curp}
+              onChange={handleChange}
+              placeholder="CURP"
+              // --- CAMBIOS AQUÍ ---
+              maxLength="18"
+              className={`w-full px-3 py-2 border rounded-md ${
+                formErrors.curp ? "border-red-500" : "border-gray-300"
+              }`}
+              // Agrega validación nativa del navegador
+              pattern="[A-Z]{1}[AEIOU]{1}[A-Z]{2}[0-9]{2}(0[1-9]|1[0-2])(0[1-9]|1[0-9]|2[0-9]|3[0-1])[HM]{1}(AS|BC|BS|CC|CS|CH|CL|CM|DF|DG|GT|GR|HG|JC|MC|MN|MS|NT|NL|OC|PL|QT|QR|SP|SL|SR|TC|TS|TL|VZ|YN|ZS|NE)[B-DF-HJ-NP-TV-Z]{3}[A-Z0-9]{1}[0-9]{1}"
+              title="Ingresa una CURP válida de 18 caracteres en mayúsculas."
+            />
+            <div>
+              <label className="text-sm text-gray-500">
+                Fecha de Nacimiento
+              </label>
+              <input
+                type="date"
+                name="fecha_nacimiento"
+                value={formData.fecha_nacimiento}
+                onChange={handleChange}
+                placeholder="Fecha de Nacimiento"
+                className="w-full px-3 py-2 border rounded-md"
+              />
+            </div>
+            <select
+              name="genero"
+              value={formData.genero}
+              onChange={handleChange}
+              className="w-full px-3 py-2 border rounded-md"
+            >
+              <option value="">-- Seleccione Género --</option>
+              <option value="Femenino">Femenino</option>
+              <option value="Masculino">Masculino</option>
+              <option value="Otro">Otro</option>
+            </select>
+            {/* --- FIN DE CAMPOS NUEVOS --- */}
           </div>
+          {/* --- NUEVO: MUESTRA EL ERROR DE CURP --- */}
+          {formErrors.curp && (
+            <p className="text-red-600 text-sm">{formErrors.curp}</p>
+          )}
           <input
             type="email"
             name="email"
@@ -705,6 +808,10 @@ const AsignaturasPage = () => {
             <tr>
               <th className="px-4 py-2">Nombre</th>
               <th className="px-4 py-2">Clave</th>
+              {/* --- NUEVAS COLUMNAS --- */}
+              <th className="px-4 py-2">Plan de Estudios</th>
+              <th className="px-4 py-2">Grado</th>
+              {/* --- FIN --- */}
               <th className="px-4 py-2">Créditos</th>
               <th className="px-4 py-2">Acciones</th>
             </tr>
@@ -714,6 +821,10 @@ const AsignaturasPage = () => {
               <tr key={asig.id} className="border-b">
                 <td className="px-4 py-2">{asig.nombre_asignatura}</td>
                 <td className="px-4 py-2">{asig.clave_asignatura}</td>
+                {/* --- NUEVAS CELDAS --- */}
+                <td className="px-4 py-2">{asig.nombre_plan || "N/A"}</td>
+                <td className="px-4 py-2">{asig.nombre_grado || "N/A"}</td>
+                {/* --- FIN --- */}
                 <td className="px-4 py-2">{asig.creditos}</td>
                 <td className="px-4 py-2 flex items-center space-x-2">
                   <button
@@ -751,10 +862,38 @@ const AsignaturaModal = ({ asignatura, onClose, onSave }) => {
     nombre_asignatura: asignatura?.nombre_asignatura || "",
     clave_asignatura: asignatura?.clave_asignatura || "",
     creditos: asignatura?.creditos || "",
-    plan_estudio_id: asignatura?.plan_estudio_id || 1,
+    plan_estudio_id: asignatura?.plan_estudio_id || "", // <-- CAMBIO
     tipo_asignatura_id: asignatura?.tipo_asignatura_id || 1,
-    grado_id: asignatura?.grado_id || 1,
+    grado_id: asignatura?.grado_id || "", // <-- CAMBIO
   });
+
+  const [catalogos, setCatalogos] = useState({ planes: [], grados: [] });
+  // --- AGREGA ESTE useEffect ---
+  useEffect(() => {
+    const fetchCatalogos = async () => {
+      try {
+        const [planesRes, gradosRes] = await Promise.all([
+          api.get("/admin/planes_estudio"),
+          api.get("/admin/grados"),
+        ]);
+        setCatalogos({
+          planes: planesRes.data,
+          grados: gradosRes.data,
+        });
+        // Si es una asignatura nueva, pre-selecciona el primer valor
+        if (!asignatura) {
+          setFormData((prev) => ({
+            ...prev,
+            plan_estudio_id: planesRes.data[0]?.id || "",
+            grado_id: gradosRes.data[0]?.id || "",
+          }));
+        }
+      } catch (error) {
+        console.error("Error cargando catálogos para asignaturas", error);
+      }
+    };
+    fetchCatalogos();
+  }, [asignatura]); // Depende de 'asignatura' para resetear si cambia
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -820,6 +959,41 @@ const AsignaturaModal = ({ asignatura, onClose, onSave }) => {
             required
             className="w-full px-3 py-2 border rounded-md focus:ring-principal focus:border-principal"
           />
+          {/* --- AGREGA ESTOS 2 BLOQUES --- */}
+          <div>
+            <label className="text-sm font-medium text-gray-700">
+              Plan de Estudios
+            </label>
+            <select
+              name="plan_estudio_id"
+              value={formData.plan_estudio_id}
+              onChange={handleChange}
+              className="w-full px-3 py-2 mt-1 border rounded-md"
+            >
+              {catalogos.planes.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.nombre_plan}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="text-sm font-medium text-gray-700">Grado</label>
+            <select
+              name="grado_id"
+              value={formData.grado_id}
+              onChange={handleChange}
+              className="w-full px-3 py-2 mt-1 border rounded-md"
+            >
+              {catalogos.grados.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.nombre_grado}
+                </option>
+              ))}
+            </select>
+          </div>
+          {/* --- FIN DE BLOQUES AGREGADOS --- */}
           <div className="flex justify-end space-x-4 mt-8">
             <button
               type="button"
@@ -902,6 +1076,7 @@ const GruposPage = () => {
               <th className="px-4 py-2">Sede</th>
               <th className="px-4 py-2">Plan de Estudios</th>
               <th className="px-4 py-2">Grado</th>
+              <th className="px-4 py-2">Estatus</th> {/* <-- NUEVA LÍNEA */}
               <th className="px-4 py-2">Acciones</th>
             </tr>
           </thead>
@@ -921,6 +1096,19 @@ const GruposPage = () => {
                 <td className="px-4 py-2">{g.nombre_sede}</td>
                 <td className="px-4 py-2">{g.nombre_plan}</td>
                 <td className="px-4 py-2">{g.nombre_grado}</td>
+                {/* --- INSERTA ESTE BLOQUE NUEVO AQUÍ --- */}
+                <td className="px-4 py-2">
+                  <span
+                    className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                      g.estatus === "activo"
+                        ? "bg-green-100 text-green-800"
+                        : "bg-red-100 text-red-800"
+                    }`}
+                  >
+                    {g.estatus === "activo" ? "Activo" : "Inactivo"}
+                  </span>
+                </td>
+                {/* --- FIN DEL BLOQUE NUEVO --- */}
                 <td className="px-4 py-2 flex items-center space-x-2">
                   <button
                     onClick={() => openModal(g)}
@@ -960,6 +1148,7 @@ const GrupoModal = ({ grupo, onClose, onSave }) => {
     sede_id: grupo?.sede_id || "",
     plan_estudio_id: grupo?.plan_estudio_id || "",
     grado_id: grupo?.grado_id || "",
+    estatus: grupo?.estatus || "activo", // <-- Agregado (default 'activo')
   });
 
   const [catalogos, setCatalogos] = useState({
@@ -1105,6 +1294,23 @@ const GrupoModal = ({ grupo, onClose, onSave }) => {
             ))}
           </select>
 
+          {/* --- INSERTA ESTE BLOQUE NUEVO AQUÍ --- */}
+          <div>
+            <label className="text-sm font-medium text-gray-700">
+              Estatus del Grupo
+            </label>
+            <select
+              name="estatus"
+              value={formData.estatus}
+              onChange={handleChange}
+              className="w-full px-3 py-2 mt-1 border rounded-md"
+            >
+              <option value="activo">Activo</option>
+              <option value="inactivo">Inactivo</option>
+            </select>
+          </div>
+          {/* --- FIN DEL BLOQUE NUEVO --- */}
+
           <div className="flex justify-end space-x-4 mt-8">
             <button
               type="button"
@@ -1188,42 +1394,84 @@ const DetalleGrupoPage = () => {
       <h2 className="text-3xl font-bold text-gray-800 mb-4">
         Detalle del Grupo: {grupo.nombre_grupo}
       </h2>
+      {/* --- INSERTA ESTE BLOQUE NUEVO AQUÍ --- */}
+      <span
+        className={`px-3 py-1 rounded-full text-sm font-semibold mb-6 inline-block ${
+          grupo.estatus === "activo"
+            ? "bg-green-100 text-green-800"
+            : "bg-red-100 text-red-800"
+        }`}
+      >
+        Estatus: {grupo.estatus === "activo" ? "Activo" : "Inactivo"}
+      </span>
+      {/* --- FIN DEL BLOQUE NUEVO --- */}
 
       <div className="bg-white p-6 rounded-lg shadow mt-6">
         <h3 className="text-xl font-bold mb-4">Asignaturas y Docentes</h3>
-        <table className="w-full table-auto">
-          <thead className="text-left bg-gray-50">
-            <tr>
-              <th className="px-4 py-2">Asignatura</th>
-              <th className="px-4 py-2">Clave</th>
-              <th className="px-4 py-2">Docente Asignado</th>
-              <th className="px-4 py-2">Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {grupo.asignaturas.map((asig) => (
-              <tr key={asig.id} className="border-b">
-                <td className="px-4 py-2">{asig.nombre_asignatura}</td>
-                <td className="px-4 py-2">{asig.clave_asignatura}</td>
-                <td className="px-4 py-2">
-                  {asig.docente_id ? (
-                    `${asig.docente_nombre} ${asig.docente_apellido}`
-                  ) : (
-                    <span className="text-gray-500">Sin asignar</span>
-                  )}
-                </td>
-                <td className="px-4 py-2">
-                  <button
-                    onClick={() => handleOpenAsignarModal(asig)}
-                    className="text-principal hover:underline"
-                  >
-                    {asig.docente_id ? "Cambiar Docente" : "Asignar Docente"}
-                  </button>
-                </td>
+        <Link
+          to="/asignaturas"
+          className="flex items-center px-4 py-2 text-sm font-semibold text-white bg-secundario rounded-md hover:opacity-90"
+          title="Ir a gestionar el catálogo de asignaturas"
+        >
+          <Edit size={16} className="mr-2" />
+          Gestionar Asignaturas
+        </Link>
+        {/* --- MEJORA 1: Lógica condicional --- */}
+        {grupo.asignaturas.length === 0 ? (
+          <div className="text-center py-8 px-4 bg-gray-50 rounded-md border border-gray-200">
+            <Book size={40} className="mx-auto text-gray-400" />
+            <h4 className="font-semibold text-lg mt-3">
+              No hay asignaturas para este grupo
+            </h4>
+            <p className="text-gray-600 mt-1 max-w-lg mx-auto">
+              Para asignar docentes, primero deben existir asignaturas
+              vinculadas al Plan de Estudios (
+              <span className="font-semibold">{grupo.nombre_plan}</span>) y al
+              Grado (<span className="font-semibold">{grupo.nombre_grado}</span>
+              ) de este grupo.
+            </p>
+            <p className="text-gray-600 mt-3">
+              Por favor, ve a <strong>"Gestionar Asignaturas"</strong> (botón
+              arriba) y crea las materias correspondientes.
+            </p>
+          </div>
+        ) : (
+          <table className="w-full table-auto">
+            <thead className="text-left bg-gray-50">
+              <tr>
+                <th className="px-4 py-2">Asignatura</th>
+                <th className="px-4 py-2">Clave</th>
+                <th className="px-4 py-2">Docente Asignado</th>
+                <th className="px-4 py-2">Acciones</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {grupo.asignaturas.map((asig) => (
+                <tr key={asig.id} className="border-b">
+                  <td className="px-4 py-2">{asig.nombre_asignatura}</td>
+                  <td className="px-4 py-2">{asig.clave_asignatura}</td>
+                  <td className="px-4 py-2">
+                    {asig.docente_id ? (
+                      `${asig.docente_nombre} ${asig.docente_apellido}`
+                    ) : (
+                      <span className="text-gray-500">Sin asignar</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-2">
+                    <button
+                      onClick={() => handleOpenAsignarModal(asig)}
+                      className="text-principal hover:underline"
+                      disabled={grupo.estatus === "inactivo"}
+                    >
+                      {asig.docente_id ? "Cambiar Docente" : "Asignar Docente"}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        {/* --- Fin de la lógica condicional --- */}
       </div>
 
       <div className="bg-white p-6 rounded-lg shadow mt-6">
@@ -1233,7 +1481,11 @@ const DetalleGrupoPage = () => {
           </h3>
           <button
             onClick={() => setInscribirAlumnoModal(true)}
-            className="flex items-center px-4 py-2 font-semibold text-white bg-principal rounded-md hover:opacity-90"
+            className="flex items-center px-4 py-2 font-semibold text-white bg-principal rounded-md hover:opacity-90 disabled:bg-gray-400"
+            disabled={grupo.estatus === "inactivo"} // <-- AÑADE ESTO
+            title={
+              grupo.estatus === "inactivo" ? "Este grupo está cerrado" : ""
+            } // <-- (Opcional pero útil)
           >
             <UserPlus className="w-5 h-5 mr-2" />
             Inscribir Alumno
@@ -1255,7 +1507,8 @@ const DetalleGrupoPage = () => {
                 <td className="px-4 py-2">
                   <button
                     onClick={() => handleBajaAlumno(alumno.id)}
-                    className="text-red-500 hover:underline"
+                    className="text-red-500 hover:underline disabled:text-gray-400 disabled:no-underline"
+                    disabled={grupo.estatus === "inactivo"} // <-- AÑADE ESTO
                   >
                     Dar de Baja
                   </button>
@@ -2071,6 +2324,56 @@ function App() {
               />
               <Route path="/grupos" element={<GruposPage />} />
               <Route path="/grupos/:id" element={<DetalleGrupoPage />} />
+              {/* --- INICIO DE NUEVAS RUTAS DE CATÁLOGO --- */}
+              <Route
+                path="/ciclos"
+                element={
+                  <CatalogoPage
+                    title="Ciclos Escolares"
+                    apiEndpoint="ciclos"
+                    fields={[
+                      {
+                        name: "nombre_ciclo",
+                        placeholder: "Nombre del Ciclo (ej. 2025-1)",
+                      },
+                    ]}
+                    columns={[{ key: "nombre_ciclo", header: "Nombre" }]}
+                  />
+                }
+              />
+              <Route
+                path="/planes-estudio"
+                element={
+                  <CatalogoPage
+                    title="Planes de Estudio"
+                    apiEndpoint="planes_estudio"
+                    fields={[
+                      {
+                        name: "nombre_plan",
+                        placeholder: "Nombre del Plan (ej. Ing. Software 2025)",
+                      },
+                    ]}
+                    columns={[{ key: "nombre_plan", header: "Nombre" }]}
+                  />
+                }
+              />
+              <Route
+                path="/grados"
+                element={
+                  <CatalogoPage
+                    title="Grados/Semestres"
+                    apiEndpoint="grados"
+                    fields={[
+                      {
+                        name: "nombre_grado",
+                        placeholder: "Nombre del Grado (ej. 1er Cuatrimestre)",
+                      },
+                    ]}
+                    columns={[{ key: "nombre_grado", header: "Nombre" }]}
+                  />
+                }
+              />
+              {/* --- FIN DE NUEVAS RUTAS --- */}
               <Route
                 path="/carreras"
                 element={
