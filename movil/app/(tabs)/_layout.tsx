@@ -1,18 +1,17 @@
-import { Tabs, Redirect } from "expo-router";
-import React from "react";
-import { Button, ActivityIndicator, View, StyleSheet } from "react-native";
-import { TabBarIcon } from "../../components/navigation/TabBarIcon";
-import { Colors } from "../../constants/Colors";
-import { useColorScheme } from "../../hooks/useColorScheme";
-import { useAuth } from "../../context/AuthContext";
+// Archivo: movil/app/(tabs)/_layout.tsx
 
-export default function TabLayout() {
-  const colorScheme = useColorScheme();
+import React from "react";
+import { Redirect, Tabs, useNavigation } from "expo-router";
+import { useAuth } from "../../context/AuthContext";
+import { TouchableOpacity, ActivityIndicator, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons"; // <-- Usamos Ionicons directamente
+
+export default function TabsLayout() {
   const { user, loading, logout } = useAuth();
 
   if (loading) {
     return (
-      <View style={styles.centered}>
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
         <ActivityIndicator size="large" />
       </View>
     );
@@ -22,56 +21,49 @@ export default function TabLayout() {
     return <Redirect href="/login" />;
   }
 
-  // AHORA TypeScript sabe que user NO es null en este punto
-  const isAlumno = user.rol === "alumno";
-  const isDocente = user.rol === "docente";
+  // Oculta si el rol no es alumno o docente
+  if (user.rol === "admin" || user.rol === "aspirante") {
+    return <Redirect href="/login" />;
+  }
 
   return (
+    // ¡Usamos <Tabs>! Esto corrige los errores de layout.
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? "light"].tint,
-        headerShown: true,
         headerRight: () => (
-          <Button onPress={logout} title="Salir" color="#ff3b30" />
+          <TouchableOpacity onPress={logout} style={{ marginRight: 15 }}>
+            <Ionicons name="log-out-outline" size={24} color="red" />
+          </TouchableOpacity>
         ),
       }}
     >
+      {/* Pestaña del Alumno */}
       <Tabs.Screen
         name="index"
         options={{
           title: "Mi Portal",
-          tabBarIcon: ({ color, focused }) => (
-            <TabBarIcon
-              name={focused ? "home" : "home-outline"}
-              color={color}
-            />
+          // --- MODIFICACIÓN AQUÍ ---
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="home" color={color} size={size} />
           ),
-          // Muestra esta pestaña solo si el usuario es Alumno
-          href: isAlumno ? "/(tabs)" : null,
+          // Oculta esta pestaña si no es alumno
+          href: user?.rol === "alumno" ? "/" : null,
         }}
       />
+
+      {/* Pestaña del Docente */}
       <Tabs.Screen
         name="explore"
         options={{
           title: "Mis Cursos",
-          tabBarIcon: ({ color, focused }) => (
-            <TabBarIcon
-              name={focused ? "book" : "book-outline"}
-              color={color}
-            />
+          // --- MODIFICACIÓN AQUÍ ---
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="book" color={color} size={size} />
           ),
-          // Muestra esta pestaña solo si el usuario es Docente
-          href: isDocente ? "/(tabs)/explore" : null,
+          // Oculta esta pestaña si no es docente
+          href: user?.rol === "docente" ? "/explore" : null,
         }}
       />
     </Tabs>
   );
 }
-
-const styles = StyleSheet.create({
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-});

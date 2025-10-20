@@ -155,6 +155,59 @@ apiRouter.post("/login", async (req, res) => {
 // Usamos el middleware 'verifyToken' para todas las rutas que siguen
 apiRouter.use(verifyToken);
 
+// --- NUEVA RUTA "GUARDAR TODO" (PARA ADMIN Y DOCENTE) ---
+apiRouter.post("/calificar-grupo-completo", async (req, res) => {
+  // 1. Verificar permisos
+  if (req.user.rol !== "admin" && req.user.rol !== "docente") {
+    return res.status(403).send({
+      message: "Acceso denegado. Se requiere rol de Admin o Docente.",
+    });
+  }
+
+  const { asignatura_id, calificaciones } = req.body;
+  // 'calificaciones' debe ser un arreglo: [{ alumno_id: 1, calificacion: 90 }, ...]
+
+  if (!asignatura_id || !calificaciones || !Array.isArray(calificaciones)) {
+    return res.status(400).send({ message: "Datos incompletos." });
+  }
+
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // 2. Iterar y guardar cada calificación
+    for (const cal of calificaciones) {
+      // Validamos que la calificación sea un número
+      const calNum = parseFloat(cal.calificacion);
+      if (isNaN(calNum) || calNum < 0 || calNum > 100) {
+        // Si no es válida, la guardamos como NULL (sin calificar)
+        await connection.query(
+          "INSERT INTO calificaciones (alumno_id, asignatura_id, calificacion) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE calificacion = ?",
+          [cal.alumno_id, asignatura_id, null, null]
+        );
+      } else {
+        // Si es válida, la guardamos
+        await connection.query(
+          "INSERT INTO calificaciones (alumno_id, asignatura_id, calificacion) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE calificacion = ?",
+          [cal.alumno_id, asignatura_id, calNum, calNum]
+        );
+      }
+    }
+
+    // 3. Confirmar la transacción
+    await connection.commit();
+    res.send({ message: "Calificaciones guardadas con éxito." });
+  } catch (error) {
+    await connection.rollback();
+    console.error("Error al guardar calificaciones:", error);
+    res.status(500).send({ message: "Error en el servidor." });
+  } finally {
+    connection.release();
+  }
+});
+
+// --- FIN DE LA NUEVA RUTA ---
+
 // --- RUTAS DE ADMIN ---
 // Usan el middleware 'isAdmin' para asegurar que solo los admins entren
 const adminRouter = express.Router();
@@ -430,7 +483,7 @@ adminRouter.delete("/asignaturas/:id", async (req, res) => {
 });
 adminRouter.get("/grupos", async (req, res) => {
   const sql = `
-        SELECT g.*, g.estatus, c.nombre_ciclo, s.nombre_sede, p.nombre_plan, gr.nombre_grado 
+        SELECT g.*, g.estatus, g.modalidad, c.nombre_ciclo, s.nombre_sede, p.nombre_plan, gr.nombre_grado 
         FROM grupos g
         JOIN ciclos c ON g.ciclo_id = c.id
         JOIN sedes s ON g.sede_id = s.id
@@ -447,13 +500,21 @@ adminRouter.get("/grupos/:id", async (req, res) => {
   if (grupoRes.length === 0)
     return res.status(404).send({ message: "Grupo no encontrado" });
   const asignaturasSql = `
-        SELECT a.id, a.nombre_asignatura, a.clave_asignatura, u.id as docente_id, u.nombre as docente_nombre, u.apellido_paterno as docente_apellido
-        FROM asignaturas a
-        LEFT JOIN grupo_asignaturas_docentes gad ON a.id = gad.asignatura_id AND gad.grupo_id = ?
+        SELECT 
+          a.id, a.nombre_asignatura, a.clave_asignatura, 
+          u.id as docente_id, u.nombre as docente_nombre, u.apellido_paterno as docente_apellido,
+          /* --- LÍNEAS NUEVAS --- */
+          (SELECT COUNT(*) FROM calificaciones c WHERE c.asignatura_id = a.id AND c.alumno_id IN (SELECT ga.alumno_id FROM grupo_alumnos ga WHERE ga.grupo_id = ?)) as total_calificaciones,
+          (SELECT COUNT(*) FROM grupo_alumnos ga WHERE ga.grupo_id = ?) as total_alumnos_grupo
+          /* --- FIN LÍNEAS NUEVAS --- */
+      FROM asignaturas a
+      LEFT JOIN grupo_asignaturas_docentes gad ON a.id = gad.asignatura_id AND gad.grupo_id = ?
         LEFT JOIN usuarios u ON gad.docente_id = u.id
         WHERE a.grado_id = ? AND a.plan_estudio_id = ?`;
   const [asignaturas] = await db.query(asignaturasSql, [
-    grupoId,
+    grupoId, // Para total_calificaciones
+    grupoId, // Para total_alumnos_grupo
+    grupoId, // Para gad.grupo_id (ya estaba)
     grupoRes[0].grado_id,
     grupoRes[0].plan_estudio_id,
   ]);
@@ -474,9 +535,10 @@ adminRouter.post("/grupos", async (req, res) => {
     plan_estudio_id,
     grado_id,
     estatus,
+    modalidad,
   } = req.body;
   await db.query(
-    "INSERT INTO grupos (nombre_grupo, cupo, ciclo_id, sede_id, plan_estudio_id, grado_id, estatus) VALUES (?,?,?,?,?,?,?)",
+    "INSERT INTO grupos (nombre_grupo, cupo, ciclo_id, sede_id, plan_estudio_id, grado_id, estatus, modalidad) VALUES (?,?,?,?,?,?,?,?)",
     [
       nombre_grupo,
       cupo,
@@ -485,6 +547,7 @@ adminRouter.post("/grupos", async (req, res) => {
       plan_estudio_id,
       grado_id,
       estatus || "activo",
+      modalidad || "presencial",
     ]
   );
   res.status(201).send({ message: "Grupo creado" });
@@ -498,9 +561,10 @@ adminRouter.put("/grupos/:id", async (req, res) => {
     plan_estudio_id,
     grado_id,
     estatus,
+    modalidad,
   } = req.body;
   await db.query(
-    "UPDATE grupos SET nombre_grupo=?, cupo=?, ciclo_id=?, sede_id=?, plan_estudio_id=?, grado_id=?, estatus=? WHERE id=?",
+    "UPDATE grupos SET nombre_grupo=?, cupo=?, ciclo_id=?, sede_id=?, plan_estudio_id=?, grado_id=?, estatus=?, modalidad=? WHERE id=?",
     [
       nombre_grupo,
       cupo,
@@ -508,7 +572,8 @@ adminRouter.put("/grupos/:id", async (req, res) => {
       sede_id,
       plan_estudio_id,
       grado_id,
-      estatus, // <-- Agregado
+      estatus,
+      modalidad, // <-- Valor añadido
       req.params.id,
     ]
   );
@@ -633,6 +698,68 @@ adminRouter.post("/migrar-grupo", async (req, res) => {
     connection.release();
   }
 });
+// --- NUEVA RUTA PARA TRANSFERIR ALUMNO ---
+adminRouter.post("/grupos/transferir-alumno", async (req, res) => {
+  const { alumnoId, sourceGroupId, destinationGroupId } = req.body;
+
+  if (!alumnoId || !sourceGroupId || !destinationGroupId) {
+    return res
+      .status(400)
+      .send({ message: "Faltan datos para la transferencia." });
+  }
+
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // 1. Eliminar al alumno del grupo de origen
+    await connection.query(
+      "DELETE FROM grupo_alumnos WHERE grupo_id = ? AND alumno_id = ?",
+      [sourceGroupId, alumnoId]
+    );
+
+    // 2. Inscribir al alumno en el grupo de destino
+    // Usamos INSERT IGNORE por si acaso el alumno ya estaba (evita que falle)
+    await connection.query(
+      "INSERT IGNORE INTO grupo_alumnos (grupo_id, alumno_id) VALUES (?, ?)",
+      [destinationGroupId, alumnoId]
+    );
+
+    // Opcional: Asegurarse que el rol sigue siendo 'alumno'
+    await connection.query("UPDATE usuarios SET rol = 'alumno' WHERE id = ?", [
+      alumnoId,
+    ]);
+
+    await connection.commit();
+    res.send({ message: "Alumno transferido con éxito." });
+  } catch (error) {
+    await connection.rollback();
+    console.error("Error al transferir alumno:", error);
+    res.status(500).send({ message: "Error en el servidor." });
+  } finally {
+    connection.release();
+  }
+});
+// --- NUEVA RUTA DE ADMIN PARA VER ALUMNOS DE UN CURSO ---
+adminRouter.get(
+  "/grupo/:grupoId/asignatura/:asignaturaId/alumnos",
+  isAdmin, // <-- Asegúrate de que esté protegido por isAdmin
+  async (req, res) => {
+    const { grupoId, asignaturaId } = req.params;
+    const cursoSql = `SELECT g.nombre_grupo, a.nombre_asignatura FROM grupos g, asignaturas a WHERE g.id = ? AND a.id = ?`;
+    const [[cursoInfo]] = await db.query(cursoSql, [grupoId, asignaturaId]);
+
+    // (Este SQL ya fue corregido para nombre completo)
+    const alumnosSql = `
+        SELECT u.id, CONCAT(u.nombre, ' ', u.apellido_paterno, ' ', IFNULL(u.apellido_materno, '')) as nombre_completo, c.calificacion
+        FROM grupo_alumnos ga JOIN usuarios u ON ga.alumno_id = u.id
+        LEFT JOIN calificaciones c ON c.alumno_id = u.id AND c.asignatura_id = ?
+        WHERE ga.grupo_id = ? AND u.rol = 'alumno'`;
+
+    const [alumnos] = await db.query(alumnosSql, [asignaturaId, grupoId]);
+    res.json({ cursoInfo, alumnos });
+  }
+);
 adminRouter.get("/aspirantes/:id/expediente", async (req, res) => {
   const { id } = req.params;
   const [docs] = await db.query(
@@ -693,10 +820,13 @@ docenteRouter.get("/mis-cursos", async (req, res) => {
   const docente_id = req.user.id;
   const sql = `
         SELECT 
-            g.id as grupo_id, g.nombre_grupo, a.id as asignatura_id,
-            a.nombre_asignatura, c.nombre_ciclo,
-            (SELECT COUNT(*) FROM grupo_alumnos WHERE grupo_id = g.id) as total_alumnos
-        FROM grupo_asignaturas_docentes gad
+          g.id as grupo_id, g.nombre_grupo, a.id as asignatura_id,
+          a.nombre_asignatura, c.nombre_ciclo,
+          (SELECT COUNT(*) FROM grupo_alumnos WHERE grupo_id = g.id) as total_alumnos,
+          /* --- LÍNEA NUEVA --- */
+          (SELECT COUNT(*) FROM calificaciones cal WHERE cal.asignatura_id = a.id AND cal.alumno_id IN (SELECT ga.alumno_id FROM grupo_alumnos ga WHERE ga.grupo_id = g.id)) as total_calificaciones
+          /* --- FIN LÍNEA NUEVA --- */
+      FROM grupo_asignaturas_docentes gad
         JOIN grupos g ON gad.grupo_id = g.id
         JOIN asignaturas a ON gad.asignatura_id = a.id
         JOIN ciclos c ON g.ciclo_id = c.id
@@ -714,6 +844,26 @@ docenteRouter.get(
         FROM grupo_alumnos ga JOIN usuarios u ON ga.alumno_id = u.id
         LEFT JOIN calificaciones c ON c.alumno_id = u.id AND c.asignatura_id = ?
         WHERE ga.grupo_id = ? AND u.rol = 'alumno'`;
+    const [alumnos] = await db.query(alumnosSql, [asignaturaId, grupoId]);
+    res.json({ cursoInfo, alumnos });
+  }
+);
+// --- NUEVA RUTA DE ADMIN PARA VER ALUMNOS DE UN CURSO ---
+adminRouter.get(
+  "/grupo/:grupoId/asignatura/:asignaturaId/alumnos",
+  isAdmin, // <-- Asegúrate de que esté protegido por isAdmin
+  async (req, res) => {
+    const { grupoId, asignaturaId } = req.params;
+    const cursoSql = `SELECT g.nombre_grupo, a.nombre_asignatura FROM grupos g, asignaturas a WHERE g.id = ? AND a.id = ?`;
+    const [[cursoInfo]] = await db.query(cursoSql, [grupoId, asignaturaId]);
+
+    // (Este SQL ya fue corregido para nombre completo)
+    const alumnosSql = `
+        SELECT u.id, CONCAT(u.nombre, ' ', u.apellido_paterno, ' ', IFNULL(u.apellido_materno, '')) as nombre_completo, c.calificacion
+        FROM grupo_alumnos ga JOIN usuarios u ON ga.alumno_id = u.id
+        LEFT JOIN calificaciones c ON c.alumno_id = u.id AND c.asignatura_id = ?
+        WHERE ga.grupo_id = ? AND u.rol = 'alumno'`;
+
     const [alumnos] = await db.query(alumnosSql, [asignaturaId, grupoId]);
     res.json({ cursoInfo, alumnos });
   }

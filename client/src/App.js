@@ -1101,7 +1101,9 @@ const GruposPage = () => {
               <th className="px-4 py-2">Sede</th>
               <th className="px-4 py-2">Plan de Estudios</th>
               <th className="px-4 py-2">Grado</th>
-              <th className="px-4 py-2">Estatus</th> {/* <-- NUEVA LÍNEA */}
+              {/* ASEGÚRATE DE QUE ESTÉN ASÍ, JUNTAS: */}
+              <th className="px-4 py-2">Modalidad</th>
+              <th className="px-4 py-2">Estatus</th>
               <th className="px-4 py-2">Acciones</th>
             </tr>
           </thead>
@@ -1121,6 +1123,19 @@ const GruposPage = () => {
                 <td className="px-4 py-2">{g.nombre_sede}</td>
                 <td className="px-4 py-2">{g.nombre_plan}</td>
                 <td className="px-4 py-2">{g.nombre_grado}</td>
+                {/* --- NUEVA CELDA CON INDICADOR VISUAL --- */}
+                <td className="px-4 py-2">
+                  <span
+                    className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                      g.modalidad === "presencial"
+                        ? "bg-blue-100 text-blue-800"
+                        : "bg-purple-100 text-purple-800"
+                    }`}
+                  >
+                    {g.modalidad === "presencial" ? "Presencial" : "Virtual"}
+                  </span>
+                </td>
+                {/* --- FIN NUEVA CELDA --- */}
                 {/* --- INSERTA ESTE BLOQUE NUEVO AQUÍ --- */}
                 <td className="px-4 py-2">
                   <span
@@ -1174,6 +1189,7 @@ const GrupoModal = ({ grupo, onClose, onSave }) => {
     plan_estudio_id: grupo?.plan_estudio_id || "",
     grado_id: grupo?.grado_id || "",
     estatus: grupo?.estatus || "activo", // <-- Agregado (default 'activo')
+    modalidad: grupo?.modalidad || "presencial", // <-- Agregado
   });
 
   const [catalogos, setCatalogos] = useState({
@@ -1335,6 +1351,22 @@ const GrupoModal = ({ grupo, onClose, onSave }) => {
             </select>
           </div>
           {/* --- FIN DEL BLOQUE NUEVO --- */}
+          {/* --- CAMPO NUEVO --- */}
+          <div>
+            <label className="text-sm font-medium text-gray-700">
+              Modalidad
+            </label>
+            <select
+              name="modalidad"
+              value={formData.modalidad}
+              onChange={handleChange}
+              className="w-full px-3 py-2 mt-1 border rounded-md"
+            >
+              <option value="presencial">Presencial</option>
+              <option value="virtual">Virtual</option>
+            </select>
+          </div>
+          {/* --- FIN CAMPO NUEVO --- */}
 
           <div className="flex justify-end space-x-4 mt-8">
             <button
@@ -1366,6 +1398,10 @@ const DetalleGrupoPage = () => {
     asignatura: null,
   });
   const [inscribirAlumnoModal, setInscribirAlumnoModal] = useState(false);
+  const [transferModal, setTransferModal] = useState({
+    open: false,
+    alumno: null,
+  });
 
   const fetchDetalles = useCallback(async () => {
     try {
@@ -1430,6 +1466,17 @@ const DetalleGrupoPage = () => {
         Estatus: {grupo.estatus === "activo" ? "Activo" : "Inactivo"}
       </span>
       {/* --- FIN DEL BLOQUE NUEVO --- */}
+      {/* --- NUEVO INDICADOR DE MODALIDAD --- */}
+      <span
+        className={`px-3 py-1 rounded-full text-sm font-semibold mb-6 inline-block ml-2 ${
+          grupo.modalidad === "presencial"
+            ? "bg-blue-100 text-blue-800"
+            : "bg-purple-100 text-purple-800"
+        }`}
+      >
+        {grupo.modalidad === "presencial" ? "Presencial" : "Virtual"}
+      </span>
+      {/* --- FIN --- */}
 
       <div className="bg-white p-6 rounded-lg shadow mt-6">
         <h3 className="text-xl font-bold mb-4">Asignaturas y Docentes</h3>
@@ -1465,16 +1512,26 @@ const DetalleGrupoPage = () => {
             <thead className="text-left bg-gray-50">
               <tr>
                 <th className="px-4 py-2">Asignatura</th>
-                <th className="px-4 py-2">Clave</th>
+                {/* <th className="px-4 py-2">Clave</th> */}
                 <th className="px-4 py-2">Docente Asignado</th>
+                <th className="px-4 py-2">Estatus</th>
                 <th className="px-4 py-2">Acciones</th>
               </tr>
             </thead>
             <tbody>
               {grupo.asignaturas.map((asig) => (
                 <tr key={asig.id} className="border-b">
-                  <td className="px-4 py-2">{asig.nombre_asignatura}</td>
-                  <td className="px-4 py-2">{asig.clave_asignatura}</td>
+                  {/* --- MODIFICAR ESTA CELDA --- */}
+                  <td className="px-4 py-2">
+                    <Link
+                      to={`/admin/grupo/${id}/asignatura/${asig.id}`}
+                      className="text-principal font-semibold hover:underline"
+                      title="Calificar este curso"
+                    >
+                      {asig.nombre_asignatura}
+                    </Link>
+                  </td>
+                  {/* --- FIN MODIFICACIÓN --- */}
                   <td className="px-4 py-2">
                     {asig.docente_id ? (
                       `${asig.docente_nombre} ${asig.docente_apellido}`
@@ -1482,10 +1539,27 @@ const DetalleGrupoPage = () => {
                       <span className="text-gray-500">Sin asignar</span>
                     )}
                   </td>
+                  {/* --- AÑADIR ESTA CELDA --- */}
+                  <td className="px-4 py-2">
+                    <span
+                      className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                        asig.total_alumnos_grupo > 0 &&
+                        asig.total_calificaciones >= asig.total_alumnos_grupo
+                          ? "bg-green-100 text-green-800"
+                          : "bg-yellow-100 text-yellow-800"
+                      }`}
+                    >
+                      {asig.total_alumnos_grupo > 0 &&
+                      asig.total_calificaciones >= asig.total_alumnos_grupo
+                        ? "Completado"
+                        : "Pendiente"}
+                    </span>
+                  </td>
+                  {/* --- FIN --- */}
                   <td className="px-4 py-2">
                     <button
                       onClick={() => handleOpenAsignarModal(asig)}
-                      className="text-principal hover:underline"
+                      className="text-principal hover:underline disabled:text-gray-400 disabled:no-underline"
                       disabled={grupo.estatus === "inactivo"}
                     >
                       {asig.docente_id ? "Cambiar Docente" : "Asignar Docente"}
@@ -1531,11 +1605,23 @@ const DetalleGrupoPage = () => {
                   alumno.apellido_paterno
                 } ${alumno.apellido_materno || ""}`}</td>
                 <td className="px-4 py-2">{alumno.email}</td>
-                <td className="px-4 py-2">
+                <td className="px-4 py-2 flex items-center space-x-2">
+                  {/* --- AÑADIR ESTE BOTÓN --- */}
+                  <button
+                    onClick={() =>
+                      setTransferModal({ open: true, alumno: alumno })
+                    }
+                    className="text-secundario hover:underline disabled:text-gray-400 disabled:no-underline"
+                    disabled={grupo.estatus === "inactivo"}
+                  >
+                    Transferir
+                  </button>
+                  {/* --- FIN DE BOTÓN AÑADIDO --- */}
+
                   <button
                     onClick={() => handleBajaAlumno(alumno.id)}
                     className="text-red-500 hover:underline disabled:text-gray-400 disabled:no-underline"
-                    disabled={grupo.estatus === "inactivo"} // <-- AÑADE ESTO
+                    disabled={grupo.estatus === "inactivo"}
                   >
                     Dar de Baja
                   </button>
@@ -1561,6 +1647,13 @@ const DetalleGrupoPage = () => {
           onSave={fetchDetalles}
         />
       )}
+      <TransferirAlumnoModal
+        show={transferModal.open}
+        onClose={() => setTransferModal({ open: false, alumno: null })}
+        alumno={transferModal.alumno}
+        currentGroupId={parseInt(id)}
+        onSave={fetchDetalles}
+      />
     </div>
   );
 };
@@ -2094,6 +2187,127 @@ const MigracionGruposPage = () => {
 };
 // --- FIN DE PÁGINA DE MIGRACIÓN ---
 
+// --- NUEVO MODAL PARA TRANSFERIR UN ALUMNO ---
+const TransferirAlumnoModal = ({
+  show,
+  onClose,
+  alumno,
+  currentGroupId,
+  onSave,
+}) => {
+  const [grupos, setGrupos] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedGroupId, setSelectedGroupId] = useState("");
+
+  useEffect(() => {
+    if (show) {
+      const fetchGrupos = async () => {
+        try {
+          setLoading(true);
+          const { data } = await api.get("/admin/grupos");
+          // Filtramos los grupos para no incluir el grupo actual
+          const availableGroups = data.filter((g) => g.id !== currentGroupId);
+          setGrupos(availableGroups);
+          if (availableGroups.length > 0) {
+            setSelectedGroupId(availableGroups[0].id);
+          }
+        } catch (error) {
+          console.error("Error al cargar grupos", error);
+        } finally {
+          setLoading(false);
+        }
+      };
+      fetchGrupos();
+    }
+  }, [show, currentGroupId]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!selectedGroupId) {
+      alert("Por favor, seleccione un grupo de destino.");
+      return;
+    }
+    try {
+      await api.post("/admin/grupos/transferir-alumno", {
+        alumnoId: alumno.id,
+        sourceGroupId: currentGroupId,
+        destinationGroupId: selectedGroupId,
+      });
+      onSave(); // Llama a onSave (que es fetchDetalles)
+      onClose(); // Cierra el modal
+    } catch (error) {
+      console.error("Error al transferir", error);
+      alert(
+        "Error al transferir: " + (error.response?.data?.message || "Error")
+      );
+    }
+  };
+
+  if (!show) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6 relative">
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 text-gray-500 hover:text-gray-800"
+        >
+          <X size={24} />
+        </button>
+        <h3 className="text-2xl font-bold mb-4">Transferir Alumno</h3>
+        <p className="mb-6">
+          Mover a:{" "}
+          <span className="font-semibold">
+            {alumno.nombre} {alumno.apellido_paterno}
+          </span>
+        </p>
+
+        {loading ? (
+          // Ocupamos un texto simple en lugar de ActivityIndicator
+          <p>Cargando grupos...</p>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <label className="block text-sm font-medium text-gray-700">
+              Seleccionar Grupo de Destino
+            </label>
+            <select
+              value={selectedGroupId}
+              onChange={(e) => setSelectedGroupId(e.target.value)}
+              className="w-full px-3 py-2 border rounded-md"
+            >
+              {grupos.length > 0 ? (
+                grupos.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.nombre_grupo} ({g.nombre_plan} / {g.modalidad})
+                  </option>
+                ))
+              ) : (
+                <option disabled>No hay otros grupos disponibles</option>
+              )}
+            </select>
+            <div className="flex justify-end space-x-4 mt-8">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={grupos.length === 0}
+                className="px-4 py-2 bg-principal text-white rounded-md hover:opacity-90 disabled:bg-gray-400"
+              >
+                Confirmar Transferencia
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const DocenteDashboardPage = () => {
   const [cursos, setCursos] = useState([]);
   const navigate = useNavigate();
@@ -2131,11 +2345,27 @@ const DocenteDashboardPage = () => {
             </h3>
             <p className="text-gray-600">Grupo: {curso.nombre_grupo}</p>
             <p className="text-sm text-gray-500">{curso.nombre_ciclo}</p>
-            <div className="mt-4 pt-4 border-t">
+
+            {/* --- REEMPLAZA EL DIV ANTERIOR CON ESTE BLOQUE --- */}
+            <div className="mt-4 pt-4 border-t flex justify-between items-center">
               <p className="text-sm font-semibold">
                 {curso.total_alumnos} Alumnos Inscritos
               </p>
+              <span
+                className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                  curso.total_alumnos > 0 &&
+                  curso.total_calificaciones >= curso.total_alumnos
+                    ? "bg-green-100 text-green-800"
+                    : "bg-yellow-100 text-yellow-800"
+                }`}
+              >
+                {curso.total_alumnos > 0 &&
+                curso.total_calificaciones >= curso.total_alumnos
+                  ? "Completado"
+                  : "Pendiente"}
+              </span>
             </div>
+            {/* --- FIN DEL BLOQUE REEMPLAZADO --- */}
           </div>
         ))}
       </div>
@@ -2143,26 +2373,38 @@ const DocenteDashboardPage = () => {
   );
 };
 
+// --- ESTE ES EL COMPONENTE REFACTORIZADO ---
 const DetalleCursoDocentePage = () => {
   const { grupoId, asignaturaId } = useParams();
   const [alumnos, setAlumnos] = useState([]);
   const [cursoInfo, setCursoInfo] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // El estado ahora es un objeto para manejar todas las calificaciones a la vez
   const [calificaciones, setCalificaciones] = useState({});
 
   const fetchAlumnos = useCallback(async () => {
     try {
+      setLoading(true);
+      // Esta ruta es la del DOCENTE
       const { data } = await api.get(
         `/docente/grupo/${grupoId}/asignatura/${asignaturaId}/alumnos`
       );
       setAlumnos(data.alumnos);
       setCursoInfo(data.cursoInfo);
+
+      // Inicializa el estado 'calificaciones' con los datos de la API
       const initialCalificaciones = data.alumnos.reduce((acc, alumno) => {
-        acc[alumno.id] = alumno.calificacion || "";
+        acc[alumno.id] =
+          alumno.calificacion !== null ? String(alumno.calificacion) : "";
         return acc;
       }, {});
       setCalificaciones(initialCalificaciones);
     } catch (error) {
       console.error("Error al cargar alumnos", error);
+    } finally {
+      setLoading(false);
     }
   }, [grupoId, asignaturaId]);
 
@@ -2170,26 +2412,38 @@ const DetalleCursoDocentePage = () => {
     fetchAlumnos();
   }, [fetchAlumnos]);
 
+  // Maneja el cambio de un solo input
   const handleCalificacionChange = (alumnoId, valor) => {
     setCalificaciones((prev) => ({ ...prev, [alumnoId]: valor }));
   };
 
-  const handleGuardarCalificacion = async (alumnoId) => {
-    const calificacion = calificaciones[alumnoId];
+  // --- NUEVA FUNCIÓN "GUARDAR TODO" ---
+  const handleGuardarTodo = async () => {
+    setIsSaving(true);
+    // 1. Convertir el objeto de estado en el array que espera la API
+    const calificacionesArray = Object.keys(calificaciones).map((alumnoId) => ({
+      alumno_id: parseInt(alumnoId),
+      calificacion:
+        calificaciones[alumnoId] === "" ? null : calificaciones[alumnoId],
+    }));
+
     try {
-      await api.post(`/docente/calificar`, {
-        alumno_id: alumnoId,
+      // 2. Usar el NUEVO endpoint de "Guardar Todo"
+      await api.post("/calificar-grupo-completo", {
         asignatura_id: asignaturaId,
-        calificacion: calificacion,
+        calificaciones: calificacionesArray,
       });
-      alert("Calificación guardada");
+      alert("Calificaciones guardadas con éxito.");
+      fetchAlumnos(); // Recargar los datos
     } catch (error) {
-      console.error("Error al guardar calificación", error);
-      alert("No se pudo guardar la calificación.");
+      console.error("Error al guardar calificaciones", error);
+      alert("Error al guardar: " + (error.response?.data?.message || "Error"));
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  if (!cursoInfo) return <p>Cargando...</p>;
+  if (loading) return <p>Cargando...</p>;
 
   return (
     <div>
@@ -2213,8 +2467,7 @@ const DetalleCursoDocentePage = () => {
           <thead className="text-left bg-gray-50">
             <tr>
               <th className="px-4 py-2">Nombre del Alumno</th>
-              <th className="px-4 py-2 w-48">Calificación</th>
-              <th className="px-4 py-2 w-32">Acciones</th>
+              <th className="px-4 py-2 w-48">Calificación (0-100)</th>
             </tr>
           </thead>
           <tbody>
@@ -2227,26 +2480,160 @@ const DetalleCursoDocentePage = () => {
                     min="0"
                     max="100"
                     step="0.1"
-                    value={calificaciones[alumno.id]}
+                    value={calificaciones[alumno.id] || ""} // Usar el estado
                     onChange={(e) =>
                       handleCalificacionChange(alumno.id, e.target.value)
                     }
                     className="w-full px-3 py-1 border rounded-md"
                   />
                 </td>
-                <td className="px-4 py-2">
-                  <button
-                    onClick={() => handleGuardarCalificacion(alumno.id)}
-                    className="flex items-center px-3 py-1 text-sm font-semibold text-white bg-green-600 rounded-md hover:bg-green-700"
-                  >
-                    <Save size={14} className="mr-1" />
-                    Guardar
-                  </button>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {/* --- NUEVO BOTÓN "GUARDAR TODO" --- */}
+        <div className="flex justify-end mt-6">
+          <button
+            onClick={handleGuardarTodo}
+            disabled={isSaving}
+            className="flex items-center px-6 py-2 font-semibold text-white bg-principal rounded-md hover:opacity-90 disabled:bg-gray-400"
+          >
+            <Save size={18} className="mr-2" />
+            {isSaving ? "Guardando..." : "Guardar Todas las Calificaciones"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+const AdminCalificarPage = () => {
+  const { grupoId, asignaturaId } = useParams();
+  const [alumnos, setAlumnos] = useState([]);
+  const [cursoInfo, setCursoInfo] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // El estado ahora es un objeto para manejar todas las calificaciones a la vez
+  const [calificaciones, setCalificaciones] = useState({});
+
+  const fetchAlumnos = useCallback(async () => {
+    try {
+      setLoading(true);
+      // Esta ruta es la del ADMIN
+      const { data } = await api.get(
+        `/admin/grupo/${grupoId}/asignatura/${asignaturaId}/alumnos`
+      );
+      setAlumnos(data.alumnos);
+      setCursoInfo(data.cursoInfo);
+
+      // Inicializa el estado 'calificaciones' con los datos de la API
+      const initialCalificaciones = data.alumnos.reduce((acc, alumno) => {
+        acc[alumno.id] =
+          alumno.calificacion !== null ? String(alumno.calificacion) : "";
+        return acc;
+      }, {});
+      setCalificaciones(initialCalificaciones);
+    } catch (error) {
+      console.error("Error al cargar alumnos", error);
+    } finally {
+      setLoading(false);
+    }
+  }, [grupoId, asignaturaId]);
+
+  useEffect(() => {
+    fetchAlumnos();
+  }, [fetchAlumnos]);
+
+  // Maneja el cambio de un solo input
+  const handleCalificacionChange = (alumnoId, valor) => {
+    setCalificaciones((prev) => ({ ...prev, [alumnoId]: valor }));
+  };
+
+  // --- NUEVA FUNCIÓN "GUARDAR TODO" ---
+  const handleGuardarTodo = async () => {
+    setIsSaving(true);
+    // 1. Convertir el objeto de estado en el array que espera la API
+    const calificacionesArray = Object.keys(calificaciones).map((alumnoId) => ({
+      alumno_id: parseInt(alumnoId),
+      calificacion:
+        calificaciones[alumnoId] === "" ? null : calificaciones[alumnoId],
+    }));
+
+    try {
+      // 2. Usar el NUEVO endpoint de "Guardar Todo"
+      await api.post("/calificar-grupo-completo", {
+        asignatura_id: asignaturaId,
+        calificaciones: calificacionesArray,
+      });
+      alert("Calificaciones guardadas con éxito.");
+      fetchAlumnos(); // Recargar los datos
+    } catch (error) {
+      console.error("Error al guardar calificaciones", error);
+      alert("Error al guardar: " + (error.response?.data?.message || "Error"));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  if (loading) return <p>Cargando...</p>;
+
+  return (
+    <div>
+      <Link
+        to={`/grupos/${grupoId}`}
+        className="flex items-center text-principal mb-6 hover:underline"
+      >
+        <ArrowLeft size={18} className="mr-2" />
+        Volver al Grupo
+      </Link>
+      <h2 className="text-3xl font-bold text-gray-800 mb-2">
+        {cursoInfo.nombre_asignatura}
+      </h2>
+      <p className="text-lg text-secundario mb-6">
+        Grupo: {cursoInfo.nombre_grupo}
+      </p>
+
+      <div className="bg-white p-6 rounded-lg shadow">
+        <h3 className="text-xl font-bold mb-4">Lista de Alumnos</h3>
+        <table className="w-full table-auto">
+          <thead className="text-left bg-gray-50">
+            <tr>
+              <th className="px-4 py-2">Nombre del Alumno</th>
+              <th className="px-4 py-2 w-48">Calificación (0-100)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {alumnos.map((alumno) => (
+              <tr key={alumno.id} className="border-b">
+                <td className="px-4 py-2">{alumno.nombre_completo}</td>
+                <td>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    value={calificaciones[alumno.id] || ""} // Usar el estado
+                    onChange={(e) =>
+                      handleCalificacionChange(alumno.id, e.target.value)
+                    }
+                    className="w-full px-3 py-1 border rounded-md"
+                  />
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
+        {/* --- NUEVO BOTÓN "GUARDAR TODO" --- */}
+        <div className="flex justify-end mt-6">
+          <button
+            onClick={handleGuardarTodo}
+            disabled={isSaving}
+            className="flex items-center px-6 py-2 font-semibold text-white bg-principal rounded-md hover:opacity-90 disabled:bg-gray-400"
+          >
+            <Save size={18} className="mr-2" />
+            {isSaving ? "Guardando..." : "Guardar Todas las Calificaciones"}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -2512,6 +2899,10 @@ function App() {
               <Route path="/grupos" element={<GruposPage />} />
               <Route path="/grupos/:id" element={<DetalleGrupoPage />} />
               <Route path="/migrar-grupos" element={<MigracionGruposPage />} />
+              <Route
+                path="/admin/grupo/:grupoId/asignatura/:asignaturaId"
+                element={<AdminCalificarPage />}
+              />
               {/* --- INICIO DE NUEVAS RUTAS DE CATÁLOGO --- */}
               <Route
                 path="/ciclos"

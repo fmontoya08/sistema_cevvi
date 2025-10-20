@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { useAuth } from "../../context/AuthContext";
 import { Ionicons } from "@expo/vector-icons";
-import { Redirect, useNavigation } from "expo-router";
+import { Redirect, useNavigation, useRouter } from "expo-router";
 
 // Definimos el tipo de dato para un curso
 interface Curso {
@@ -28,6 +28,18 @@ export default function DocenteDashboardScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const navigation = useNavigation();
+  const router = useRouter();
+
+  const handlePressCurso = (curso: Curso) => {
+    // Navegamos a la nueva pantalla y pasamos los IDs como parámetros
+    router.push({
+      pathname: "/detalle-curso",
+      params: {
+        grupoId: curso.grupo_id,
+        asignaturaId: curso.asignatura_id,
+      },
+    });
+  };
 
   const fetchCursos = useCallback(
     async (isMounted: boolean) => {
@@ -99,6 +111,7 @@ export default function DocenteDashboardScreen() {
           <TouchableOpacity
             key={`${curso.grupo_id}-${curso.asignatura_id}`}
             style={styles.card}
+            onPress={() => handlePressCurso(curso)}
           >
             <View style={{ flex: 1 }}>
               <Text style={styles.cardTitle}>{curso.nombre_asignatura}</Text>
