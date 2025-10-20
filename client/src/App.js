@@ -38,6 +38,7 @@ import {
   Calendar, // <-- NUEVO
   FileText, // <-- NUEVO
   TrendingUp, // <-- NUEVO
+  ArrowRightLeft, // <-- NUEVO
 } from "lucide-react";
 
 // --- CONFIGURACIÓN DE AXIOS ---
@@ -165,6 +166,7 @@ const AdminLayout = () => {
 
     { icon: Book, label: "Asignaturas", path: "/asignaturas" },
     { icon: Group, label: "Grupos", path: "/grupos" },
+    { icon: ArrowRightLeft, label: "Migrar Grupos", path: "/migrar-grupos" },
   ];
 
   return (
@@ -461,13 +463,16 @@ const UsuariosPage = () => {
           Nuevo Usuario
         </button>
       </div>
-      <div className="bg-white p-6 rounded-lg shadow">
-        <table className="w-full table-auto">
+      {/* Añadimos 'overflow-x-auto' al contenedor */}
+      <div className="bg-white p-6 rounded-lg shadow overflow-x-auto">
+        {/* Añadimos 'text-sm' para hacer la fuente un poco más pequeña */}
+        <table className="w-full table-auto text-sm">
           <thead className="text-left bg-gray-50">
             <tr>
               <th className="px-4 py-2">Nombre Completo</th>
               <th className="px-4 py-2">Email</th>
               <th className="px-4 py-2">Rol</th>
+              <th className="px-4 py-2">Matrícula</th>
               {/* --- NUEVAS CABECERAS --- */}
               <th className="px-4 py-2">Teléfono</th>
               <th className="px-4 py-2">CURP</th>
@@ -487,10 +492,12 @@ const UsuariosPage = () => {
                 }`}
                 onClick={() => handleRowClick(user)}
               >
-                <td className="px-4 py-2">{`${user.nombre} ${user.apellido_paterno}`}</td>
+                <td className="px-4 py-2">{`${user.nombre} ${
+                  user.apellido_paterno
+                } ${user.apellido_materno || ""}`}</td>
                 <td className="px-4 py-2">{user.email}</td>
                 <td className="px-4 py-2 capitalize">{user.rol}</td>
-
+                <td className="px-4 py-2">{user.matricula || "N/A"}</td>
                 {/* --- NUEVAS CELDAS --- */}
                 <td className="px-4 py-2">{user.telefono || "N/A"}</td>
                 <td className="px-4 py-2">{user.curp || "N/A"}</td>
@@ -545,6 +552,7 @@ const UsuarioModal = ({ usuario, onClose, onSave }) => {
     genero: usuario?.genero || "",
     telefono: usuario?.telefono || "",
     curp: usuario?.curp || "",
+    matricula: usuario?.matricula || "",
     fecha_nacimiento: usuario?.fecha_nacimiento || "",
   });
 
@@ -664,6 +672,23 @@ const UsuarioModal = ({ usuario, onClose, onSave }) => {
               pattern="[A-Z]{1}[AEIOU]{1}[A-Z]{2}[0-9]{2}(0[1-9]|1[0-2])(0[1-9]|1[0-9]|2[0-9]|3[0-1])[HM]{1}(AS|BC|BS|CC|CS|CH|CL|CM|DF|DG|GT|GR|HG|JC|MC|MN|MS|NT|NL|OC|PL|QT|QR|SP|SL|SR|TC|TS|TL|VZ|YN|ZS|NE)[B-DF-HJ-NP-TV-Z]{3}[A-Z0-9]{1}[0-9]{1}"
               title="Ingresa una CURP válida de 18 caracteres en mayúsculas."
             />
+            {/* --- CAMPO MATRÍCULA (AHORA READ-ONLY) --- */}
+            {isEditing && (
+              <div>
+                <label className="text-sm font-medium text-gray-700">
+                  Matrícula (generada automáticamente)
+                </label>
+                <input
+                  type="text"
+                  name="matricula"
+                  value={formData.matricula}
+                  readOnly // <-- Importante: solo lectura
+                  className="w-full px-3 py-2 border rounded-md bg-gray-100 cursor-not-allowed" // <-- Estilo de deshabilitado
+                />
+              </div>
+            )}
+            {/* --- FIN --- */}
+
             <div>
               <label className="text-sm text-gray-500">
                 Fecha de Nacimiento
@@ -1502,7 +1527,9 @@ const DetalleGrupoPage = () => {
           <tbody>
             {grupo.alumnos.map((alumno) => (
               <tr key={alumno.id} className="border-b">
-                <td className="px-4 py-2">{`${alumno.nombre} ${alumno.apellido_paterno}`}</td>
+                <td className="px-4 py-2">{`${alumno.nombre} ${
+                  alumno.apellido_paterno
+                } ${alumno.apellido_materno || ""}`}</td>
                 <td className="px-4 py-2">{alumno.email}</td>
                 <td className="px-4 py-2">
                   <button
@@ -1906,6 +1933,166 @@ const CatalogoModal = ({
     </div>
   );
 };
+// --- NUEVA PÁGINA DE MIGRACIÓN ---
+const MigracionGruposPage = () => {
+  const [grupos, setGrupos] = useState([]);
+  const [sourceGroupId, setSourceGroupId] = useState("");
+  const [destinationGroupId, setDestinationGroupId] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState({ type: "", text: "" });
+
+  // 1. Cargar todos los grupos al iniciar
+  useEffect(() => {
+    const fetchGrupos = async () => {
+      try {
+        const { data } = await api.get("/admin/grupos");
+        setGrupos(data);
+      } catch (error) {
+        console.error("Error al cargar grupos", error);
+        setMessage({
+          type: "error",
+          text: "No se pudieron cargar los grupos.",
+        });
+      }
+    };
+    fetchGrupos();
+  }, []);
+
+  // 2. Filtrar grupos en listas separadas (memoizado para eficiencia)
+  const inactivos = useMemo(
+    () => grupos.filter((g) => g.estatus === "inactivo"),
+    [grupos]
+  );
+  const activos = useMemo(
+    () => grupos.filter((g) => g.estatus === "activo"),
+    [grupos]
+  );
+
+  // 3. Manejar el envío del formulario
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setMessage({ type: "", text: "" });
+
+    if (!sourceGroupId || !destinationGroupId) {
+      setMessage({
+        type: "error",
+        text: "Debes seleccionar un grupo de origen y uno de destino.",
+      });
+      return;
+    }
+
+    if (
+      window.confirm(
+        "¿Estás seguro de que quieres migrar a TODOS los alumnos de este grupo? Esta acción es irreversible."
+      )
+    ) {
+      setLoading(true);
+      try {
+        const { data } = await api.post("/admin/migrar-grupo", {
+          sourceGroupId,
+          destinationGroupId,
+        });
+        setMessage({ type: "success", text: data.message });
+        // Limpiar selección después de éxito
+        setSourceGroupId("");
+        setDestinationGroupId("");
+      } catch (error) {
+        setMessage({
+          type: "error",
+          text: error.response?.data?.message || "Error al migrar.",
+        });
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+
+  return (
+    <div className="bg-white p-6 rounded-lg shadow max-w-4xl mx-auto">
+      <h2 className="text-3xl font-bold text-gray-800 mb-6">
+        Herramienta de Migración de Grupos
+      </h2>
+      <p className="mb-8 text-gray-700">
+        Esta herramienta moverá a **todos** los alumnos de un grupo cerrado
+        (inactivo) a un nuevo grupo (activo). Asegúrate de que el grupo de
+        destino sea el correcto (ej. el siguiente grado o semestre).
+      </p>
+
+      <form onSubmit={handleSubmit}>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-6">
+          {/* --- COLUMNA DE ORIGEN --- */}
+          <div>
+            <h3 className="text-xl font-semibold mb-3 text-red-700">
+              <span className="text-2xl mr-2">①</span> Grupo de Origen (Cerrado)
+            </h3>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Seleccionar grupo inactivo:
+            </label>
+            <select
+              value={sourceGroupId}
+              onChange={(e) => setSourceGroupId(e.target.value)}
+              className="w-full px-3 py-2 border rounded-md focus:ring-principal focus:border-principal"
+            >
+              <option value="">-- Grupos Inactivos --</option>
+              {inactivos.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.nombre_grupo} ({g.nombre_plan} - {g.nombre_grado})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* --- COLUMNA DE DESTINO --- */}
+          <div>
+            <h3 className="text-xl font-semibold mb-3 text-green-700">
+              <span className="text-2xl mr-2">②</span> Grupo de Destino (Nuevo)
+            </h3>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Seleccionar grupo activo:
+            </label>
+            <select
+              value={destinationGroupId}
+              onChange={(e) => setDestinationGroupId(e.target.value)}
+              className="w-full px-3 py-2 border rounded-md focus:ring-principal focus:border-principal"
+            >
+              <option value="">-- Grupos Activos --</option>
+              {activos.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.nombre_grupo} ({g.nombre_plan} - {g.nombre_grado})
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* --- MENSAJES DE ESTADO --- */}
+        {message.text && (
+          <div
+            className={`p-3 rounded-md mb-6 ${
+              message.type === "error"
+                ? "bg-red-100 text-red-800"
+                : "bg-green-100 text-green-800"
+            }`}
+          >
+            {message.text}
+          </div>
+        )}
+
+        <div className="flex justify-end pt-4 border-t">
+          <button
+            type="submit"
+            disabled={loading || !sourceGroupId || !destinationGroupId}
+            className="flex items-center justify-center px-6 py-3 font-semibold text-white bg-principal rounded-md hover:opacity-90 disabled:bg-gray-400"
+          >
+            <ArrowRightLeft size={18} className="mr-2" />
+            {loading ? "Migrando..." : "Iniciar Migración"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+};
+// --- FIN DE PÁGINA DE MIGRACIÓN ---
 
 const DocenteDashboardPage = () => {
   const [cursos, setCursos] = useState([]);
@@ -2324,6 +2511,7 @@ function App() {
               />
               <Route path="/grupos" element={<GruposPage />} />
               <Route path="/grupos/:id" element={<DetalleGrupoPage />} />
+              <Route path="/migrar-grupos" element={<MigracionGruposPage />} />
               {/* --- INICIO DE NUEVAS RUTAS DE CATÁLOGO --- */}
               <Route
                 path="/ciclos"

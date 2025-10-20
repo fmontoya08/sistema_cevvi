@@ -198,7 +198,7 @@ adminRouter.get("/usuarios", async (req, res) =>
   res.json(
     (
       await db.query(
-        "SELECT id, nombre, apellido_paterno, apellido_materno, email, rol, telefono, curp, genero, DATE_FORMAT(fecha_nacimiento, '%Y-%m-%d') as fecha_nacimiento FROM usuarios"
+        "SELECT id, nombre, apellido_paterno, apellido_materno, email, rol, telefono, curp, matricula, genero, matricula, DATE_FORMAT(fecha_nacimiento, '%Y-%m-%d') as fecha_nacimiento FROM usuarios"
       )
     )[0]
   )
@@ -223,10 +223,15 @@ adminRouter.post("/usuarios", async (req, res) => {
   }
   if (!["aspirante", "alumno", "docente", "admin"].includes(rol))
     return res.status(400).send({ message: "Rol no válido" });
+  const connection = await db.getConnection(); // Obtenemos una conexión del pool
   try {
+    await connection.beginTransaction(); // 1. Iniciamos la transacción
+
     const hashedPassword = await bcrypt.hash(password, 10);
-    await db.query(
-      "INSERT INTO usuarios (email, password, nombre, rol, apellido_paterno, apellido_materno, genero, telefono, curp, fecha_nacimiento) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", // <-- Campos agregados
+
+    // 2. Insertamos al usuario SIN matrícula
+    const [insertResult] = await connection.query(
+      "INSERT INTO usuarios (email, password, nombre, rol, apellido_paterno, apellido_materno, genero, telefono, curp, fecha_nacimiento) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       [
         email,
         hashedPassword,
@@ -234,19 +239,39 @@ adminRouter.post("/usuarios", async (req, res) => {
         rol,
         apellido_paterno || null,
         apellido_materno || null,
-        genero || null, // <-- Valor agregado
-        telefono || null, // <-- Valor agregado
-        curp || null, // <-- Valor agregado
-        fecha_nacimiento || null, // <-- Valor agregado
+        genero || null,
+        telefono || null,
+        curp || null,
+        fecha_nacimiento || null,
       ]
     );
-    res.status(201).send({ message: "Usuario registrado" });
+
+    const newUserId = insertResult.insertId; // 3. Obtenemos el ID del nuevo usuario
+
+    // 4. Generamos la matrícula (Ej: 2025 + 0001 -> "20250001")
+    const year = new Date().getFullYear();
+    const matricula = `${year}${String(newUserId).padStart(4, "0")}`;
+
+    // 5. Actualizamos al usuario con su nueva matrícula
+    await connection.query("UPDATE usuarios SET matricula = ? WHERE id = ?", [
+      matricula,
+      newUserId,
+    ]);
+
+    await connection.commit(); // 6. Confirmamos la transacción
+    res
+      .status(201)
+      .send({ message: "Usuario registrado con matrícula: " + matricula });
   } catch (error) {
+    await connection.rollback(); // 7. Revertimos en caso de error
     if (error.code === "ER_DUP_ENTRY")
       return res
         .status(409)
-        .send({ message: "El correo electrónico ya está en uso." });
+        .send({ message: "El correo electrónico o la CURP ya están en uso." });
+    console.error(error);
     res.status(500).send({ message: "Error al registrar el usuario" });
+  } finally {
+    connection.release(); // 8. Siempre liberamos la conexión
   }
 });
 adminRouter.get("/usuarios/:id", async (req, res) =>
@@ -277,11 +302,12 @@ adminRouter.put("/usuarios/:id", async (req, res) => {
       .status(400)
       .send({ message: "El formato de la CURP no es válido." });
   }
+
   let sql, params;
   if (password) {
     const hashedPassword = await bcrypt.hash(password, 10);
     sql =
-      "UPDATE usuarios SET nombre=?, apellido_paterno=?, apellido_materno=?, email=?, password=?, rol=?, genero=?, telefono=?, curp=?, fecha_nacimiento=? WHERE id=?"; // <-- Campos agregados
+      "UPDATE usuarios SET nombre=?, apellido_paterno=?, apellido_materno=?, email=?, password=?, rol=?, genero=?, telefono=?, curp=?, fecha_nacimiento=? WHERE id=?";
     params = [
       nombre,
       apellido_paterno,
@@ -289,25 +315,25 @@ adminRouter.put("/usuarios/:id", async (req, res) => {
       email,
       hashedPassword,
       rol,
-      genero, // <-- Valor agregado
-      telefono, // <-- Valor agregado
-      curp, // <-- Valor agregado
-      fecha_nacimiento, // <-- Valor agregado
+      genero,
+      telefono,
+      curp,
+      fecha_nacimiento,
       req.params.id,
     ];
   } else {
     sql =
-      "UPDATE usuarios SET nombre=?, apellido_paterno=?, apellido_materno=?, email=?, rol=?, genero=?, telefono=?, curp=?, fecha_nacimiento=? WHERE id=?"; // <-- Campos agregados
+      "UPDATE usuarios SET nombre=?, apellido_paterno=?, apellido_materno=?, email=?, rol=?, genero=?, telefono=?, curp=?, fecha_nacimiento=? WHERE id=?";
     params = [
       nombre,
       apellido_paterno,
       apellido_materno,
       email,
       rol,
-      genero, // <-- Valor agregado
-      telefono, // <-- Valor agregado
-      curp, // <-- Valor agregado
-      fecha_nacimiento, // <-- Valor agregado
+      genero,
+      telefono,
+      curp,
+      fecha_nacimiento,
       req.params.id,
     ];
   }
@@ -316,7 +342,9 @@ adminRouter.put("/usuarios/:id", async (req, res) => {
     res.send({ message: "Usuario actualizado" });
   } catch (error) {
     if (error.code === "ER_DUP_ENTRY")
-      return res.status(409).send({ message: "El email ya está en uso." });
+      return res
+        .status(409)
+        .send({ message: "El email o la CURP ya están en uso." });
     res.status(500).send({ message: "Error al actualizar usuario" });
   }
 });
@@ -430,7 +458,7 @@ adminRouter.get("/grupos/:id", async (req, res) => {
     grupoRes[0].plan_estudio_id,
   ]);
   const alumnosSql = `
-        SELECT u.id, u.nombre, u.apellido_paterno, u.email 
+        SELECT u.id, u.nombre, u.apellido_paterno, u.apellido_materno, u.email 
         FROM usuarios u
         JOIN grupo_alumnos ga ON u.id = ga.alumno_id
         WHERE ga.grupo_id = ?`;
@@ -547,6 +575,64 @@ adminRouter.delete("/grupos/:id/dar-baja/:alumnoId", async (req, res) => {
     connection.release();
   }
 });
+// --- NUEVA RUTA DE MIGRACIÓN DE GRUPO ---
+adminRouter.post("/migrar-grupo", async (req, res) => {
+  const { sourceGroupId, destinationGroupId } = req.body;
+
+  if (!sourceGroupId || !destinationGroupId) {
+    return res
+      .status(400)
+      .send({ message: "Se requieren los IDs de origen y destino." });
+  }
+  if (sourceGroupId === destinationGroupId) {
+    return res.status(400).send({
+      message: "El grupo de origen y destino no pueden ser el mismo.",
+    });
+  }
+
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // 1. Obtener todos los alumnos del grupo de origen
+    const [alumnos] = await connection.query(
+      "SELECT alumno_id FROM grupo_alumnos WHERE grupo_id = ?",
+      [sourceGroupId]
+    );
+
+    if (alumnos.length === 0) {
+      // No es un error, pero se lo informamos al admin
+      await connection.rollback(); // Revertimos la transacción vacía
+      return res
+        .status(404)
+        .send({ message: "El grupo de origen no tiene alumnos para migrar." });
+    }
+
+    // 2. Preparar los datos para la inserción masiva
+    // Usamos "INSERT IGNORE" para evitar errores si un alumno
+    // (por alguna razón) ya estaba inscrito en el grupo de destino.
+    const values = alumnos.map((a) => [destinationGroupId, a.alumno_id]);
+
+    // 3. Insertar todos los alumnos en el grupo de destino
+    const [result] = await connection.query(
+      "INSERT IGNORE INTO grupo_alumnos (grupo_id, alumno_id) VALUES ?",
+      [values]
+    );
+
+    await connection.commit();
+    res.send({
+      message: `Migración completada. ${result.affectedRows} de ${alumnos.length} alumnos fueron movidos.`,
+    });
+  } catch (error) {
+    await connection.rollback();
+    console.error("Error en la migración de grupo:", error);
+    res
+      .status(500)
+      .send({ message: "Error en el servidor durante la migración." });
+  } finally {
+    connection.release();
+  }
+});
 adminRouter.get("/aspirantes/:id/expediente", async (req, res) => {
   const { id } = req.params;
   const [docs] = await db.query(
@@ -624,7 +710,7 @@ docenteRouter.get(
     const cursoSql = `SELECT g.nombre_grupo, a.nombre_asignatura FROM grupos g, asignaturas a WHERE g.id = ? AND a.id = ?`;
     const [[cursoInfo]] = await db.query(cursoSql, [grupoId, asignaturaId]);
     const alumnosSql = `
-        SELECT u.id, CONCAT(u.nombre, ' ', u.apellido_paterno) as nombre_completo, c.calificacion
+        SELECT u.id, CONCAT(u.nombre, ' ', u.apellido_paterno, ' ', IFNULL(u.apellido_materno, '')) as nombre_completo, c.calificacion
         FROM grupo_alumnos ga JOIN usuarios u ON ga.alumno_id = u.id
         LEFT JOIN calificaciones c ON c.alumno_id = u.id AND c.asignatura_id = ?
         WHERE ga.grupo_id = ? AND u.rol = 'alumno'`;
