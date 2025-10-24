@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "160173379921",
+    "project_id": "plataformamovil-6275a",
+    "storage_bucket": "plataformamovil-6275a.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:160173379921:android:f72c97704c1bfea9624370",
+        "android_client_info": {
+          "package_name": "com.cevvisvallesvirtualgdl2.movil"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA_IJmtpdrZDgKsjKVjz4U3J89Q8ZWbXgo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

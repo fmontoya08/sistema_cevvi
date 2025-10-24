@@ -1,10 +1,10 @@
 // Archivo: movil/app/(tabs)/_layout.tsx
 
 import React from "react";
-import { Redirect, Tabs, useNavigation } from "expo-router";
+import { Redirect, Tabs } from "expo-router";
 import { useAuth } from "../../context/AuthContext";
 import { TouchableOpacity, ActivityIndicator, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons"; // <-- Usamos Ionicons directamente
+import { Ionicons } from "@expo/vector-icons";
 
 export default function TabsLayout() {
   const { user, loading, logout } = useAuth();
@@ -21,13 +21,12 @@ export default function TabsLayout() {
     return <Redirect href="/login" />;
   }
 
-  // Oculta si el rol no es alumno o docente
-  if (user.rol === "admin" || user.rol === "aspirante") {
+  // Solo el admin no entra a esta sección
+  if (user.rol === "admin") {
     return <Redirect href="/login" />;
   }
 
   return (
-    // ¡Usamos <Tabs>! Esto corrige los errores de layout.
     <Tabs
       screenOptions={{
         headerRight: () => (
@@ -39,29 +38,40 @@ export default function TabsLayout() {
     >
       {/* Pestaña del Alumno */}
       <Tabs.Screen
-        name="index"
+        name="index" // Corresponde a (tabs)/index.tsx
         options={{
           title: "Mi Portal",
-          // --- MODIFICACIÓN AQUÍ ---
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="home" color={color} size={size} />
           ),
-          // Oculta esta pestaña si no es alumno
+          // Usamos href: null para ocultar si no es alumno
           href: user?.rol === "alumno" ? "/" : null,
         }}
       />
 
       {/* Pestaña del Docente */}
       <Tabs.Screen
-        name="explore"
+        name="explore" // Corresponde a (tabs)/explore.tsx
         options={{
           title: "Mis Cursos",
-          // --- MODIFICACIÓN AQUÍ ---
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="book" color={color} size={size} />
           ),
-          // Oculta esta pestaña si no es docente
+          // Usamos href: null para ocultar si no es docente
           href: user?.rol === "docente" ? "/explore" : null,
+        }}
+      />
+
+      {/* Pestaña del Aspirante */}
+      <Tabs.Screen
+        name="expediente" // Corresponde a (tabs)/expediente.tsx
+        options={{
+          title: "Mi Expediente",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="file-tray-full" color={color} size={size} />
+          ),
+          // Usamos href: null para ocultar si no es aspirante
+          href: user?.rol === "aspirante" ? "/expediente" : null,
         }}
       />
     </Tabs>

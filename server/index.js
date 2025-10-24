@@ -6,6 +6,7 @@ const jwt = require("jsonwebtoken");
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
+const fetch = require("node-fetch");
 
 const app = express();
 app.use(cors());
@@ -113,6 +114,14 @@ const isAlumno = (req, res, next) => {
     .status(403)
     .send({ message: "Acceso denegado. Se requiere rol de alumno." });
 };
+const isAspirante = (req, res, next) => {
+  if (req.user && req.user.rol === "aspirante") {
+    return next();
+  }
+  return res
+    .status(403)
+    .send({ message: "Acceso denegado. Se requiere rol de aspirante." });
+};
 
 const apiRouter = express.Router();
 app.use("/api", apiRouter); // Montamos el router principal en /api
@@ -142,6 +151,7 @@ apiRouter.post("/login", async (req, res) => {
       email: user.email,
       rol: user.rol,
       nombre: user.nombre,
+      apellido_paterno: user.apellido_paterno,
     };
     const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "8h" });
     res.json({ token, user: payload });
@@ -154,6 +164,51 @@ apiRouter.post("/login", async (req, res) => {
 // --- A PARTIR DE AQUÍ, TODAS LAS RUTAS REQUIEREN UN TOKEN VÁLIDO ---
 // Usamos el middleware 'verifyToken' para todas las rutas que siguen
 apiRouter.use(verifyToken);
+
+// RUTA PARA REGISTRAR UN TOKEN
+apiRouter.post("/register-push-token", async (req, res) => {
+  const { token } = req.body;
+  const userId = req.user.id; // Obtenemos el ID del usuario del token JWT
+
+  if (!token) {
+    return res.status(400).send({ message: "Token es requerido." });
+  }
+
+  try {
+    // Usamos INSERT IGNORE para evitar errores si el token ya existe
+    await db.query(
+      "INSERT IGNORE INTO push_tokens (user_id, token) VALUES (?, ?)",
+      [userId, token]
+    );
+    res.status(200).send({ message: "Token registrado con éxito." });
+  } catch (error) {
+    console.error("Error al registrar push token:", error);
+    res.status(500).send({ message: "Error en el servidor." });
+  }
+});
+
+// RUTA PARA ELIMINAR UN TOKEN (PARA EL LOGOUT)
+apiRouter.delete("/unregister-push-token", async (req, res) => {
+  const { token } = req.body;
+  const userId = req.user.id;
+
+  if (!token) {
+    return res.status(400).send({ message: "Token es requerido." });
+  }
+
+  try {
+    await db.query("DELETE FROM push_tokens WHERE user_id = ? AND token = ?", [
+      userId,
+      token,
+    ]);
+    res.status(200).send({ message: "Token eliminado con éxito." });
+  } catch (error) {
+    console.error("Error al eliminar push token:", error);
+    res.status(500).send({ message: "Error en el servidor." });
+  }
+});
+
+// --- FIN DE NUEVAS RUTAS ---
 
 // --- NUEVA RUTA "GUARDAR TODO" (PARA ADMIN Y DOCENTE) ---
 apiRouter.post("/calificar-grupo-completo", async (req, res) => {
@@ -196,8 +251,57 @@ apiRouter.post("/calificar-grupo-completo", async (req, res) => {
 
     // 3. Confirmar la transacción
     await connection.commit();
+    // --- INICIO CÓDIGO PARA ENVIAR NOTIFICACIÓN ---
+    try {
+      // Iteramos de nuevo sobre las calificaciones guardadas
+      for (const cal of calificaciones) {
+        // Solo si la calificación es válida (no null)
+        const calNum = parseFloat(cal.calificacion);
+        if (!isNaN(calNum) && calNum >= 0 && calNum <= 100) {
+          const alumnoId = cal.alumno_id;
+
+          // Buscamos los tokens de ESE alumno en la tabla push_tokens
+          const [tokens] = await db.query(
+            "SELECT token FROM push_tokens WHERE user_id = ?",
+            [alumnoId]
+          );
+
+          // Si el alumno tiene tokens registrados...
+          if (tokens.length > 0) {
+            // Preparamos los mensajes para enviar a Expo
+            const messages = tokens.map((t) => ({
+              to: t.token, // El token del dispositivo
+              sound: "default", // Sonido por defecto
+              title: "¡Nueva Calificación! 📊", // Título de la notificación
+              body: `Se ha registrado tu calificación para la asignatura.`, // Cuerpo del mensaje
+              // data: { ... }, // Puedes añadir datos extra aquí si quieres
+            }));
+
+            // Enviamos la petición a la API de Expo para enviar las notificaciones
+            await fetch("https://exp.host/--/api/v2/push/send", {
+              method: "POST",
+              headers: {
+                Accept: "application/json",
+                "Accept-encoding": "gzip, deflate",
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(messages), // Enviamos los mensajes como JSON
+            });
+            console.log(`Notificación enviada al alumno ${alumnoId}`);
+          }
+        }
+      }
+    } catch (notificationError) {
+      // Si falla el envío de la notificación, solo mostramos el error en consola
+      // No detenemos el proceso principal de guardar calificaciones
+      console.error("Error al enviar notificación push:", notificationError);
+    }
+    // --- FIN CÓDIGO PARA ENVIAR NOTIFICACIÓN ---
+
+    // Esta línea ya la tenías, es la respuesta al frontend
     res.send({ message: "Calificaciones guardadas con éxito." });
   } catch (error) {
+    // <-- Tu bloque catch existente
     await connection.rollback();
     console.error("Error al guardar calificaciones:", error);
     res.status(500).send({ message: "Error en el servidor." });
@@ -423,6 +527,29 @@ adminRouter.get("/docentes", async (req, res) =>
     )[0]
   )
 );
+adminRouter.get("/grupos/:id/alumnos-disponibles", async (req, res) => {
+  const { id: grupoId } = req.params;
+  try {
+    /*
+    Buscamos usuarios que puedan ser inscritos:
+    1. Su rol es 'aspirante' O 'alumno'.
+    2. Y NO están ya inscritos en ESTE grupo.
+    */
+    const [alumnos] = await db.query(
+      `SELECT id, nombre, apellido_paterno, rol
+       FROM usuarios
+       WHERE (rol = 'aspirante' OR rol = 'alumno') 
+       AND id NOT IN (
+           SELECT alumno_id FROM grupo_alumnos WHERE grupo_id = ?
+       )`,
+      [grupoId]
+    );
+    res.json(alumnos);
+  } catch (error) {
+    console.error("Error al buscar alumnos disponibles:", error);
+    res.status(500).send({ message: "Error en el servidor" });
+  }
+});
 adminRouter.get("/asignaturas", async (req, res) => {
   const sql = `
     SELECT a.*, p.nombre_plan, g.nombre_grado
@@ -618,27 +745,25 @@ adminRouter.post("/grupos/:id/inscribir-alumno", async (req, res) => {
     connection.release();
   }
 });
+// --- REEMPLAZA LA RUTA "DAR-BAJA" CON ESTO ---
 adminRouter.delete("/grupos/:id/dar-baja/:alumnoId", async (req, res) => {
   const { id: grupo_id, alumnoId } = req.params;
-  const connection = await db.getConnection();
+
   try {
-    await connection.beginTransaction();
-    await connection.query(
+    // 1. Simplemente damos de baja al alumno de ESTE grupo
+    await db.query(
       "DELETE FROM grupo_alumnos WHERE grupo_id = ? AND alumno_id = ?",
       [grupo_id, alumnoId]
     );
-    await connection.query(
-      "UPDATE usuarios SET rol = 'aspirante' WHERE id = ?",
-      [alumnoId]
-    );
-    await connection.commit();
-    res.send({ message: "Alumno dado de baja" });
+
+    // 2. YA NO CAMBIAMOS EL ROL. El alumno sigue siendo alumno.
+
+    res.send({ message: "Alumno dado de baja del grupo." });
   } catch (error) {
-    await connection.rollback();
+    console.error("Error al dar de baja:", error);
     res.status(500).send({ message: "Error al dar de baja" });
-  } finally {
-    connection.release();
   }
+  // Nota: Ya no necesitamos la transacción porque es una sola consulta
 });
 // --- NUEVA RUTA DE MIGRACIÓN DE GRUPO ---
 adminRouter.post("/migrar-grupo", async (req, res) => {
@@ -881,22 +1006,35 @@ apiRouter.use("/docente", docenteRouter); // Registra el router de docente en /a
 // --- RUTAS DE ALUMNO ---
 const alumnoRouter = express.Router();
 alumnoRouter.use(isAlumno); // Se asegura que solo alumnos entren
+// --- REEMPLAZA LA RUTA /mi-grupo CON ESTO ---
 alumnoRouter.get("/mi-grupo", async (req, res) => {
   const alumno_id = req.user.id;
-  const [[miGrupo]] = await db.query(
+
+  // 1. Obtenemos TODOS los grupos donde está el alumno
+  const [misGrupos] = await db.query(
     "SELECT * FROM grupo_alumnos WHERE alumno_id = ?",
     [alumno_id]
   );
-  if (!miGrupo)
-    return res.status(404).send({ message: "No estás inscrito en un grupo." });
 
-  const grupoId = miGrupo.grupo_id;
-  const [[grupo]] = await db.query(
-    `SELECT g.*, c.nombre_ciclo FROM grupos g JOIN ciclos c ON g.ciclo_id = c.id WHERE g.id = ?`,
-    [grupoId]
-  );
+  if (!misGrupos || misGrupos.length === 0) {
+    // Esto es correcto, el alumno puede no estar en grupos
+    return res.json([]); // Devolvemos un array vacío
+  }
 
-  const asignaturasSql = `
+  let responseData = [];
+
+  // 2. Iteramos sobre cada grupo encontrado
+  for (const miGrupo of misGrupos) {
+    const grupoId = miGrupo.grupo_id;
+
+    // Obtenemos los detalles de ESE grupo
+    const [[grupo]] = await db.query(
+      `SELECT g.*, c.nombre_ciclo FROM grupos g JOIN ciclos c ON g.ciclo_id = c.id WHERE g.id = ?`,
+      [grupoId]
+    );
+
+    // Obtenemos las asignaturas de ESE grupo
+    const asignaturasSql = `
         SELECT a.nombre_asignatura, a.clave_asignatura, u.nombre as docente_nombre, u.apellido_paterno as docente_apellido, cal.calificacion
         FROM asignaturas a
         LEFT JOIN grupo_asignaturas_docentes gad ON a.id = gad.asignatura_id AND gad.grupo_id = ?
@@ -904,15 +1042,94 @@ alumnoRouter.get("/mi-grupo", async (req, res) => {
         LEFT JOIN calificaciones cal ON cal.asignatura_id = a.id AND cal.alumno_id = ?
         WHERE a.grado_id = ? AND a.plan_estudio_id = ?`;
 
-  const [asignaturas] = await db.query(asignaturasSql, [
-    grupoId,
-    alumno_id,
-    grupo.grado_id,
-    grupo.plan_estudio_id,
-  ]);
-  res.json({ grupo, asignaturas });
+    const [asignaturas] = await db.query(asignaturasSql, [
+      grupoId,
+      alumno_id,
+      grupo.grado_id,
+      grupo.plan_estudio_id,
+    ]);
+
+    // 3. Agregamos este grupo y sus asignaturas al array de respuesta
+    responseData.push({ grupo, asignaturas });
+  }
+
+  // 4. Devolvemos el array con todos los grupos
+  res.json(responseData);
 });
 apiRouter.use("/alumno", alumnoRouter); // Registra el router de alumno en /api/alumno
+
+// --- RUTAS DE ASPIRANTE ---
+const aspiranteRouter = express.Router();
+aspiranteRouter.use(isAspirante); // Se asegura que solo aspirantes entren
+
+// 1. RUTA PARA OBTENER MI PROPIO EXPEDIENTE
+aspiranteRouter.get("/mi-expediente", async (req, res) => {
+  const aspirante_id = req.user.id; // Obtenemos el ID del token
+  const [docs] = await db.query(
+    "SELECT * FROM expediente_aspirantes WHERE aspirante_id = ?",
+    [aspirante_id]
+  );
+  res.json(docs);
+});
+
+// 2. RUTA PARA SUBIR MI PROPIO DOCUMENTO
+aspiranteRouter.post(
+  "/upload",
+  upload.single("documento"),
+  async (req, res) => {
+    const aspirante_id = req.user.id; // Obtenemos el ID del token
+    const { tipo_documento } = req.body;
+    if (!req.file) {
+      return res.status(400).send({ message: "No se subió ningún archivo." });
+    }
+    const { filename, originalname } = req.file;
+    const sql = `
+        INSERT INTO expediente_aspirantes (aspirante_id, tipo_documento, ruta_archivo, nombre_original)
+        VALUES (?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE ruta_archivo = ?, nombre_original = ?`;
+    await db.query(sql, [
+      aspirante_id,
+      tipo_documento,
+      filename,
+      originalname,
+      filename,
+      originalname,
+    ]);
+    res
+      .status(201)
+      .send({ message: "Documento subido con éxito", filePath: filename });
+  }
+);
+
+// 3. RUTA PARA BORRAR MI PROPIO DOCUMENTO
+aspiranteRouter.delete("/expedientes/:id", async (req, res) => {
+  const { id: docId } = req.params;
+  const aspirante_id = req.user.id;
+
+  const [[doc]] = await db.query(
+    "SELECT * FROM expediente_aspirantes WHERE id = ?",
+    [docId]
+  );
+  if (doc) {
+    // --- VERIFICACIÓN DE PROPIEDAD ---
+    if (doc.aspirante_id !== aspirante_id) {
+      return res
+        .status(403)
+        .send({ message: "No tienes permiso para borrar este documento." });
+    }
+    // --- FIN DE VERIFICACIÓN ---
+
+    fs.unlink(path.join(uploadsDir, doc.ruta_archivo), (err) => {
+      if (err) console.error("Error al borrar archivo físico:", err);
+    });
+    await db.query("DELETE FROM expediente_aspirantes WHERE id = ?", [docId]);
+    res.send({ message: "Documento eliminado" });
+  } else {
+    res.status(404).send({ message: "Documento no encontrado" });
+  }
+});
+
+apiRouter.use("/aspirante", aspiranteRouter); // Registra el router de aspirante
 
 // --- INICIO DEL SERVIDOR ---
 const PORT = 3001;

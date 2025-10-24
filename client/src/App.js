@@ -59,6 +59,37 @@ api.interceptors.request.use(
   }
 );
 
+// Interceptor de RESPUESTA (para manejar errores)
+api.interceptors.response.use(
+  (response) => {
+    // Si la respuesta es exitosa, solo la retornamos
+    return response;
+  },
+  (error) => {
+    // Si el error es un 401 (No Autorizado) o 403 (Prohibido)
+    if (
+      error.response &&
+      (error.response.status === 401 || error.response.status === 403)
+    ) {
+      console.warn("Token no válido o sesión expirada. Redirigiendo al login.");
+
+      // Limpiamos el localStorage para forzar el logout
+      localStorage.removeItem("user");
+      localStorage.removeItem("token");
+
+      // Redirigimos al login
+      // Usamos window.location.href para forzar una recarga completa
+      // y limpiar el estado de React.
+      if (window.location.pathname !== "/login") {
+        window.location.href = "/login";
+      }
+    }
+    // Retornamos el error para que otras partes (como el login) puedan manejarlo
+    return Promise.reject(error);
+  }
+);
+// --- FIN DEL NUEVO BLOQUE ---
+
 // --- CONTEXTO DE AUTENTICACIÓN ---
 const AuthContext = createContext(null);
 
@@ -92,6 +123,9 @@ const AuthProvider = ({ children }) => {
         navigate("/docente/dashboard");
       } else if (userData.rol === "alumno") {
         navigate("/alumno/dashboard");
+      } else if (userData.rol === "aspirante") {
+        // <-- AÑADE ESTO
+        navigate("/aspirante/dashboard");
       } else {
         navigate("/login");
       }
@@ -126,7 +160,8 @@ const useAuth = () => {
 // --- COMPONENTES DE LA INTERFAZ ---
 
 const ProtectedRoute = ({ allowedRoles }) => {
-  const { user, loading } = useAuth();
+  // 1. Obtenemos la función "logout"
+  const { user, loading, logout } = useAuth();
   const location = useLocation();
 
   if (loading) {
@@ -141,8 +176,15 @@ const ProtectedRoute = ({ allowedRoles }) => {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
+  // 2. Esta es la lógica modificada
   if (!allowedRoles.includes(user.rol)) {
-    return <Navigate to="/unauthorized" replace />;
+    // Si el rol en localStorage no coincide con la ruta
+    // (ej. un admin en ruta de alumno), la sesión es inválida.
+    // Forzamos el cierre de sesión.
+    logout();
+
+    // Mostramos null mientras el logout redirige al login
+    return null;
   }
 
   return <Outlet />;
@@ -317,6 +359,53 @@ const AlumnoLayout = () => {
         <header className="bg-white shadow-sm p-4">
           <h1 className="text-2xl font-semibold text-gray-800">
             Portal del Alumno
+          </h1>
+        </header>
+        <div className="p-6">
+          <Outlet />
+        </div>
+      </main>
+    </div>
+  );
+};
+
+const AspiranteLayout = () => {
+  const { logout } = useAuth();
+  return (
+    <div className="flex h-screen bg-gray-100 font-sans">
+      <aside className="w-64 flex-shrink-0 bg-gray-800 text-white flex flex-col">
+        <div className="h-20 flex items-center justify-center border-b border-gray-700">
+          <svg
+            className="w-auto h-10 text-principal"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+          >
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5-10-5-10 5z" />
+          </svg>
+        </div>
+        <nav className="flex-1 px-4 py-6 space-y-2">
+          <Link
+            to="/aspirante/dashboard"
+            className="flex items-center px-4 py-2 rounded-lg bg-principal text-white"
+          >
+            <FileIcon className="w-5 h-5 mr-3" />
+            Mi Expediente
+          </Link>
+        </nav>
+        <div className="px-4 py-4 border-t border-gray-700">
+          <button
+            onClick={logout}
+            className="w-full flex items-center px-4 py-2 rounded-lg text-gray-300 hover:bg-principal hover:text-white transition-colors duration-200"
+          >
+            <LogOut className="w-5 h-5 mr-3" />
+            Cerrar Sesión
+          </button>
+        </div>
+      </aside>
+      <main className="flex-1 overflow-y-auto">
+        <header className="bg-white shadow-sm p-4">
+          <h1 className="text-2xl font-semibold text-gray-800">
+            Portal del Aspirante
           </h1>
         </header>
         <div className="p-6">
@@ -1745,34 +1834,40 @@ const AsignarDocenteModal = ({ grupoId, asignatura, onClose, onSave }) => {
   );
 };
 
+// --- REEMPLAZA EL MODAL DE INSCRIBIR CON ESTE ---
 const InscribirAlumnoModal = ({ grupoId, onClose, onSave }) => {
-  const [aspirantes, setAspirantes] = useState([]);
-  const [selectedAspirante, setSelectedAspirante] = useState("");
+  const [alumnosDisponibles, setAlumnosDisponibles] = useState([]); // Renombrado
+  const [selectedAlumno, setSelectedAlumno] = useState(""); // Renombrado
 
   useEffect(() => {
-    const fetchAspirantes = async () => {
+    const fetchAlumnos = async () => {
+      if (!grupoId) return;
       try {
-        const { data } = await api.get("/admin/aspirantes");
-        setAspirantes(data);
+        // --- 1. USA EL NUEVO ENDPOINT ---
+        const { data } = await api.get(
+          `/admin/grupos/${grupoId}/alumnos-disponibles`
+        );
+        setAlumnosDisponibles(data);
         if (data.length > 0) {
-          setSelectedAspirante(data[0].id);
+          setSelectedAlumno(data[0].id);
         }
       } catch (error) {
-        console.error("Error al obtener aspirantes", error);
+        console.error("Error al obtener alumnos disponibles", error);
       }
     };
-    fetchAspirantes();
-  }, []);
+    fetchAlumnos();
+  }, [grupoId]); // Se ejecuta si el grupoId cambia
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!selectedAspirante) {
-      alert("Por favor, seleccione un aspirante.");
+    if (!selectedAlumno) {
+      alert("Por favor, seleccione un alumno.");
       return;
     }
     try {
+      // Esta ruta ya tiene la lógica de convertir 'aspirante' a 'alumno'
       await api.post(`/admin/grupos/${grupoId}/inscribir-alumno`, {
-        alumno_id: selectedAspirante,
+        alumno_id: selectedAlumno, // Usamos el estado actualizado
       });
       onSave();
       onClose();
@@ -1797,21 +1892,23 @@ const InscribirAlumnoModal = ({ grupoId, onClose, onSave }) => {
         <h3 className="text-2xl font-bold mb-6">Inscribir Alumno</h3>
         <form onSubmit={handleSubmit} className="space-y-4">
           <label className="block text-sm font-medium text-gray-700">
-            Seleccionar Aspirante
+            Seleccionar Aspirante o Alumno
           </label>
+          {/* --- 2. EL SELECT AHORA MUESTRA AMBOS ROLES --- */}
           <select
-            value={selectedAspirante}
-            onChange={(e) => setSelectedAspirante(e.target.value)}
+            value={selectedAlumno}
+            onChange={(e) => setSelectedAlumno(e.target.value)}
             className="w-full px-3 py-2 border rounded-md"
           >
-            {aspirantes.length > 0 ? (
-              aspirantes.map((a) => (
+            {alumnosDisponibles.length > 0 ? (
+              alumnosDisponibles.map((a) => (
+                // Mostramos el rol para que el admin sepa
                 <option key={a.id} value={a.id}>
-                  {a.nombre} {a.apellido_paterno}
+                  {a.nombre} {a.apellido_paterno} ({a.rol})
                 </option>
               ))
             ) : (
-              <option disabled>No hay aspirantes disponibles</option>
+              <option disabled>No hay aspirantes o alumnos disponibles</option>
             )}
           </select>
           <div className="flex justify-end space-x-4 mt-8">
@@ -1824,7 +1921,7 @@ const InscribirAlumnoModal = ({ grupoId, onClose, onSave }) => {
             </button>
             <button
               type="submit"
-              disabled={aspirantes.length === 0}
+              disabled={alumnosDisponibles.length === 0}
               className="px-4 py-2 bg-principal text-white rounded-md hover:opacity-90 disabled:bg-gray-400"
             >
               Inscribir
@@ -2639,15 +2736,17 @@ const AdminCalificarPage = () => {
   );
 };
 
+// --- REEMPLAZA EL COMPONENTE AlumnoDashboardPage CON ESTO ---
 const AlumnoDashboardPage = () => {
-  const [miGrupo, setMiGrupo] = useState(null);
+  // 1. Cambiamos el estado para que sea un array
+  const [misGrupos, setMisGrupos] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchMiGrupo = async () => {
       try {
         const { data } = await api.get("/alumno/mi-grupo");
-        setMiGrupo(data);
+        setMisGrupos(data); // 2. Guardamos el array
       } catch (error) {
         console.error("Error al cargar la información del grupo", error);
       } finally {
@@ -2658,48 +2757,59 @@ const AlumnoDashboardPage = () => {
   }, []);
 
   if (loading) return <p>Cargando tu información...</p>;
-  if (!miGrupo) return <p>Aún no estás inscrito en ningún grupo.</p>;
 
+  // 3. Actualizamos la comprobación
+  if (!misGrupos || misGrupos.length === 0) {
+    return <p>Aún no estás inscrito en ningún grupo.</p>;
+  }
+
+  // 4. Hacemos un map sobre el array misGrupos
   return (
-    <div>
-      <h2 className="text-3xl font-bold text-gray-800 mb-2">
-        Grupo: {miGrupo.grupo.nombre_grupo}
-      </h2>
-      <p className="text-lg text-secundario mb-6">
-        Ciclo Escolar: {miGrupo.grupo.nombre_ciclo}
-      </p>
+    <div className="space-y-8">
+      {misGrupos.map((infoGrupo, index) => (
+        <div key={index}>
+          <h2 className="text-3xl font-bold text-gray-800 mb-2">
+            Grupo: {infoGrupo.grupo.nombre_grupo} ({infoGrupo.grupo.modalidad})
+          </h2>
+          <p className="text-lg text-secundario mb-6">
+            Ciclo Escolar: {infoGrupo.grupo.nombre_ciclo}
+          </p>
 
-      <div className="bg-white p-6 rounded-lg shadow">
-        <h3 className="text-xl font-bold mb-4">
-          Mis Asignaturas y Calificaciones
-        </h3>
-        <table className="w-full table-auto">
-          <thead className="text-left bg-gray-50">
-            <tr>
-              <th className="px-4 py-2">Asignatura</th>
-              <th className="px-4 py-2">Docente</th>
-              <th className="px-4 py-2">Calificación</th>
-            </tr>
-          </thead>
-          <tbody>
-            {miGrupo.asignaturas.map((asig) => (
-              <tr key={asig.clave_asignatura} className="border-b">
-                <td className="px-4 py-2">{asig.nombre_asignatura}</td>
-                <td className="px-4 py-2">
-                  {asig.docente_nombre
-                    ? `${asig.docente_nombre} ${asig.docente_apellido}`
-                    : "N/A"}
-                </td>
-                <td className="px-4 py-2 font-semibold">
-                  {asig.calificacion !== null
-                    ? asig.calificacion
-                    : "Sin calificar"}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+          <div className="bg-white p-6 rounded-lg shadow">
+            <h3 className="text-xl font-bold mb-4">
+              Mis Asignaturas y Calificaciones
+            </h3>
+            <table className="w-full table-auto">
+              <thead className="text-left bg-gray-50">
+                <tr>
+                  <th className="px-4 py-2">Asignatura</th>
+                  <th className="px-4 py-2">Docente</th>
+                  <th className="px-4 py-2">Calificación</th>
+                </tr>
+              </thead>
+              <tbody>
+                {infoGrupo.asignaturas.map((asig) => (
+                  <tr key={asig.clave_asignatura} className="border-b">
+                    <td className="px-4 py-2">{asig.nombre_asignatura}</td>
+                    <td className="px-4 py-2">
+                      {asig.docente_nombre
+                        ? `${asig.docente_nombre} ${
+                            asig.docente_apellido || ""
+                          }`
+                        : "N/A"}
+                    </td>
+                    <td className="px-4 py-2 font-semibold">
+                      {asig.calificacion !== null
+                        ? asig.calificacion
+                        : "Sin calificar"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ))}
     </div>
   );
 };
@@ -2868,6 +2978,157 @@ const DetalleAspirantePage = () => {
   );
 };
 
+const AspiranteDashboardPage = () => {
+  // 1. Usamos useAuth en lugar de useParams
+  const { user } = useAuth();
+  const [expediente, setExpediente] = useState([]);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [tipoDocumento, setTipoDocumento] = useState("acta_nacimiento");
+
+  // Lista de documentos requeridos
+  const tiposRequeridos = [
+    { id: "acta_nacimiento", nombre: "Acta de Nacimiento" },
+    { id: "curp", nombre: "CURP" },
+    { id: "certificado_bachillerato", nombre: "Certificado de Bachillerato" },
+    { id: "comprobante_domicilio", nombre: "Comprobante de Domicilio" },
+  ];
+
+  const fetchAspirante = useCallback(async () => {
+    try {
+      // 2. Usamos la nueva ruta del aspirante
+      const expedienteRes = await api.get(`/aspirante/mi-expediente`);
+      setExpediente(expedienteRes.data);
+    } catch (error) {
+      console.error("Error al cargar datos del aspirante", error);
+    }
+  }, []); // 3. No hay dependencias, usa el ID del token
+
+  useEffect(() => {
+    fetchAspirante();
+  }, [fetchAspirante]);
+
+  const handleFileChange = (e) => {
+    setSelectedFile(e.target.files[0]);
+  };
+
+  const handleUpload = async (e) => {
+    e.preventDefault();
+    if (!selectedFile) {
+      alert("Por favor, selecciona un archivo.");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("documento", selectedFile);
+    formData.append("tipo_documento", tipoDocumento);
+
+    try {
+      // 4. Usamos la nueva ruta del aspirante
+      await api.post(`/aspirante/upload`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      fetchAspirante(); // Recargar datos
+      setSelectedFile(null); // Limpiar el input
+      e.target.reset(); // Limpiar el form
+    } catch (error) {
+      // ... (manejo de error)
+    }
+  };
+
+  const handleDelete = async (docId) => {
+    if (window.confirm("¿Estás seguro de eliminar este documento?")) {
+      try {
+        // 5. Usamos la nueva ruta del aspirante
+        await api.delete(`/aspirante/expedientes/${docId}`);
+        fetchAspirante();
+      } catch (error) {
+        // ... (manejo de error)
+      }
+    }
+  };
+
+  // 6. Lógica para el recordatorio
+  const documentosSubidos = expediente.map((doc) => doc.tipo_documento);
+  const faltantes = tiposRequeridos.filter(
+    (tipo) => !documentosSubidos.includes(tipo.id)
+  );
+
+  if (!user) return <p>Cargando...</p>;
+
+  return (
+    <div>
+      {/* 7. Saludamos al usuario desde useAuth */}
+      <h2 className="text-3xl font-bold text-gray-800 mb-4">
+        ¡Hola, {user.nombre} {user.apellido_paterno}!
+      </h2>
+      <p className="text-lg text-gray-700 mb-6">
+        Bienvenido a tu portal. Para completar tu registro, por favor sube los
+        documentos de tu expediente.
+      </p>
+
+      {/* 8. Mostramos el recordatorio si faltan documentos */}
+      {faltantes.length > 0 && (
+        <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-6 rounded-md">
+          <p className="font-bold">¡Acción Requerida!</p>
+          <p>Aún necesitas subir los siguientes documentos:</p>
+          <ul className="list-disc list-inside mt-2">
+            {faltantes.map((doc) => (
+              <li key={doc.id}>{doc.nombre}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div className="bg-white p-6 rounded-lg shadow mt-6">
+        <h3 className="text-xl font-bold mb-4">Subir Documento</h3>
+        <form onSubmit={handleUpload} className="flex items-end space-x-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Tipo de Documento
+            </label>
+            <select
+              value={tipoDocumento}
+              onChange={(e) => setTipoDocumento(e.target.value)}
+              className="w-full px-3 py-2 mt-1 border rounded-md"
+            >
+              {/* Usamos la lista de requeridos para el select */}
+              {tiposRequeridos.map((tipo) => (
+                <option key={tipo.id} value={tipo.id}>
+                  {tipo.nombre}
+                </option>
+              ))}
+            </select>
+          </div>
+          {/* ... (el resto del formulario de subida se queda igual) ... */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Archivo
+            </label>
+            <input
+              type="file"
+              onChange={handleFileChange}
+              className="w-full px-3 py-1 mt-1 border rounded-md"
+            />
+          </div>
+          <button
+            type="submit"
+            className="flex items-center h-10 px-4 py-2 font-semibold text-white bg-principal rounded-md hover:opacity-90"
+          >
+            <Upload size={18} className="mr-2" />
+            Subir
+          </button>
+        </form>
+      </div>
+
+      <div className="bg-white p-6 rounded-lg shadow mt-6">
+        <h3 className="text-xl font-bold mb-4">Mis Documentos</h3>
+        {/* ... (La tabla de documentos se queda exactamente igual) ... */}
+        <table className="w-full table-auto">{/* ... */}</table>
+      </div>
+    </div>
+  );
+};
+
 // --- COMPONENTE PRINCIPAL DE LA APP ---
 function App() {
   return (
@@ -3007,12 +3268,12 @@ function App() {
             </Route>
           </Route>
 
-          {/* Rutas de Alumno */}
-          <Route element={<ProtectedRoute allowedRoles={["alumno"]} />}>
-            <Route element={<AlumnoLayout />}>
+          {/* Rutas de Aspirante */}
+          <Route element={<ProtectedRoute allowedRoles={["aspirante"]} />}>
+            <Route element={<AspiranteLayout />}>
               <Route
-                path="/alumno/dashboard"
-                element={<AlumnoDashboardPage />}
+                path="/aspirante/dashboard"
+                element={<AspiranteDashboardPage />}
               />
             </Route>
           </Route>

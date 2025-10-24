@@ -24,13 +24,15 @@ export default function LoginScreen() {
     setIsLoading(false);
 
     if (result.success) {
-      if (result.user?.rol === "admin" || result.user?.rol === "aspirante") {
+      if (result.user?.rol === "admin") {
+        // <-- MODIFICADO
         Alert.alert(
           "Acceso Denegado",
-          "Esta aplicación es solo para alumnos y docentes."
+          "Esta aplicación es para alumnos, docentes y aspirantes." // <-- MODIFICADO
         );
         return;
       }
+      // Todos los demás (alumno, docente, aspirante) entran
       router.replace("/(tabs)");
     } else {
       Alert.alert(
