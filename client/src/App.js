@@ -46,11 +46,12 @@ import {
   Sparkles, // <-- NUEVO
   UploadCloud, // <-- NUEVO
   Check, // <-- NUEVO
-  File, // <-- NUEVO
   Download, // <-- NUEVO
   Award, // <-- NUEVO
   Link as LinkIcon, // <-- NUEVO (con alias para no chocar con <Link> de react-router)
   Paperclip, // <-- NUEVO
+  ClipboardCheck, // <-- NUEVO
+  History, // <-- NUEVO
 } from "lucide-react";
 
 // --- CONFIGURACIÓN DE AXIOS ---
@@ -3430,6 +3431,10 @@ const AulaVirtualPage = () => {
   const [formData, setFormData] = useState({
     enlace_videollamada: "",
     descripcion_curso: "",
+    objetivos: "", // <-- NUEVO
+    evaluacion: "", // <-- NUEVO
+    horario: "", // <-- NUEVO
+    contacto_docente: "", // <-- NUEVO
   });
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -3446,25 +3451,36 @@ const AulaVirtualPage = () => {
   const [loadingRecursos, setLoadingRecursos] = useState(true);
   const [showRecursoModal, setShowRecursoModal] = useState(false);
 
-  // Función para cargar los datos del aula
+  // --- INICIA NUEVO CÓDIGO (ASISTENCIA) ---
+  const [historialAsistencia, setHistorialAsistencia] = useState([]);
+  const [loadingHistorial, setLoadingHistorial] = useState(false);
+  const [isCreatingSession, setIsCreatingSession] = useState(false); // Para el botón del docente
+  // --- TERMINA NUEVO CÓDIGO (ASISTENCIA) ---
+
   const fetchAulaConfig = useCallback(async () => {
     try {
+      // --- ESTA ES LA LÍNEA CORREGIDA ---
       const { data } = await api.get(
         `/${user.rol}/aula-virtual/${grupoId}/${asignaturaId}/config`
       );
-      setConfig(data);
+      // --- FIN CORRECCIÓN ---
+      setConfig(data); // <-- Aquí ya vienen modalidad y estatus
+      // Sincroniza formData con los datos cargados
       setFormData({
-        enlace_videollamada: data.enlace_videollamada || "",
+        enlace_videollallamada: data.enlace_videollamada || "",
         descripcion_curso: data.descripcion_curso || "",
+        objetivos: data.objetivos || "",
+        evaluacion: data.evaluacion || "",
+        horario: data.horario || "",
+        contacto_docente: data.contacto_docente || "",
       });
     } catch (error) {
       console.error("Error al cargar la configuración del aula", error);
     } finally {
-      setLoading(false);
+      setLoading(false); // <-- Asegúrate que setLoading esté aquí
     }
-  }, [user.rol, grupoId, asignaturaId]);
+  }, [user.rol, grupoId, asignaturaId]); // Las dependencias están bien
 
-  // Función para cargar las tareas
   const fetchTareas = useCallback(async () => {
     setLoadingTareas(true);
     try {
@@ -3480,52 +3496,48 @@ const AulaVirtualPage = () => {
   }, [user.rol, grupoId, asignaturaId]);
 
   const fetchRecursos = useCallback(async () => {
-    // --- REEMPLAZA EL CONTENIDO ANTERIOR CON ESTO ---
-    setLoadingRecursos(true); // Indicar que estamos cargando
+    setLoadingRecursos(true);
     try {
-      // Hacemos la llamada a la API (la ruta es la misma para ambos roles)
       const { data } = await api.get(
         `/${user.rol}/aula-virtual/${grupoId}/${asignaturaId}/recursos`
       );
-      setRecursos(data); // Guardamos los datos en el estado
+      setRecursos(data);
     } catch (error) {
       console.error("Error al cargar recursos", error);
-      setRecursos([]); // En caso de error, dejamos la lista vacía
     } finally {
-      setLoadingRecursos(false); // Indicamos que la carga terminó
+      setLoadingRecursos(false);
     }
-    // --- FIN DEL REEMPLAZO ---
   }, [user.rol, grupoId, asignaturaId]);
 
-  const handleDeleteRecurso = async (recursoId) => {
-    // --- REEMPLAZA EL CONTENIDO ANTERIOR CON ESTO ---
-    // Preguntar confirmación al usuario
-    if (
-      window.confirm(
-        "¿Estás seguro de eliminar este recurso? Esta acción no se puede deshacer."
-      )
-    ) {
-      try {
-        // Llamar a la API para borrar el recurso por su ID
-        await api.delete(`/docente/aula-virtual/recurso/${recursoId}`);
-        // Si la llamada fue exitosa, refrescar la lista de recursos
-        fetchRecursos(); // Esto hará que el recurso borrado desaparezca de la pantalla
-      } catch (error) {
-        console.error("Error al eliminar recurso", error);
-        alert("Error al eliminar el recurso. Inténtalo de nuevo.");
-      }
+  // --- INICIA NUEVO CÓDIGO (ASISTENCIA) ---
+  // Función para cargar el historial de asistencia (solo Alumno)
+  const fetchHistorialAsistencia = useCallback(async () => {
+    if (user.rol !== "alumno") return; // Solo para alumnos
+    setLoadingHistorial(true);
+    try {
+      const { data } = await api.get(
+        `/alumno/aula-virtual/${grupoId}/${asignaturaId}/mis-asistencias`
+      );
+      setHistorialAsistencia(data);
+    } catch (error) {
+      console.error("Error al cargar historial de asistencia", error);
+    } finally {
+      setLoadingHistorial(false);
     }
-    // --- FIN DEL REEMPLAZO ---
-  };
+  }, [user.rol, grupoId, asignaturaId]);
+  // --- TERMINA NUEVO CÓDIGO (ASISTENCIA) ---
 
   // Cargar datos al montar el componente
   useEffect(() => {
     fetchAulaConfig();
     fetchTareas();
-    fetchRecursos(); // <-- AGREGA ESTA LLAMADA
-  }, [fetchAulaConfig, fetchTareas, fetchRecursos]); // <-- AGREGA fetchRecursos AQUÍ
+    fetchRecursos();
+    // --- MODIFICADO ---
+    fetchHistorialAsistencia(); // Llama a la nueva función
+    // --- FIN MODIFICADO ---
+  }, [fetchAulaConfig, fetchTareas, fetchRecursos, fetchHistorialAsistencia]); // <-- Añadido fetchHistorialAsistencia
 
-  // Manejador para guardar (solo docentes)
+  // ... (handleSave, handleChange, handleOpenEntregarModal, handleDeleteRecurso se quedan igual) ...
   const handleSave = async (e) => {
     e.preventDefault();
     setIsSaving(true);
@@ -3552,74 +3564,177 @@ const AulaVirtualPage = () => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  // Abre el modal de "Entregar" para el alumno
   const handleOpenEntregarModal = (tarea) => {
     setSelectedTask(tarea);
     setShowEntregarModal(true);
   };
+
+  const handleDeleteRecurso = async (recursoId) => {
+    if (window.confirm("¿Estás seguro de eliminar este recurso?")) {
+      try {
+        await api.delete(`/docente/aula-virtual/recurso/${recursoId}`);
+        fetchRecursos();
+      } catch (error) {
+        console.error("Error al eliminar recurso", error);
+        alert("Error al eliminar el recurso.");
+      }
+    }
+  };
+
+  // --- INICIA NUEVO CÓDIGO (ASISTENCIA) ---
+  // Iniciar Sesión de Hoy (solo Docente)
+  const handleIniciarSesionHoy = async () => {
+    setIsCreatingSession(true);
+    try {
+      // (Podríamos añadir un prompt para el tema_sesion aquí si quisiéramos)
+      const { data } = await api.post(
+        `/docente/aula-virtual/${grupoId}/${asignaturaId}/iniciar-sesion`,
+        {} // Podríamos enviar { tema_sesion: '...' }
+      );
+      // Navegar a la página de asistencia con el ID de sesión devuelto
+      navigate(
+        `/docente/grupo/${grupoId}/asignatura/${asignaturaId}/asistencia/${data.sesionId}`
+      );
+    } catch (error) {
+      console.error("Error al iniciar sesión", error);
+      alert("Error al iniciar la sesión de asistencia.");
+    } finally {
+      setIsCreatingSession(false);
+    }
+  };
+  // --- TERMINA NUEVO CÓDIGO (ASISTENCIA) ---
 
   if (loading) return <p>Cargando aula virtual...</p>;
   if (!config) return <p>No se pudo cargar la configuración del aula.</p>;
 
   // Componente del formulario de edición (solo para docentes)
   const renderDocenteForm = () => (
-    // ... (Este componente no cambia, lo dejamos igual) ...
     <form
       onSubmit={handleSave}
-      className="bg-gray-50 p-6 rounded-lg shadow-inner"
+      className="bg-gray-50 p-6 rounded-lg shadow-inner space-y-6"
     >
-      <h3 className="text-xl font-semibold mb-4 text-gray-800">
-        Configurar Aula Virtual
-      </h3>
-      <div className="space-y-4">
-        <div>
-          <label
-            htmlFor="enlace_videollamada"
-            className="block text-sm font-medium text-gray-700"
-          >
-            Enlace de la Videollamada (Zoom, Meet, etc.)
-          </label>
-          <input
-            type="url"
-            name="enlace_videollamada"
-            id="enlace_videollamada"
-            value={formData.enlace_videollamada}
-            onChange={handleChange}
-            placeholder="https://zoom.us/j/123456789"
-            className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-principal focus:border-principal"
-          />
-          <button
-            type="button"
-            onClick={() =>
-              setFormData((prev) => ({
-                ...prev,
-                enlace_videollamada: `https://meet.jit.si/CEVVI-G${grupoId}-A${asignaturaId}`,
-              }))
-            }
-            className="flex items-center mt-2 px-3 py-1 text-sm text-white bg-secundario rounded-md hover:opacity-90"
-          >
-            <Sparkles size={16} className="mr-2" />
-            Generar enlace de Jitsi Meet
-          </button>
-        </div>
-        <div>
-          <label
-            htmlFor="descripcion_curso"
-            className="block text-sm font-medium text-gray-700"
-          >
-            Descripción o Mensaje de Bienvenida
-          </label>
-          <textarea
-            name="descripcion_curso"
-            id="descripcion_curso"
-            rows="6"
-            value={formData.descripcion_curso}
-            onChange={handleChange}
-            placeholder="Bienvenidos al curso. Aquí encontrarán los detalles..."
-            className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-principal focus:border-principal"
-          ></textarea>
-        </div>
+      {" "}
+      {/* Añadido space-y-6 */}
+      {/* --- BLOQUE ENLACE VIDEOCONFERENCIA (igual que antes) --- */}
+      <div>
+        <label
+          htmlFor="enlace_videollamada"
+          className="block text-sm font-medium text-gray-700"
+        >
+          Enlace de la Videollamada (Zoom, Meet, etc.)
+        </label>
+        <input
+          type="url"
+          name="enlace_videollamada"
+          id="enlace_videollamada"
+          value={formData.enlace_videollamada}
+          onChange={handleChange}
+          placeholder="https://zoom.us/j/..."
+          className="w-full ..."
+        />
+        <button
+          type="button"
+          onClick={() =>
+            setFormData((prev) => ({
+              ...prev,
+              enlace_videollamada: `https://meet.jit.si/CEVVI-G${grupoId}-A${asignaturaId}`,
+            }))
+          }
+          className="flex items-center mt-2 ..."
+        >
+          <Sparkles size={16} className="mr-2" />
+          Generar enlace de Jitsi Meet
+        </button>
       </div>
+      {/* --- NUEVOS CAMPOS ESTRUCTURADOS --- */}
+      <div>
+        <label
+          htmlFor="objetivos"
+          className="block text-sm font-medium text-gray-700"
+        >
+          Objetivos del Curso
+        </label>
+        <textarea
+          name="objetivos"
+          id="objetivos"
+          rows="4"
+          value={formData.objetivos}
+          onChange={handleChange}
+          placeholder="Al finalizar el curso, el alumno será capaz de..."
+          className="w-full px-3 py-2 mt-1 border ..."
+        ></textarea>
+      </div>
+      <div>
+        <label
+          htmlFor="evaluacion"
+          className="block text-sm font-medium text-gray-700"
+        >
+          Criterios de Evaluación
+        </label>
+        <textarea
+          name="evaluacion"
+          id="evaluacion"
+          rows="3"
+          value={formData.evaluacion}
+          onChange={handleChange}
+          placeholder="Ej: Tareas 50%, Examen Final 30%, Participación 20%"
+          className="w-full px-3 py-2 mt-1 border ..."
+        ></textarea>
+      </div>
+      <div>
+        <label
+          htmlFor="horario"
+          className="block text-sm font-medium text-gray-700"
+        >
+          Horario de Clases / Oficina
+        </label>
+        <textarea
+          name="horario"
+          id="horario"
+          rows="2"
+          value={formData.horario}
+          onChange={handleChange}
+          placeholder="Ej: Lunes y Miércoles 10:00 - 12:00. Consultas: Viernes 11:00"
+          className="w-full px-3 py-2 mt-1 border ..."
+        ></textarea>
+      </div>
+      <div>
+        <label
+          htmlFor="contacto_docente"
+          className="block text-sm font-medium text-gray-700"
+        >
+          Información de Contacto (Docente)
+        </label>
+        <textarea
+          name="contacto_docente"
+          id="contacto_docente"
+          rows="2"
+          value={formData.contacto_docente}
+          onChange={handleChange}
+          placeholder="Ej: Email: profe@mail.com | Sala virtual: https://meet..."
+          className="w-full px-3 py-2 mt-1 border ..."
+        ></textarea>
+      </div>
+      {/* --- CAMPO DESCRIPCIÓN (Opcional, puede mantenerse o quitarse si los otros son suficientes) --- */}
+      <div>
+        <label
+          htmlFor="descripcion_curso"
+          className="block text-sm font-medium text-gray-700"
+        >
+          Descripción General / Mensaje de Bienvenida (Opcional)
+        </label>
+        <textarea
+          name="descripcion_curso"
+          id="descripcion_curso"
+          rows="4"
+          value={formData.descripcion_curso}
+          onChange={handleChange}
+          placeholder="Bienvenidos al curso..."
+          className="w-full px-3 py-2 mt-1 border ..."
+        ></textarea>
+      </div>
+      {/* --- FIN NUEVOS CAMPOS --- */}
+      {/* --- BOTONES GUARDAR/CANCELAR (igual que antes) --- */}
       <div className="flex justify-end items-center space-x-4 mt-6">
         {saveSuccess && (
           <span className="flex items-center text-green-600">
@@ -3629,14 +3744,14 @@ const AulaVirtualPage = () => {
         <button
           type="button"
           onClick={() => setIsEditing(false)}
-          className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
+          className="px-4 py-2 bg-gray-200 ..."
         >
           Cancelar
         </button>
         <button
           type="submit"
           disabled={isSaving}
-          className="px-4 py-2 bg-principal text-white rounded-md hover:opacity-90"
+          className="px-4 py-2 bg-principal ..."
         >
           {isSaving ? "Guardando..." : "Guardar Cambios"}
         </button>
@@ -3644,9 +3759,8 @@ const AulaVirtualPage = () => {
     </form>
   );
 
-  // Componente para mostrar la lista de tareas
+  // ... (renderTareasList y renderRecursosList se quedan igual) ...
   const renderTareasList = () => {
-    // ... (Este componente no cambia, lo dejamos igual) ...
     if (loadingTareas) return <p>Cargando tareas...</p>;
     if (tareas.length === 0) {
       return (
@@ -3739,8 +3853,6 @@ const AulaVirtualPage = () => {
     );
   };
 
-  // --- AGREGA ESTA NUEVA FUNCIÓN ---
-  // Componente para mostrar la lista de RECURSOS
   const renderRecursosList = () => {
     if (loadingRecursos) return <p>Cargando recursos...</p>;
     if (recursos.length === 0) {
@@ -3757,36 +3869,32 @@ const AulaVirtualPage = () => {
         {recursos.map((recurso) => {
           const isEnlace = recurso.tipo_recurso === "enlace";
           const Icono = isEnlace ? LinkIcon : Paperclip;
-          // Construimos la URL correcta para el enlace/descarga
           const url = isEnlace
-            ? recurso.ruta_o_url // Si es enlace, es la URL directa
-            : `http://localhost:3001/uploads/recursos/${recurso.ruta_o_url}`; // Si es archivo, construimos la ruta al servidor
+            ? recurso.ruta_o_url
+            : `http://localhost:3001/uploads/recursos/${recurso.ruta_o_url}`;
 
           return (
             <div
               key={recurso.id}
               className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border"
             >
-              {/* Enlace para abrir/descargar */}
               <a
                 href={url}
-                target="_blank" // Abrir en nueva pestaña
-                rel="noopener noreferrer" // Seguridad
+                target="_blank"
+                rel="noopener noreferrer"
                 className="flex items-center text-blue-600 hover:underline"
               >
                 <Icono className="w-5 h-5 mr-3" />
                 <span className="font-medium">{recurso.titulo}</span>
-                {/* Mostramos el nombre original solo si es archivo */}
                 {!isEnlace && (
                   <span className="text-xs text-gray-500 ml-2">
                     ({recurso.nombre_original})
                   </span>
                 )}
               </a>
-              {/* Botón de borrar (solo para docente) */}
               {user.rol === "docente" && (
                 <button
-                  onClick={() => handleDeleteRecurso(recurso.id)} // Llamará a la función (aún vacía)
+                  onClick={() => handleDeleteRecurso(recurso.id)}
                   className="text-red-500 hover:text-red-700"
                   title="Eliminar recurso"
                 >
@@ -3803,54 +3911,136 @@ const AulaVirtualPage = () => {
   // Componente de vista (para alumnos y docente cuando no edita)
   const renderView = () => (
     <div className="bg-white p-6 rounded-lg shadow">
-      {user.rol === "docente" && (
-        <button
-          onClick={() => setIsEditing(true)}
-          className="flex items-center float-right px-3 py-1 text-sm bg-secundario text-white rounded-md hover:opacity-90"
-        >
-          <Edit2 size={14} className="mr-1" /> Editar
-        </button>
-      )}
-      {/* Enlace de Videollamada */}
+      {/* Botón Editar y Registrar Asistencia (Docente) */}
+      <div className="flex justify-end items-center mb-4 space-x-2">
+        {" "}
+        {/* Contenedor para botones flotantes */}
+        {user.rol === "docente" && (
+          <>
+            <button
+              onClick={handleIniciarSesionHoy}
+              disabled={isCreatingSession}
+              className="flex items-center px-4 py-2 text-sm font-semibold text-white bg-secundario rounded-md hover:opacity-90 disabled:bg-gray-400"
+            >
+              <ClipboardCheck size={16} className="mr-1" />
+              {isCreatingSession ? "Iniciando..." : "Asistencia Hoy"}
+            </button>
+            <button
+              onClick={() => setIsEditing(true)}
+              className="flex items-center px-3 py-1 text-sm bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
+            >
+              <Edit2 size={14} className="mr-1" /> Editar Info.
+            </button>
+          </>
+        )}
+      </div>
+
+      {/* Sección Sesión en Vivo (igual que antes) */}
       <h3 className="text-xl font-semibold mb-4 text-gray-800">
         Sesión en Vivo
       </h3>
       {config.enlace_videollamada ? (
-        <a
-          href={config.enlace_videollamada}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center px-6 py-3 font-semibold text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors"
-        >
+        <a href={config.enlace_videollamada} /*...*/>
           <Video size={20} className="mr-2" />
           Entrar a la Clase Virtual
         </a>
       ) : (
-        <p className="text-gray-500">
-          {user.rol === "alumno"
-            ? "El docente aún no ha publicado el enlace de la clase."
-            : "Aún no has configurado un enlace para la videollamada."}
-        </p>
+        <p className="text-gray-500">{/*...*/}</p>
       )}
-      {/* Descripción del Curso */}
+
+      {/* --- SECCIÓN ACERCA DEL CURSO (REESTRUCTURADA) --- */}
       <div className="mt-8 pt-6 border-t">
-        <h3 className="text-xl font-semibold mb-4 text-gray-800">
-          Acerca del Curso
-        </h3>
-        {config.descripcion_curso ? (
-          <p className="text-gray-700 whitespace-pre-wrap">
-            {config.descripcion_curso}
-          </p>
-        ) : (
-          <p className="text-gray-500">
-            {user.rol === "alumno"
-              ? "El docente aún no ha agregado una descripción."
-              : "Aún no has agregado una descripción o mensaje de bienvenida."}
-          </p>
+        <div className="flex justify-between items-start mb-4">
+          {" "}
+          {/* items-start para alinear badges */}
+          <h3 className="text-xl font-semibold text-gray-800">
+            Acerca del Curso
+          </h3>
+          {/* Indicadores de Modalidad y Estatus */}
+          <div className="flex space-x-2">
+            <span
+              className={`capitalize px-3 py-1 rounded-full text-xs font-semibold ${
+                config.modalidad === "presencial"
+                  ? "bg-blue-100 text-blue-800"
+                  : "bg-purple-100 text-purple-800"
+              }`}
+            >
+              {config.modalidad}
+            </span>
+            <span
+              className={`capitalize px-3 py-1 rounded-full text-xs font-semibold ${
+                config.estatus === "activo"
+                  ? "bg-green-100 text-green-800"
+                  : "bg-red-100 text-red-800"
+              }`}
+            >
+              {config.estatus}
+            </span>
+          </div>
+        </div>
+
+        {/* Mostrar campos estructurados si tienen contenido */}
+        {config.objetivos && (
+          <div className="mb-4 p-4 bg-gray-50 rounded border border-gray-200">
+            <h4 className="font-semibold text-gray-700 mb-1">Objetivos</h4>
+            <p className="text-sm text-gray-600 whitespace-pre-wrap">
+              {config.objetivos}
+            </p>
+          </div>
         )}
+        {config.evaluacion && (
+          <div className="mb-4 p-4 bg-gray-50 rounded border border-gray-200">
+            <h4 className="font-semibold text-gray-700 mb-1">Evaluación</h4>
+            <p className="text-sm text-gray-600 whitespace-pre-wrap">
+              {config.evaluacion}
+            </p>
+          </div>
+        )}
+        {config.horario && (
+          <div className="mb-4 p-4 bg-gray-50 rounded border border-gray-200">
+            <h4 className="font-semibold text-gray-700 mb-1">Horario</h4>
+            <p className="text-sm text-gray-600 whitespace-pre-wrap">
+              {config.horario}
+            </p>
+          </div>
+        )}
+        {config.contacto_docente && (
+          <div className="mb-4 p-4 bg-gray-50 rounded border border-gray-200">
+            <h4 className="font-semibold text-gray-700 mb-1">
+              Contacto Docente
+            </h4>
+            <p className="text-sm text-gray-600 whitespace-pre-wrap">
+              {config.contacto_docente}
+            </p>
+          </div>
+        )}
+        {/* Descripción General (Opcional) */}
+        {config.descripcion_curso && (
+          <div className="mb-4">
+            <h4 className="font-semibold text-gray-700 mb-1">
+              Descripción General
+            </h4>
+            <p className="text-sm text-gray-600 whitespace-pre-wrap">
+              {config.descripcion_curso}
+            </p>
+          </div>
+        )}
+        {/* Mensaje si no hay nada configurado */}
+        {!config.objetivos &&
+          !config.evaluacion &&
+          !config.horario &&
+          !config.contacto_docente &&
+          !config.descripcion_curso && (
+            <p className="text-gray-500 text-sm">
+              El docente aún no ha agregado información detallada sobre el
+              curso.
+            </p>
+          )}
       </div>
-      {/* --- INICIA BLOQUE MODIFICADO --- */}
-      {/* Dividimos Tareas y Recursos en dos secciones */}
+      {/* --- FIN SECCIÓN ACERCA DEL CURSO --- */}
+
+      {/* Secciones Tareas, Recursos, Historial Asistencia (Alumno), Botón Calificación Final (Docente) - Se quedan igual */}
+      {/* ... (código existente para las otras secciones) ... */}
       <div className="mt-8 pt-6 border-t">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-xl font-semibold text-gray-800">
@@ -3867,36 +4057,102 @@ const AulaVirtualPage = () => {
           )}
         </div>
         {renderTareasList()}
-      </div>{" "}
-      {/* <-- Cierre del div de Tareas */}
-      {/* --- AGREGA ESTA NUEVA SECCIÓN --- */}
+      </div>
+
       <div className="mt-8 pt-6 border-t">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-xl font-semibold text-gray-800">
             Material de Clase y Recursos
           </h3>
-          {/* --- AGREGA ESTE BOTÓN --- */}
           {user.rol === "docente" && (
             <button
-              onClick={() => setShowRecursoModal(true)} // <-- Llama a setState para abrir el modal
+              onClick={() => setShowRecursoModal(true)}
               className="flex items-center px-4 py-2 font-semibold text-white bg-secundario rounded-md hover:opacity-90"
             >
               <Plus size={18} className="mr-2" />
               Agregar Recurso
             </button>
           )}
-          {/* --- FIN AGREGAR --- */}
         </div>
         {renderRecursosList()}
       </div>
-      {/* --- FIN AGREGAR --- */}
-      {/* El botón "Ir a Calificación Final" va después */}
-      {user.rol === "docente" && (
-        <div className="mt-8 pt-6 border-t">{/* ... botón ... */}</div>
+
+      {user.rol === "alumno" && (
+        <div className="mt-8 pt-6 border-t">
+          <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center">
+            <History size={20} className="mr-2" /> Mi Historial de Asistencia
+          </h3>
+          {loadingHistorial ? (
+            <p>Cargando historial...</p>
+          ) : historialAsistencia.length === 0 ? (
+            <p className="text-gray-500">
+              Aún no hay registros de asistencia para este curso.
+            </p>
+          ) : (
+            <div className="max-h-60 overflow-y-auto border rounded-md">
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-2 text-left">Fecha</th>
+                    <th className="px-4 py-2 text-left">Estatus</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {historialAsistencia.map((reg) => (
+                    <tr
+                      key={reg.sesion_id}
+                      className="border-b last:border-b-0"
+                    >
+                      <td className="px-4 py-2">
+                        {(() => {
+                          const parts = reg.fecha_sesion.split("-");
+                          const fecha = new Date(
+                            parseInt(parts[0]),
+                            parseInt(parts[1]) - 1,
+                            parseInt(parts[2])
+                          );
+                          return fecha.toLocaleDateString();
+                        })()}
+                      </td>
+                      <td className="px-4 py-2">
+                        <span
+                          className={`capitalize font-medium ${
+                            reg.mi_estatus === "presente"
+                              ? "text-green-600"
+                              : reg.mi_estatus === "justificado"
+                              ? "text-yellow-600"
+                              : "text-red-600"
+                          }`}
+                        >
+                          {reg.mi_estatus}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       )}
-    </div> // <-- Cierre de renderView
+
+      {user.rol === "docente" && (
+        <div className="mt-8 pt-6 border-t">
+          <button
+            onClick={() =>
+              navigate(`/docente/grupo/${grupoId}/asignatura/${asignaturaId}`)
+            }
+            className="inline-flex items-center px-4 py-2 font-semibold text-gray-600 bg-gray-200 rounded-md hover:bg-gray-300"
+          >
+            <GraduationCap size={18} className="mr-2" />
+            Ir a Calificación Final del Grupo
+          </button>
+        </div>
+      )}
+    </div>
   );
 
+  // ... (El return principal y los modales al final se quedan igual) ...
   return (
     <div>
       <h2 className="text-3xl font-bold text-gray-800 mb-6">Aula Virtual</h2>
@@ -3916,18 +4172,17 @@ const AulaVirtualPage = () => {
         tarea={selectedTask}
         onEntregaExitosa={fetchTareas}
       />
-      {/* --- AGREGA ESTA LLAMADA AL MODAL --- */}
+
       <AgregarRecursoModal
-        show={showRecursoModal} // Controlado por el estado
-        onClose={() => setShowRecursoModal(false)} // Función para cerrar
-        grupoId={grupoId} // Pasa el ID del grupo
-        asignaturaId={asignaturaId} // Pasa el ID de la asignatura
-        onRecursoAgregado={fetchRecursos} // Pasa la función para refrescar la lista
+        show={showRecursoModal}
+        onClose={() => setShowRecursoModal(false)}
+        grupoId={grupoId}
+        asignaturaId={asignaturaId}
+        onRecursoAgregado={fetchRecursos}
       />
-      {/* --- FIN AGREGAR --- */}
     </div>
   );
-};
+}; // <-- Cierre del componente AulaVirtualPage
 
 // --- INICIA CÓDIGO FALTANTE (AGREGAR) ---
 
@@ -4773,6 +5028,156 @@ const DetalleTareaDocentePage = () => {
   );
 };
 
+// --- INICIA NUEVO CÓDIGO (AGREGAR) ---
+
+// Página para tomar Asistencia (solo Docente)
+const AsistenciaPage = () => {
+  const { grupoId, asignaturaId, sesionId } = useParams();
+  const [sesion, setSesion] = useState(null);
+  const [alumnos, setAlumnos] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const navigate = useNavigate();
+
+  // Estado para manejar los cambios de asistencia localmente
+  const [asistenciaChanges, setAsistenciaChanges] = useState({});
+
+  // Cargar datos de la sesión y asistencia actual
+  const fetchAsistencia = useCallback(async () => {
+    try {
+      setLoading(true);
+      const { data } = await api.get(
+        `/docente/aula-virtual/sesion/${sesionId}/asistencia`
+      );
+      setSesion(data.sesion);
+      setAlumnos(data.alumnos);
+      // Inicializar el estado local con los datos cargados
+      const initialChanges = data.alumnos.reduce((acc, al) => {
+        acc[al.alumno_id] = al.estatus;
+        return acc;
+      }, {});
+      setAsistenciaChanges(initialChanges);
+    } catch (error) {
+      console.error("Error al cargar datos de asistencia", error);
+      alert("No se pudieron cargar los datos.");
+    } finally {
+      setLoading(false);
+    }
+  }, [sesionId]);
+
+  useEffect(() => {
+    fetchAsistencia();
+  }, [fetchAsistencia]);
+
+  // Manejar cambio en el select de un alumno
+  const handleStatusChange = (alumnoId, nuevoEstatus) => {
+    setAsistenciaChanges((prev) => ({
+      ...prev,
+      [alumnoId]: nuevoEstatus,
+    }));
+  };
+
+  // Guardar todos los cambios
+  const handleGuardarAsistencia = async () => {
+    setIsSaving(true);
+    try {
+      await api.post(`/docente/aula-virtual/sesion/${sesionId}/asistencia`, {
+        asistencias: asistenciaChanges,
+      });
+      alert("Asistencia guardada con éxito.");
+      // Opcional: Recargar datos después de guardar
+      fetchAsistencia();
+    } catch (error) {
+      console.error("Error al guardar asistencia", error);
+      alert("Error al guardar. Inténtalo de nuevo.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  if (loading) return <p>Cargando lista de asistencia...</p>;
+  if (!sesion) return <p>Sesión no encontrada.</p>;
+
+  return (
+    <div>
+      <Link
+        to={`/docente/grupo/${grupoId}/asignatura/${asignaturaId}/aula`}
+        className="flex items-center text-principal mb-6 hover:underline"
+      >
+        <ArrowLeft size={18} className="mr-2" />
+        Volver al Aula Virtual
+      </Link>
+      <h2 className="text-3xl font-bold text-gray-800 mb-2">
+        Registro de Asistencia
+      </h2>
+      <p className="text-lg text-secundario mb-6">
+        Fecha:{" "}
+        {(() => {
+          const parts = sesion.fecha_sesion.split("-");
+          const fecha = new Date(
+            parseInt(parts[0]),
+            parseInt(parts[1]) - 1,
+            parseInt(parts[2])
+          );
+          return fecha.toLocaleDateString();
+        })()}{" "}
+      </p>
+
+      <div className="bg-white p-6 rounded-lg shadow overflow-x-auto">
+        <h3 className="text-xl font-bold mb-4">Lista de Alumnos</h3>
+        <table className="w-full table-auto text-sm">
+          <thead className="text-left bg-gray-50">
+            <tr>
+              <th className="px-4 py-2">Alumno</th>
+              <th className="px-4 py-2 w-48">Estatus de Asistencia</th>
+            </tr>
+          </thead>
+          <tbody>
+            {alumnos.map((alumno) => (
+              <tr key={alumno.alumno_id} className="border-b">
+                <td className="px-4 py-2 font-medium">
+                  {alumno.nombre} {alumno.apellido_paterno}{" "}
+                  {alumno.apellido_materno || ""}
+                </td>
+                <td className="px-4 py-2">
+                  <select
+                    value={asistenciaChanges[alumno.alumno_id] || "ausente"}
+                    onChange={(e) =>
+                      handleStatusChange(alumno.alumno_id, e.target.value)
+                    }
+                    className={`w-full px-3 py-1 border rounded-md ${
+                      asistenciaChanges[alumno.alumno_id] === "presente"
+                        ? "bg-green-50 border-green-300"
+                        : asistenciaChanges[alumno.alumno_id] === "justificado"
+                        ? "bg-yellow-50 border-yellow-300"
+                        : "bg-red-50 border-red-300"
+                    }`}
+                  >
+                    <option value="presente">Presente</option>
+                    <option value="ausente">Ausente</option>
+                    <option value="justificado">Justificado</option>
+                  </select>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div className="flex justify-end mt-6">
+          <button
+            onClick={handleGuardarAsistencia}
+            disabled={isSaving}
+            className="flex items-center px-6 py-2 font-semibold text-white bg-principal rounded-md hover:opacity-90 disabled:bg-gray-400"
+          >
+            <Save size={18} className="mr-2" />
+            {isSaving ? "Guardando..." : "Guardar Asistencia"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+// --- TERMINA NUEVO CÓDIGO ---
+
 // --- COMPONENTE PRINCIPAL DE LA APP ---
 function App() {
   return (
@@ -4922,6 +5327,11 @@ function App() {
               <Route
                 path="/docente/grupo/:grupoId/asignatura/:asignaturaId/tarea/:tareaId"
                 element={<DetalleTareaDocentePage />}
+              />
+              {/* --- AGREGA ESTA LÍNEA (DOCENTE) --- */}
+              <Route
+                path="/docente/grupo/:grupoId/asignatura/:asignaturaId/asistencia/:sesionId"
+                element={<AsistenciaPage />}
               />
             </Route>
           </Route>

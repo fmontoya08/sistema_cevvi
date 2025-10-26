@@ -181,6 +181,32 @@ CREATE TABLE recursos_clase (
     FOREIGN KEY (docente_id) REFERENCES usuarios(id)
 );
 
+-- 12. Tabla de Sesiones de Clase (para registrar cuándo hubo clase)
+CREATE TABLE clases_sesiones (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    grupo_id INT NOT NULL,
+    asignatura_id INT NOT NULL,
+    docente_id INT NOT NULL,
+    fecha_sesion DATE NOT NULL, -- Solo la fecha, la hora no es tan crucial aquí
+    tema_sesion VARCHAR(255), -- Opcional: tema visto en clase
+    fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (grupo_id) REFERENCES grupos(id) ON DELETE CASCADE,
+    FOREIGN KEY (asignatura_id) REFERENCES asignaturas(id) ON DELETE CASCADE,
+    FOREIGN KEY (docente_id) REFERENCES usuarios(id),
+    UNIQUE KEY (grupo_id, asignatura_id, fecha_sesion) -- Solo una sesión por día por clase
+);
+
+-- 13. Tabla de Asistencia (registra el estatus de cada alumno en cada sesión)
+CREATE TABLE asistencia (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    sesion_id INT NOT NULL,
+    alumno_id INT NOT NULL,
+    estatus ENUM('presente', 'ausente', 'justificado') NOT NULL DEFAULT 'ausente',
+    FOREIGN KEY (sesion_id) REFERENCES clases_sesiones(id) ON DELETE CASCADE,
+    FOREIGN KEY (alumno_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+    UNIQUE KEY (sesion_id, alumno_id) -- Un alumno solo puede tener un registro por sesión
+);
+
 -- --- TERMINA NUEVO CÓDIGO ---
 
 

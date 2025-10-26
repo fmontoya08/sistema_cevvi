@@ -1163,7 +1163,10 @@ async function getOrCreateAulaConfig(grupoId, asignaturaId) {
   );
   // Luego, selecciónalo. Ahora estamos seguros de que existe.
   const [[config]] = await db.query(
-    "SELECT * FROM aula_virtual_config WHERE grupo_id = ? AND asignatura_id = ?",
+    `SELECT avc.*, g.modalidad, g.estatus 
+     FROM aula_virtual_config avc
+     JOIN grupos g ON avc.grupo_id = g.id 
+     WHERE avc.grupo_id = ? AND avc.asignatura_id = ?`,
     [grupoId, asignaturaId]
   );
   return config;
@@ -1195,14 +1198,23 @@ docenteRouter.get(
 );
 
 // PUT (Docente): Actualizar la config del aula virtual
+// PUT (Docente): Actualizar la config del aula virtual
 docenteRouter.put(
   "/aula-virtual/:grupoId/:asignaturaId/config",
   async (req, res) => {
     try {
       const { grupoId, asignaturaId } = req.params;
-      const { enlace_videollamada, descripcion_curso } = req.body;
+      // Extraemos los nuevos campos del body
+      const {
+        enlace_videollamada,
+        descripcion_curso,
+        objetivos,
+        evaluacion,
+        horario,
+        contacto_docente,
+      } = req.body;
 
-      // Validar que el docente da esta clase
+      // Validar que el docente da esta clase (igual que antes)
       const [[curso]] = await db.query(
         "SELECT * FROM grupo_asignaturas_docentes WHERE grupo_id = ? AND asignatura_id = ? AND docente_id = ?",
         [grupoId, asignaturaId, req.user.id]
@@ -1213,20 +1225,35 @@ docenteRouter.put(
           .send({ message: "No tienes permiso sobre este curso." });
       }
 
-      // Usamos 'ON DUPLICATE KEY UPDATE' para insertar si no existe, o actualizar si ya existe.
-      await db.query(
-        `INSERT INTO aula_virtual_config (grupo_id, asignatura_id, enlace_videollamada, descripcion_curso) 
-         VALUES (?, ?, ?, ?) 
-         ON DUPLICATE KEY UPDATE 
-         enlace_videollamada = VALUES(enlace_videollamada), 
-         descripcion_curso = VALUES(descripcion_curso)`,
-        [
-          grupoId,
-          asignaturaId,
-          enlace_videollamada || null,
-          descripcion_curso || null,
-        ]
-      );
+      // Actualizamos la query INSERT...ON DUPLICATE KEY UPDATE
+      const sql = `
+        INSERT INTO aula_virtual_config (
+          grupo_id, asignatura_id, enlace_videollamada, descripcion_curso, 
+          objetivos, evaluacion, horario, contacto_docente 
+        ) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?) 
+        ON DUPLICATE KEY UPDATE 
+          enlace_videollamada = VALUES(enlace_videollamada), 
+          descripcion_curso = VALUES(descripcion_curso),
+          objetivos = VALUES(objetivos),
+          evaluacion = VALUES(evaluacion),
+          horario = VALUES(horario),
+          contacto_docente = VALUES(contacto_docente)
+      `;
+
+      // Añadimos los nuevos valores al array de parámetros
+      const params = [
+        grupoId,
+        asignaturaId,
+        enlace_videollamada || null,
+        descripcion_curso || null,
+        objetivos || null,
+        evaluacion || null,
+        horario || null,
+        contacto_docente || null,
+      ];
+
+      await db.query(sql, params);
 
       res.send({ message: "Aula virtual actualizada con éxito." });
     } catch (error) {
@@ -1641,6 +1668,155 @@ docenteRouter.get(
   "/aula-virtual/:grupoId/:asignaturaId/recursos",
   getRecursosClase
 );
+
+// --- INICIA NUEVO CÓDIGO (AGREGAR) ---
+
+// POST (Docente): Iniciar/Crear una Sesión de Clase para hoy
+docenteRouter.post(
+  "/aula-virtual/:grupoId/:asignaturaId/iniciar-sesion",
+  async (req, res) => {
+    try {
+      const { grupoId, asignaturaId } = req.params;
+      const docente_id = req.user.id;
+      const { tema_sesion } = req.body; // Opcional
+      const fecha_sesion = new Date().toISOString().slice(0, 10); // Fecha de hoy YYYY-MM-DD
+
+      // Validar permiso
+      const [[curso]] = await db.query(
+        "SELECT * FROM grupo_asignaturas_docentes WHERE grupo_id = ? AND asignatura_id = ? AND docente_id = ?",
+        [grupoId, asignaturaId, docente_id]
+      );
+      if (!curso) {
+        return res.status(403).send({ message: "No tienes permiso." });
+      }
+
+      // Intentar insertar la sesión. Si ya existe para hoy, simplemente la obtendremos.
+      await db.query(
+        "INSERT IGNORE INTO clases_sesiones (grupo_id, asignatura_id, docente_id, fecha_sesion, tema_sesion) VALUES (?, ?, ?, ?, ?)",
+        [grupoId, asignaturaId, docente_id, fecha_sesion, tema_sesion || null]
+      );
+
+      // Obtener el ID de la sesión (ya sea la recién creada o la existente)
+      const [[sesion]] = await db.query(
+        "SELECT id FROM clases_sesiones WHERE grupo_id = ? AND asignatura_id = ? AND fecha_sesion = ?",
+        [grupoId, asignaturaId, fecha_sesion]
+      );
+
+      res.status(200).json({ sesionId: sesion.id }); // Devolver el ID para redirigir
+    } catch (error) {
+      console.error("Error al iniciar sesión de clase:", error);
+      res.status(500).send({ message: "Error en el servidor." });
+    }
+  }
+);
+
+// GET (Docente): Obtener la lista de alumnos y su asistencia para UNA sesión
+docenteRouter.get(
+  "/aula-virtual/sesion/:sesionId/asistencia",
+  async (req, res) => {
+    try {
+      const { sesionId } = req.params;
+      const docente_id = req.user.id;
+
+      // 1. Validar que la sesión pertenece al docente
+      const [[sesion]] = await db.query(
+        "SELECT * FROM clases_sesiones WHERE id = ? AND docente_id = ?",
+        [sesionId, docente_id]
+      );
+      if (!sesion) {
+        return res
+          .status(404)
+          .send({ message: "Sesión no encontrada o no te pertenece." });
+      }
+
+      // 2. Obtener TODOS los alumnos del grupo de esa sesión
+      //    y hacer LEFT JOIN con la tabla de asistencia para esa sesión.
+      const [alumnosAsistencia] = await db.query(
+        `SELECT
+          u.id as alumno_id,
+          u.nombre,
+          u.apellido_paterno,
+          u.apellido_materno,
+          COALESCE(a.estatus, 'ausente') as estatus -- Si no hay registro, por defecto es 'ausente'
+       FROM grupo_alumnos ga
+       JOIN usuarios u ON ga.alumno_id = u.id
+       LEFT JOIN asistencia a ON a.alumno_id = u.id AND a.sesion_id = ?
+       WHERE ga.grupo_id = ?`, // Usamos el grupo_id de la sesión
+        [sesionId, sesion.grupo_id]
+      );
+
+      res.json({ sesion, alumnos: alumnosAsistencia });
+    } catch (error) {
+      console.error("Error al obtener lista de asistencia:", error);
+      res.status(500).send({ message: "Error en el servidor." });
+    }
+  }
+);
+
+// POST (Docente): Guardar/Actualizar la asistencia para UNA sesión
+docenteRouter.post(
+  "/aula-virtual/sesion/:sesionId/asistencia",
+  async (req, res) => {
+    try {
+      const { sesionId } = req.params;
+      const docente_id = req.user.id;
+      // Esperamos un objeto: { alumnoId1: 'presente', alumnoId2: 'ausente', ... }
+      const asistencias = req.body.asistencias;
+
+      if (!asistencias || typeof asistencias !== "object") {
+        return res
+          .status(400)
+          .send({ message: "Formato de datos incorrecto." });
+      }
+
+      // 1. Validar que la sesión pertenece al docente
+      const [[sesion]] = await db.query(
+        "SELECT id FROM clases_sesiones WHERE id = ? AND docente_id = ?",
+        [sesionId, docente_id]
+      );
+      if (!sesion) {
+        return res
+          .status(404)
+          .send({ message: "Sesión no encontrada o no te pertenece." });
+      }
+
+      // 2. Usar una transacción para insertar/actualizar todas las asistencias
+      const connection = await db.getConnection();
+      try {
+        await connection.beginTransaction();
+        const promises = [];
+        for (const alumnoId in asistencias) {
+          const estatus = asistencias[alumnoId];
+          // Validar estatus
+          if (!["presente", "ausente", "justificado"].includes(estatus)) {
+            throw new Error(
+              `Estatus inválido '${estatus}' para alumno ${alumnoId}`
+            );
+          }
+          // Crear la query con ON DUPLICATE KEY UPDATE
+          const sql = `
+            INSERT INTO asistencia (sesion_id, alumno_id, estatus) 
+            VALUES (?, ?, ?) 
+            ON DUPLICATE KEY UPDATE estatus = VALUES(estatus)`;
+          promises.push(connection.query(sql, [sesionId, alumnoId, estatus]));
+        }
+        await Promise.all(promises); // Ejecutar todas las queries
+        await connection.commit(); // Confirmar transacción
+        res.send({ message: "Asistencia guardada con éxito." });
+      } catch (error) {
+        await connection.rollback(); // Revertir en caso de error
+        throw error; // Re-lanzar para el catch externo
+      } finally {
+        connection.release(); // Liberar conexión
+      }
+    } catch (error) {
+      console.error("Error al guardar asistencia:", error);
+      res.status(500).send({ message: "Error en el servidor." });
+    }
+  }
+);
+// --- TERMINA NUEVO CÓDIGO ---
+
 // --- TERMINA NUEVO CÓDIGO ---
 apiRouter.use("/docente", docenteRouter); // Registra el router de docente en /api/docente
 
@@ -1872,6 +2048,47 @@ alumnoRouter.get(
   "/aula-virtual/:grupoId/:asignaturaId/recursos",
   getRecursosClase // <-- Reutilizamos la misma función
 );
+
+// --- INICIA NUEVO CÓDIGO (AGREGAR) ---
+// GET (Alumno): Obtener MI historial de asistencia para UNA materia
+alumnoRouter.get(
+  "/aula-virtual/:grupoId/:asignaturaId/mis-asistencias",
+  async (req, res) => {
+    try {
+      const { grupoId, asignaturaId } = req.params;
+      const alumno_id = req.user.id;
+
+      // Validar inscripción
+      const [[inscripcion]] = await db.query(
+        "SELECT * FROM grupo_alumnos WHERE grupo_id = ? AND alumno_id = ?",
+        [grupoId, alumno_id]
+      );
+      if (!inscripcion) {
+        return res.status(403).send({ message: "No estás inscrito." });
+      }
+
+      // Obtener todas las sesiones de esa clase Y mi estatus en cada una
+      const [historial] = await db.query(
+        `SELECT 
+            cs.id as sesion_id, 
+            cs.fecha_sesion, 
+            cs.tema_sesion,
+            COALESCE(a.estatus, 'ausente') as mi_estatus 
+         FROM clases_sesiones cs
+         LEFT JOIN asistencia a ON cs.id = a.sesion_id AND a.alumno_id = ?
+         WHERE cs.grupo_id = ? AND cs.asignatura_id = ?
+         ORDER BY cs.fecha_sesion DESC`,
+        [alumno_id, grupoId, asignaturaId]
+      );
+      res.json(historial);
+    } catch (error) {
+      console.error("Error al obtener historial de asistencia:", error);
+      res.status(500).send({ message: "Error en el servidor." });
+    }
+  }
+);
+// --- TERMINA NUEVO CÓDIGO ---
+
 // --- TERMINA NUEVO CÓDIGO ---
 apiRouter.use("/alumno", alumnoRouter); // Registra el router de alumno en /api/alumno
 
