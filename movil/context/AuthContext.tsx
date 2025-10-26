@@ -13,7 +13,7 @@ import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 
 // --- IP DEL SERVIDOR (Verifica que sea correcta) ---
-const API_URL = "http://192.168.3.19:3001/api"; // O la IP actual de tu PC
+const API_URL = "http://192.168.100.87:3001/api"; // O la IP actual de tu PC
 
 const api = axios.create({
   baseURL: API_URL,

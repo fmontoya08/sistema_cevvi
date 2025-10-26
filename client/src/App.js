@@ -39,6 +39,18 @@ import {
   FileText, // <-- NUEVO
   TrendingUp, // <-- NUEVO
   ArrowRightLeft, // <-- NUEVO
+  Bell,
+  Video, // <-- NUEVO
+  Edit2, // <-- NUEVO
+  CheckCircle, // <-- NUEVO
+  Sparkles, // <-- NUEVO
+  UploadCloud, // <-- NUEVO
+  Check, // <-- NUEVO
+  File, // <-- NUEVO
+  Download, // <-- NUEVO
+  Award, // <-- NUEVO
+  Link as LinkIcon, // <-- NUEVO (con alias para no chocar con <Link> de react-router)
+  Paperclip, // <-- NUEVO
 } from "lucide-react";
 
 // --- CONFIGURACIÓN DE AXIOS ---
@@ -157,12 +169,150 @@ const useAuth = () => {
   return useContext(AuthContext);
 };
 
+// ... (después de la función useAuth)
+
+// --- NUEVO COMPONENTE DE NOTIFICACIONES (CORREGIDO) ---
+const NotificationBell = () => {
+  // 1. CAMBIO AQUÍ: Quitamos 'api' de useAuth()
+  const { user } = useAuth();
+  const [notificaciones, setNotificaciones] = useState([]);
+  const [count, setCount] = useState(0);
+  const [isOpen, setIsOpen] = useState(false);
+  const navigate = useNavigate();
+
+  // Función para cargar notificaciones
+  const fetchNotifications = useCallback(async () => {
+    // 2. CAMBIO AQUÍ: Quitamos la comprobación de '!api'
+    if (!user) return;
+    try {
+      // 'api' (el global) se usa aquí sin problema
+      const { data } = await api.get("/notificaciones/no-leidas");
+      setNotificaciones(data.notificaciones || []);
+      setCount(data.count || 0);
+    } catch (error) {
+      console.error("Error al cargar notificaciones", error);
+    }
+    // 3. CAMBIO AQUÍ: Quitamos 'api' de las dependencias
+  }, [user]);
+
+  // Efecto para cargar al inicio y luego cada 60 segundos
+  useEffect(() => {
+    // 4. CAMBIO AQUÍ: Quitamos la comprobación de 'api'
+    if (user) {
+      fetchNotifications();
+      const interval = setInterval(fetchNotifications, 60000); // Refrescar cada 60 seg
+      return () => clearInterval(interval);
+    }
+    // 5. CAMBIO AQUÍ: Quitamos 'api' de las dependencias
+  }, [user, fetchNotifications]);
+
+  // Al hacer clic en una notificación
+  const handleNotificationClick = async (notif) => {
+    try {
+      // 'api' (el global) se usa aquí
+      await api.put(`/notificaciones/${notif.id}/marcar-leida`);
+      fetchNotifications();
+      setIsOpen(false);
+      if (notif.url_destino) {
+        navigate(notif.url_destino);
+      }
+    } catch (error) {
+      console.error("Error al marcar como leída", error);
+    }
+  };
+
+  // Marcar todas como leídas
+  const handleMarkAllAsRead = async (e) => {
+    e.stopPropagation();
+    try {
+      // 'api' (el global) se usa aquí
+      await api.put("/notificaciones/marcar-todas-leidas");
+      fetchNotifications();
+    } catch (error) {
+      console.error("Error al marcar todas como leídas", error);
+    }
+  };
+
+  if (!user) return null; // No mostrar si no está logueado
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setIsOpen((prev) => !prev)}
+        className="relative text-gray-600 hover:text-principal"
+      >
+        <Bell size={24} />
+        {count > 0 && (
+          <span className="absolute -top-2 -right-2 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-xs font-bold text-white">
+            {count}
+          </span>
+        )}
+      </button>
+
+      {isOpen && (
+        <div
+          className="absolute right-0 mt-2 w-80 max-w-sm origin-top-right rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 z-50"
+          onMouseLeave={() => setIsOpen(false)} // Cierra al sacar el mouse
+        >
+          <div className="p-4">
+            <div className="flex justify-between items-center">
+              <h4 className="text-lg font-semibold text-gray-900">
+                Notificaciones
+              </h4>
+              <button
+                onClick={handleMarkAllAsRead}
+                className="text-xs text-principal hover:underline"
+                disabled={count === 0}
+              >
+                Marcar todas como leídas
+              </button>
+            </div>
+          </div>
+          <div className="border-t border-gray-200">
+            {notificaciones.length > 0 ? (
+              <div className="max-h-96 overflow-y-auto">
+                {notificaciones.map((notif) => (
+                  <button
+                    key={notif.id}
+                    onClick={() => handleNotificationClick(notif)}
+                    className="w-full text-left p-4 border-b border-gray-100 hover:bg-gray-50"
+                  >
+                    <p className="text-sm text-gray-800">{notif.mensaje}</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {new Date(notif.fecha_creacion).toLocaleString()}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="text-center text-sm text-gray-500 p-6">
+                No tienes notificaciones nuevas.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+// --- FIN COMPONENTE NOTIFICACIONES ---
+
 // --- COMPONENTES DE LA INTERFAZ ---
 
 const ProtectedRoute = ({ allowedRoles }) => {
-  // 1. Obtenemos la función "logout"
   const { user, loading, logout } = useAuth();
   const location = useLocation();
+
+  // --- INICIA CORRECCIÓN ---
+  // Usamos useEffect para manejar efectos secundarios como "logout"
+  useEffect(() => {
+    // Si no estamos cargando, el usuario existe, PERO su rol no está permitido...
+    if (!loading && user && !allowedRoles.includes(user.rol)) {
+      // ...entonces llamamos a logout() como un efecto, no durante el render.
+      logout();
+    }
+  }, [user, loading, allowedRoles, logout]); // Dependencias del efecto
+  // --- TERMINA CORRECCIÓN ---
 
   if (loading) {
     return (
@@ -176,14 +326,9 @@ const ProtectedRoute = ({ allowedRoles }) => {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // 2. Esta es la lógica modificada
+  // Si el rol no coincide, el useEffect de arriba se encargará del logout.
+  // Mientras tanto, no mostramos nada.
   if (!allowedRoles.includes(user.rol)) {
-    // Si el rol en localStorage no coincide con la ruta
-    // (ej. un admin en ruta de alumno), la sesión es inválida.
-    // Forzamos el cierre de sesión.
-    logout();
-
-    // Mostramos null mientras el logout redirige al login
     return null;
   }
 
@@ -192,7 +337,7 @@ const ProtectedRoute = ({ allowedRoles }) => {
 
 // --- LAYOUTS ---
 const AdminLayout = () => {
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
   const location = useLocation();
   const navItems = [
     { icon: Home, label: "Dashboard", path: "/dashboard" },
@@ -251,10 +396,21 @@ const AdminLayout = () => {
       </aside>
 
       <main className="flex-1 overflow-y-auto">
-        <header className="bg-white shadow-sm p-4">
+        <header className="bg-white shadow-sm p-4 flex justify-between items-center">
           <h1 className="text-2xl font-semibold text-gray-800">
             Panel de Administrador
           </h1>
+          <div className="flex items-center space-x-4">
+            <NotificationBell /> {/* <-- AÑADIDO */}
+            <span className="text-gray-600">Bienvenido, {user?.nombre}</span>
+            <button
+              onClick={logout}
+              className="text-gray-500 hover:text-principal"
+              title="Cerrar Sesión"
+            >
+              <LogOut size={22} />
+            </button>
+          </div>
         </header>
         <div className="p-6">
           <Outlet />
@@ -265,7 +421,7 @@ const AdminLayout = () => {
 };
 
 const DocenteLayout = () => {
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
   const location = useLocation();
   const navItems = [
     { icon: Home, label: "Mis Cursos", path: "/docente/dashboard" },
@@ -309,10 +465,21 @@ const DocenteLayout = () => {
         </div>
       </aside>
       <main className="flex-1 overflow-y-auto">
-        <header className="bg-white shadow-sm p-4">
+        <header className="bg-white shadow-sm p-4 flex justify-between items-center">
           <h1 className="text-2xl font-semibold text-gray-800">
             Portal Docente
           </h1>
+          <div className="flex items-center space-x-4">
+            <NotificationBell /> {/* <-- AÑADIDO */}
+            <span className="text-gray-600">Bienvenido, {user?.nombre}</span>
+            <button
+              onClick={logout}
+              className="text-gray-500 hover:text-principal"
+              title="Cerrar Sesión"
+            >
+              <LogOut size={22} />
+            </button>
+          </div>
         </header>
         <div className="p-6">
           <Outlet />
@@ -323,7 +490,7 @@ const DocenteLayout = () => {
 };
 
 const AlumnoLayout = () => {
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
   return (
     <div className="flex h-screen bg-gray-100 font-sans">
       <aside className="w-64 flex-shrink-0 bg-gray-800 text-white flex flex-col">
@@ -356,10 +523,21 @@ const AlumnoLayout = () => {
         </div>
       </aside>
       <main className="flex-1 overflow-y-auto">
-        <header className="bg-white shadow-sm p-4">
+        <header className="bg-white shadow-sm p-4 flex justify-between items-center">
           <h1 className="text-2xl font-semibold text-gray-800">
             Portal del Alumno
           </h1>
+          <div className="flex items-center space-x-4">
+            <NotificationBell /> {/* <-- AÑADIDO */}
+            <span className="text-gray-600">Bienvenido, {user?.nombre}</span>
+            <button
+              onClick={logout}
+              className="text-gray-500 hover:text-principal"
+              title="Cerrar Sesión"
+            >
+              <LogOut size={22} />
+            </button>
+          </div>
         </header>
         <div className="p-6">
           <Outlet />
@@ -370,7 +548,7 @@ const AlumnoLayout = () => {
 };
 
 const AspiranteLayout = () => {
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
   return (
     <div className="flex h-screen bg-gray-100 font-sans">
       <aside className="w-64 flex-shrink-0 bg-gray-800 text-white flex flex-col">
@@ -403,10 +581,21 @@ const AspiranteLayout = () => {
         </div>
       </aside>
       <main className="flex-1 overflow-y-auto">
-        <header className="bg-white shadow-sm p-4">
+        <header className="bg-white shadow-sm p-4 flex justify-between items-center">
           <h1 className="text-2xl font-semibold text-gray-800">
             Portal del Aspirante
           </h1>
+          <div className="flex items-center space-x-4">
+            <NotificationBell /> {/* <-- AÑADIDO */}
+            <span className="text-gray-600">Bienvenido, {user?.nombre}</span>
+            <button
+              onClick={logout}
+              className="text-gray-500 hover:text-principal"
+              title="Cerrar Sesión"
+            >
+              <LogOut size={22} />
+            </button>
+          </div>
         </header>
         <div className="p-6">
           <Outlet />
@@ -2433,7 +2622,7 @@ const DocenteDashboardPage = () => {
             className="bg-white p-6 rounded-lg shadow hover:shadow-lg transition-shadow cursor-pointer"
             onClick={() =>
               navigate(
-                `/docente/grupo/${curso.grupo_id}/asignatura/${curso.asignatura_id}`
+                `/docente/grupo/${curso.grupo_id}/asignatura/${curso.asignatura_id}/aula`
               )
             }
           >
@@ -2480,6 +2669,7 @@ const DetalleCursoDocentePage = () => {
 
   // El estado ahora es un objeto para manejar todas las calificaciones a la vez
   const [calificaciones, setCalificaciones] = useState({});
+  const [originalCalificaciones, setOriginalCalificaciones] = useState({});
 
   const fetchAlumnos = useCallback(async () => {
     try {
@@ -2498,6 +2688,8 @@ const DetalleCursoDocentePage = () => {
         return acc;
       }, {});
       setCalificaciones(initialCalificaciones);
+      // "Congelamos" el estado original para poder comparar después
+      setOriginalCalificaciones(initialCalificaciones);
     } catch (error) {
       console.error("Error al cargar alumnos", error);
     } finally {
@@ -2514,23 +2706,48 @@ const DetalleCursoDocentePage = () => {
     setCalificaciones((prev) => ({ ...prev, [alumnoId]: valor }));
   };
 
-  // --- NUEVA FUNCIÓN "GUARDAR TODO" ---
+  // --- **** AQUÍ ESTÁ LA CORRECCIÓN **** ---
+  // --- ESTA ES LA FUNCIÓN QUE CORREGÍ ---
   const handleGuardarTodo = async () => {
     setIsSaving(true);
-    // 1. Convertir el objeto de estado en el array que espera la API
-    const calificacionesArray = Object.keys(calificaciones).map((alumnoId) => ({
-      alumno_id: parseInt(alumnoId),
-      calificacion:
-        calificaciones[alumnoId] === "" ? null : calificaciones[alumnoId],
-    }));
+
+    // 1. Compara el estado 'calificaciones' con 'originalCalificaciones'
+    const calificacionesArray = Object.keys(calificaciones)
+      .filter((alumnoId) => {
+        const valorActual = calificaciones[alumnoId];
+        const valorOriginal = originalCalificaciones[alumnoId];
+
+        // Solo incluiremos la calificación si:
+        // 1. No está vacía (es nueva o modificada)
+        // 2. Y es DIFERENTE del valor original que cargó la página
+        return valorActual !== "" && valorActual !== valorOriginal;
+      })
+      .map((alumnoId) => ({
+        alumno_id: parseInt(alumnoId),
+        calificacion: calificaciones[alumnoId],
+      }));
+
+    // Si no hay calificaciones nuevas o modificadas, no hacemos nada
+    if (calificacionesArray.length === 0) {
+      alert("No hay calificaciones nuevas o modificadas para guardar.");
+      setIsSaving(false);
+      return;
+    }
 
     try {
       // 2. Usar el NUEVO endpoint de "Guardar Todo"
       await api.post("/calificar-grupo-completo", {
         asignatura_id: asignaturaId,
+        grupo_id: grupoId, // <-- AÑADE ESTA LÍNEA (grupoId viene de useParams)
         calificaciones: calificacionesArray,
       });
       alert("Calificaciones guardadas con éxito.");
+
+      // --- ¡IMPORTANTE! ---
+      // Sincronizamos el estado 'original' con el 'actual'
+      // para evitar re-envíos si el usuario vuelve a dar clic.
+      setOriginalCalificaciones(calificaciones);
+
       fetchAlumnos(); // Recargar los datos
     } catch (error) {
       console.error("Error al guardar calificaciones", error);
@@ -2612,6 +2829,8 @@ const AdminCalificarPage = () => {
 
   // El estado ahora es un objeto para manejar todas las calificaciones a la vez
   const [calificaciones, setCalificaciones] = useState({});
+  // --- ¡AÑADE ESTA LÍNEA AQUÍ! ---
+  const [originalCalificaciones, setOriginalCalificaciones] = useState({});
 
   const fetchAlumnos = useCallback(async () => {
     try {
@@ -2630,6 +2849,9 @@ const AdminCalificarPage = () => {
         return acc;
       }, {});
       setCalificaciones(initialCalificaciones);
+      // --- ¡AÑADE ESTAS LÍNEAS AQUÍ! ---
+      // "Congelamos" el estado original para poder comparar después
+      setOriginalCalificaciones(initialCalificaciones);
     } catch (error) {
       console.error("Error al cargar alumnos", error);
     } finally {
@@ -2646,24 +2868,48 @@ const AdminCalificarPage = () => {
     setCalificaciones((prev) => ({ ...prev, [alumnoId]: valor }));
   };
 
-  // --- NUEVA FUNCIÓN "GUARDAR TODO" ---
+  // --- NUEVA FUNCIÓN "GUARDAR TODO" (CORREGIDA) ---
   const handleGuardarTodo = async () => {
     setIsSaving(true);
-    // 1. Convertir el objeto de estado en el array que espera la API
-    const calificacionesArray = Object.keys(calificaciones).map((alumnoId) => ({
-      alumno_id: parseInt(alumnoId),
-      calificacion:
-        calificaciones[alumnoId] === "" ? null : calificaciones[alumnoId],
-    }));
+
+    // 1. Compara el estado 'calificaciones' con 'originalCalificaciones'
+    const calificacionesArray = Object.keys(calificaciones)
+      .filter((alumnoId) => {
+        const valorActual = calificaciones[alumnoId];
+        const valorOriginal = originalCalificaciones[alumnoId];
+
+        // Solo incluiremos la calificación si:
+        // 1. No está vacía (es nueva o modificada)
+        // 2. Y es DIFERENTE del valor original que cargó la página
+        return valorActual !== "" && valorActual !== valorOriginal;
+      })
+      .map((alumnoId) => ({
+        alumno_id: parseInt(alumnoId),
+        calificacion: calificaciones[alumnoId],
+      }));
+
+    // Si no hay calificaciones nuevas o modificadas, no hacemos nada
+    if (calificacionesArray.length === 0) {
+      alert("No hay calificaciones nuevas o modificadas para guardar.");
+      setIsSaving(false);
+      return;
+    }
 
     try {
       // 2. Usar el NUEVO endpoint de "Guardar Todo"
       await api.post("/calificar-grupo-completo", {
         asignatura_id: asignaturaId,
+        grupo_id: grupoId,
         calificaciones: calificacionesArray,
       });
       alert("Calificaciones guardadas con éxito.");
-      fetchAlumnos(); // Recargar los datos
+
+      // --- ¡IMPORTANTE! ---
+      // Sincronizamos el estado 'original' con el 'actual'
+      // para evitar re-envíos si el usuario vuelve a dar clic.
+      setOriginalCalificaciones(calificaciones);
+
+      fetchAlumnos(); // Recargar los datos (opcional, pero bueno)
     } catch (error) {
       console.error("Error al guardar calificaciones", error);
       alert("Error al guardar: " + (error.response?.data?.message || "Error"));
@@ -2790,7 +3036,14 @@ const AlumnoDashboardPage = () => {
               <tbody>
                 {infoGrupo.asignaturas.map((asig) => (
                   <tr key={asig.clave_asignatura} className="border-b">
-                    <td className="px-4 py-2">{asig.nombre_asignatura}</td>
+                    <td className="px-4 py-2">
+                      <Link
+                        to={`/alumno/grupo/${infoGrupo.grupo.id}/asignatura/${asig.asignatura_id}/aula`}
+                        className="font-semibold text-principal hover:underline"
+                      >
+                        {asig.nombre_asignatura}
+                      </Link>
+                    </td>
                     <td className="px-4 py-2">
                       {asig.docente_nombre
                         ? `${asig.docente_nombre} ${
@@ -3123,8 +3376,1399 @@ const AspiranteDashboardPage = () => {
       <div className="bg-white p-6 rounded-lg shadow mt-6">
         <h3 className="text-xl font-bold mb-4">Mis Documentos</h3>
         {/* ... (La tabla de documentos se queda exactamente igual) ... */}
-        <table className="w-full table-auto">{/* ... */}</table>
+        <table className="w-full table-auto">
+          <thead className="text-left bg-gray-50">
+            <tr>
+              <th className="px-4 py-2">Tipo de Documento</th>
+              <th className="px-4 py-2">Nombre del Archivo</th>
+              <th className="px-4 py-2">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {expediente.map((doc) => (
+              <tr key={doc.id} className="border-b">
+                <td className="px-4 py-2 capitalize">
+                  {doc.tipo_documento.replace(/_/g, " ")}
+                </td>
+                <td className="px-4 py-2">
+                  <a
+                    href={`http://localhost:3001/uploads/${doc.ruta_archivo}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center text-blue-600 hover:underline"
+                  >
+                    <FileIcon size={16} className="mr-2" />{" "}
+                    {doc.nombre_original}
+                  </a>
+                </td>
+                <td className="px-4 py-2">
+                  <button
+                    onClick={() => handleDelete(doc.id)}
+                    className="text-red-500 hover:text-red-700"
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
+    </div>
+  );
+};
+
+// --- INICIA NUEVO CÓDIGO (AGREGAR) ---
+
+// Este es el nuevo componente de AULA VIRTUAL (MODIFICADO)
+const AulaVirtualPage = () => {
+  const { grupoId, asignaturaId } = useParams();
+  const { user } = useAuth();
+  const [config, setConfig] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [isEditing, setIsEditing] = useState(false);
+  const [formData, setFormData] = useState({
+    enlace_videollamada: "",
+    descripcion_curso: "",
+  });
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const navigate = useNavigate();
+
+  const [tareas, setTareas] = useState([]);
+  const [loadingTareas, setLoadingTareas] = useState(true);
+  const [showCrearTareaModal, setShowCrearTareaModal] = useState(false);
+
+  const [showEntregarModal, setShowEntregarModal] = useState(false);
+  const [selectedTask, setSelectedTask] = useState(null);
+
+  const [recursos, setRecursos] = useState([]);
+  const [loadingRecursos, setLoadingRecursos] = useState(true);
+  const [showRecursoModal, setShowRecursoModal] = useState(false);
+
+  // Función para cargar los datos del aula
+  const fetchAulaConfig = useCallback(async () => {
+    try {
+      const { data } = await api.get(
+        `/${user.rol}/aula-virtual/${grupoId}/${asignaturaId}/config`
+      );
+      setConfig(data);
+      setFormData({
+        enlace_videollamada: data.enlace_videollamada || "",
+        descripcion_curso: data.descripcion_curso || "",
+      });
+    } catch (error) {
+      console.error("Error al cargar la configuración del aula", error);
+    } finally {
+      setLoading(false);
+    }
+  }, [user.rol, grupoId, asignaturaId]);
+
+  // Función para cargar las tareas
+  const fetchTareas = useCallback(async () => {
+    setLoadingTareas(true);
+    try {
+      const { data } = await api.get(
+        `/${user.rol}/aula-virtual/${grupoId}/${asignaturaId}/tareas`
+      );
+      setTareas(data);
+    } catch (error) {
+      console.error("Error al cargar tareas", error);
+    } finally {
+      setLoadingTareas(false);
+    }
+  }, [user.rol, grupoId, asignaturaId]);
+
+  const fetchRecursos = useCallback(async () => {
+    // --- REEMPLAZA EL CONTENIDO ANTERIOR CON ESTO ---
+    setLoadingRecursos(true); // Indicar que estamos cargando
+    try {
+      // Hacemos la llamada a la API (la ruta es la misma para ambos roles)
+      const { data } = await api.get(
+        `/${user.rol}/aula-virtual/${grupoId}/${asignaturaId}/recursos`
+      );
+      setRecursos(data); // Guardamos los datos en el estado
+    } catch (error) {
+      console.error("Error al cargar recursos", error);
+      setRecursos([]); // En caso de error, dejamos la lista vacía
+    } finally {
+      setLoadingRecursos(false); // Indicamos que la carga terminó
+    }
+    // --- FIN DEL REEMPLAZO ---
+  }, [user.rol, grupoId, asignaturaId]);
+
+  const handleDeleteRecurso = async (recursoId) => {
+    // --- REEMPLAZA EL CONTENIDO ANTERIOR CON ESTO ---
+    // Preguntar confirmación al usuario
+    if (
+      window.confirm(
+        "¿Estás seguro de eliminar este recurso? Esta acción no se puede deshacer."
+      )
+    ) {
+      try {
+        // Llamar a la API para borrar el recurso por su ID
+        await api.delete(`/docente/aula-virtual/recurso/${recursoId}`);
+        // Si la llamada fue exitosa, refrescar la lista de recursos
+        fetchRecursos(); // Esto hará que el recurso borrado desaparezca de la pantalla
+      } catch (error) {
+        console.error("Error al eliminar recurso", error);
+        alert("Error al eliminar el recurso. Inténtalo de nuevo.");
+      }
+    }
+    // --- FIN DEL REEMPLAZO ---
+  };
+
+  // Cargar datos al montar el componente
+  useEffect(() => {
+    fetchAulaConfig();
+    fetchTareas();
+    fetchRecursos(); // <-- AGREGA ESTA LLAMADA
+  }, [fetchAulaConfig, fetchTareas, fetchRecursos]); // <-- AGREGA fetchRecursos AQUÍ
+
+  // Manejador para guardar (solo docentes)
+  const handleSave = async (e) => {
+    e.preventDefault();
+    setIsSaving(true);
+    setSaveSuccess(false);
+    try {
+      await api.put(
+        `/docente/aula-virtual/${grupoId}/${asignaturaId}/config`,
+        formData
+      );
+      setIsSaving(false);
+      setSaveSuccess(true);
+      setIsEditing(false);
+      setConfig((prev) => ({ ...prev, ...formData }));
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (error) {
+      console.error("Error al guardar", error);
+      setIsSaving(false);
+      alert("Error al guardar la configuración.");
+    }
+  };
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  // Abre el modal de "Entregar" para el alumno
+  const handleOpenEntregarModal = (tarea) => {
+    setSelectedTask(tarea);
+    setShowEntregarModal(true);
+  };
+
+  if (loading) return <p>Cargando aula virtual...</p>;
+  if (!config) return <p>No se pudo cargar la configuración del aula.</p>;
+
+  // Componente del formulario de edición (solo para docentes)
+  const renderDocenteForm = () => (
+    // ... (Este componente no cambia, lo dejamos igual) ...
+    <form
+      onSubmit={handleSave}
+      className="bg-gray-50 p-6 rounded-lg shadow-inner"
+    >
+      <h3 className="text-xl font-semibold mb-4 text-gray-800">
+        Configurar Aula Virtual
+      </h3>
+      <div className="space-y-4">
+        <div>
+          <label
+            htmlFor="enlace_videollamada"
+            className="block text-sm font-medium text-gray-700"
+          >
+            Enlace de la Videollamada (Zoom, Meet, etc.)
+          </label>
+          <input
+            type="url"
+            name="enlace_videollamada"
+            id="enlace_videollamada"
+            value={formData.enlace_videollamada}
+            onChange={handleChange}
+            placeholder="https://zoom.us/j/123456789"
+            className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-principal focus:border-principal"
+          />
+          <button
+            type="button"
+            onClick={() =>
+              setFormData((prev) => ({
+                ...prev,
+                enlace_videollamada: `https://meet.jit.si/CEVVI-G${grupoId}-A${asignaturaId}`,
+              }))
+            }
+            className="flex items-center mt-2 px-3 py-1 text-sm text-white bg-secundario rounded-md hover:opacity-90"
+          >
+            <Sparkles size={16} className="mr-2" />
+            Generar enlace de Jitsi Meet
+          </button>
+        </div>
+        <div>
+          <label
+            htmlFor="descripcion_curso"
+            className="block text-sm font-medium text-gray-700"
+          >
+            Descripción o Mensaje de Bienvenida
+          </label>
+          <textarea
+            name="descripcion_curso"
+            id="descripcion_curso"
+            rows="6"
+            value={formData.descripcion_curso}
+            onChange={handleChange}
+            placeholder="Bienvenidos al curso. Aquí encontrarán los detalles..."
+            className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-principal focus:border-principal"
+          ></textarea>
+        </div>
+      </div>
+      <div className="flex justify-end items-center space-x-4 mt-6">
+        {saveSuccess && (
+          <span className="flex items-center text-green-600">
+            <CheckCircle size={18} className="mr-1" /> Guardado
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={() => setIsEditing(false)}
+          className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
+        >
+          Cancelar
+        </button>
+        <button
+          type="submit"
+          disabled={isSaving}
+          className="px-4 py-2 bg-principal text-white rounded-md hover:opacity-90"
+        >
+          {isSaving ? "Guardando..." : "Guardar Cambios"}
+        </button>
+      </div>
+    </form>
+  );
+
+  // Componente para mostrar la lista de tareas
+  const renderTareasList = () => {
+    // ... (Este componente no cambia, lo dejamos igual) ...
+    if (loadingTareas) return <p>Cargando tareas...</p>;
+    if (tareas.length === 0) {
+      return (
+        <p className="text-gray-500">
+          {user.rol === "docente"
+            ? "Aún no has creado ninguna tarea. ¡Crea la primera!"
+            : "Aún no hay tareas publicadas para este curso."}
+        </p>
+      );
+    }
+
+    return (
+      <div className="space-y-4">
+        {tareas.map((tarea) => {
+          if (user.rol === "docente") {
+            return (
+              <Link
+                key={tarea.id}
+                to={`/docente/grupo/${grupoId}/asignatura/${asignaturaId}/tarea/${tarea.id}`}
+                className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border w-full text-left transition-all hover:bg-gray-100 hover:shadow-sm"
+              >
+                <div className="flex items-center">
+                  <FileText className="w-6 h-6 text-principal mr-4" />
+                  <div>
+                    <span className="font-bold text-lg text-gray-800">
+                      {tarea.titulo}
+                    </span>
+                    <p className="text-sm text-gray-600">
+                      {tarea.fecha_limite
+                        ? `Fecha límite: ${new Date(
+                            tarea.fecha_limite
+                          ).toLocaleString()}`
+                        : "Sin fecha límite"}
+                    </p>
+                  </div>
+                </div>
+                <span className="text-sm font-semibold text-secundario">
+                  {tarea.total_entregas} Entregas
+                </span>
+              </Link>
+            );
+          }
+
+          const isEntregada = !!tarea.entrega_id;
+          const isCalificada = tarea.calificacion !== null;
+          return (
+            <button
+              key={tarea.id}
+              onClick={() => handleOpenEntregarModal(tarea)}
+              className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border w-full text-left transition-all hover:bg-gray-100 hover:shadow-sm"
+            >
+              <div className="flex items-center">
+                <FileText className="w-6 h-6 text-principal mr-4" />
+                <div>
+                  <span className="font-bold text-lg text-gray-800">
+                    {tarea.titulo}
+                  </span>
+                  <p className="text-sm text-gray-600">
+                    {tarea.fecha_limite
+                      ? `Fecha límite: ${new Date(
+                          tarea.fecha_limite
+                        ).toLocaleString()}`
+                      : "Sin fecha límite"}
+                  </p>
+                </div>
+              </div>
+              <span
+                className={`flex items-center px-3 py-1 rounded-full text-xs font-semibold ${
+                  isCalificada
+                    ? "bg-green-100 text-green-800"
+                    : isEntregada
+                    ? "bg-blue-100 text-blue-800"
+                    : "bg-yellow-100 text-yellow-800"
+                }`}
+              >
+                {isCalificada ? (
+                  <>
+                    <Check size={14} className="mr-1" /> Calificado
+                  </>
+                ) : isEntregada ? (
+                  "Entregado"
+                ) : (
+                  "Pendiente"
+                )}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    );
+  };
+
+  // --- AGREGA ESTA NUEVA FUNCIÓN ---
+  // Componente para mostrar la lista de RECURSOS
+  const renderRecursosList = () => {
+    if (loadingRecursos) return <p>Cargando recursos...</p>;
+    if (recursos.length === 0) {
+      return (
+        <p className="text-gray-500">
+          {user.rol === "docente"
+            ? "Aún no has subido ningún recurso."
+            : "Aún no hay recursos disponibles."}
+        </p>
+      );
+    }
+    return (
+      <div className="space-y-3">
+        {recursos.map((recurso) => {
+          const isEnlace = recurso.tipo_recurso === "enlace";
+          const Icono = isEnlace ? LinkIcon : Paperclip;
+          // Construimos la URL correcta para el enlace/descarga
+          const url = isEnlace
+            ? recurso.ruta_o_url // Si es enlace, es la URL directa
+            : `http://localhost:3001/uploads/recursos/${recurso.ruta_o_url}`; // Si es archivo, construimos la ruta al servidor
+
+          return (
+            <div
+              key={recurso.id}
+              className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border"
+            >
+              {/* Enlace para abrir/descargar */}
+              <a
+                href={url}
+                target="_blank" // Abrir en nueva pestaña
+                rel="noopener noreferrer" // Seguridad
+                className="flex items-center text-blue-600 hover:underline"
+              >
+                <Icono className="w-5 h-5 mr-3" />
+                <span className="font-medium">{recurso.titulo}</span>
+                {/* Mostramos el nombre original solo si es archivo */}
+                {!isEnlace && (
+                  <span className="text-xs text-gray-500 ml-2">
+                    ({recurso.nombre_original})
+                  </span>
+                )}
+              </a>
+              {/* Botón de borrar (solo para docente) */}
+              {user.rol === "docente" && (
+                <button
+                  onClick={() => handleDeleteRecurso(recurso.id)} // Llamará a la función (aún vacía)
+                  className="text-red-500 hover:text-red-700"
+                  title="Eliminar recurso"
+                >
+                  <Trash2 size={18} />
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  // Componente de vista (para alumnos y docente cuando no edita)
+  const renderView = () => (
+    <div className="bg-white p-6 rounded-lg shadow">
+      {user.rol === "docente" && (
+        <button
+          onClick={() => setIsEditing(true)}
+          className="flex items-center float-right px-3 py-1 text-sm bg-secundario text-white rounded-md hover:opacity-90"
+        >
+          <Edit2 size={14} className="mr-1" /> Editar
+        </button>
+      )}
+      {/* Enlace de Videollamada */}
+      <h3 className="text-xl font-semibold mb-4 text-gray-800">
+        Sesión en Vivo
+      </h3>
+      {config.enlace_videollamada ? (
+        <a
+          href={config.enlace_videollamada}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center px-6 py-3 font-semibold text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors"
+        >
+          <Video size={20} className="mr-2" />
+          Entrar a la Clase Virtual
+        </a>
+      ) : (
+        <p className="text-gray-500">
+          {user.rol === "alumno"
+            ? "El docente aún no ha publicado el enlace de la clase."
+            : "Aún no has configurado un enlace para la videollamada."}
+        </p>
+      )}
+      {/* Descripción del Curso */}
+      <div className="mt-8 pt-6 border-t">
+        <h3 className="text-xl font-semibold mb-4 text-gray-800">
+          Acerca del Curso
+        </h3>
+        {config.descripcion_curso ? (
+          <p className="text-gray-700 whitespace-pre-wrap">
+            {config.descripcion_curso}
+          </p>
+        ) : (
+          <p className="text-gray-500">
+            {user.rol === "alumno"
+              ? "El docente aún no ha agregado una descripción."
+              : "Aún no has agregado una descripción o mensaje de bienvenida."}
+          </p>
+        )}
+      </div>
+      {/* --- INICIA BLOQUE MODIFICADO --- */}
+      {/* Dividimos Tareas y Recursos en dos secciones */}
+      <div className="mt-8 pt-6 border-t">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-xl font-semibold text-gray-800">
+            Tareas y Actividades
+          </h3>
+          {user.rol === "docente" && (
+            <button
+              onClick={() => setShowCrearTareaModal(true)}
+              className="flex items-center px-4 py-2 font-semibold text-white bg-principal rounded-md hover:opacity-90"
+            >
+              <Plus size={18} className="mr-2" />
+              Crear Tarea
+            </button>
+          )}
+        </div>
+        {renderTareasList()}
+      </div>{" "}
+      {/* <-- Cierre del div de Tareas */}
+      {/* --- AGREGA ESTA NUEVA SECCIÓN --- */}
+      <div className="mt-8 pt-6 border-t">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-xl font-semibold text-gray-800">
+            Material de Clase y Recursos
+          </h3>
+          {/* --- AGREGA ESTE BOTÓN --- */}
+          {user.rol === "docente" && (
+            <button
+              onClick={() => setShowRecursoModal(true)} // <-- Llama a setState para abrir el modal
+              className="flex items-center px-4 py-2 font-semibold text-white bg-secundario rounded-md hover:opacity-90"
+            >
+              <Plus size={18} className="mr-2" />
+              Agregar Recurso
+            </button>
+          )}
+          {/* --- FIN AGREGAR --- */}
+        </div>
+        {renderRecursosList()}
+      </div>
+      {/* --- FIN AGREGAR --- */}
+      {/* El botón "Ir a Calificación Final" va después */}
+      {user.rol === "docente" && (
+        <div className="mt-8 pt-6 border-t">{/* ... botón ... */}</div>
+      )}
+    </div> // <-- Cierre de renderView
+  );
+
+  return (
+    <div>
+      <h2 className="text-3xl font-bold text-gray-800 mb-6">Aula Virtual</h2>
+      {isEditing ? renderDocenteForm() : renderView()}
+
+      <CrearTareaModal
+        show={showCrearTareaModal}
+        onClose={() => setShowCrearTareaModal(false)}
+        grupoId={grupoId}
+        asignaturaId={asignaturaId}
+        onTareaCreada={fetchTareas}
+      />
+
+      <EntregarTareaModal
+        show={showEntregarModal}
+        onClose={() => setShowEntregarModal(false)}
+        tarea={selectedTask}
+        onEntregaExitosa={fetchTareas}
+      />
+      {/* --- AGREGA ESTA LLAMADA AL MODAL --- */}
+      <AgregarRecursoModal
+        show={showRecursoModal} // Controlado por el estado
+        onClose={() => setShowRecursoModal(false)} // Función para cerrar
+        grupoId={grupoId} // Pasa el ID del grupo
+        asignaturaId={asignaturaId} // Pasa el ID de la asignatura
+        onRecursoAgregado={fetchRecursos} // Pasa la función para refrescar la lista
+      />
+      {/* --- FIN AGREGAR --- */}
+    </div>
+  );
+};
+
+// --- INICIA CÓDIGO FALTANTE (AGREGAR) ---
+
+// Modal para crear una nueva tarea (solo Docente)
+const CrearTareaModal = ({
+  show,
+  onClose,
+  grupoId,
+  asignaturaId,
+  onTareaCreada,
+}) => {
+  const [titulo, setTitulo] = useState("");
+  const [descripcion, setDescripcion] = useState("");
+  const [fechaLimite, setFechaLimite] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setIsSaving(true);
+    try {
+      await api.post(
+        `/docente/aula-virtual/${grupoId}/${asignaturaId}/tareas`,
+        {
+          titulo,
+          descripcion,
+          fecha_limite: fechaLimite || null,
+        }
+      );
+      onTareaCreada(); // Llama a la función para recargar tareas
+      onClose(); // Cierra el modal
+      // Limpiamos el formulario
+      setTitulo("");
+      setDescripcion("");
+      setFechaLimite("");
+    } catch (error) {
+      console.error("Error al crear tarea", error);
+      alert("Error al crear la tarea.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  if (!show) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6 relative">
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 text-gray-500 hover:text-gray-800"
+        >
+          <X size={24} />
+        </button>
+        <h3 className="text-2xl font-bold mb-6">Crear Nueva Tarea</h3>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label
+              htmlFor="titulo"
+              className="block text-sm font-medium text-gray-700"
+            >
+              Título de la Tarea
+            </label>
+            <input
+              type="text"
+              id="titulo"
+              value={titulo}
+              onChange={(e) => setTitulo(e.target.value)}
+              required
+              className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-principal focus:border-principal"
+            />
+          </div>
+          <div>
+            <label
+              htmlFor="descripcion"
+              className="block text-sm font-medium text-gray-700"
+            >
+              Descripción / Instrucciones
+            </label>
+            <textarea
+              id="descripcion"
+              rows="5"
+              value={descripcion}
+              onChange={(e) => setDescripcion(e.target.value)}
+              className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-principal focus:border-principal"
+            ></textarea>
+          </div>
+          <div>
+            <label
+              htmlFor="fechaLimite"
+              className="block text-sm font-medium text-gray-700"
+            >
+              Fecha Límite de Entrega (Opcional)
+            </label>
+            <input
+              type="datetime-local"
+              id="fechaLimite"
+              value={fechaLimite}
+              onChange={(e) => setFechaLimite(e.target.value)}
+              className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-principal focus:border-principal"
+            />
+          </div>
+          <div className="flex justify-end space-x-4 mt-8">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={isSaving}
+              className="px-4 py-2 bg-principal text-white rounded-md hover:opacity-90 disabled:bg-gray-400"
+            >
+              {isSaving ? "Creando..." : "Crear Tarea"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// --- TERMINA CÓDIGO FALTANTE ---
+// --- INICIA NUEVO CÓDIGO (AGREGAR) ---
+
+// Modal para entregar una tarea (solo Alumno)
+const EntregarTareaModal = ({ show, onClose, tarea, onEntregaExitosa }) => {
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [comentario, setComentario] = useState("");
+  const [isUploading, setIsUploading] = useState(false);
+  const [error, setError] = useState("");
+
+  // Reseteamos el estado cuando el modal se cierra o cambia de tarea
+  useEffect(() => {
+    if (show) {
+      setComentario(tarea.comentario_alumno || "");
+      setSelectedFile(null);
+      setError("");
+    }
+  }, [show, tarea]);
+
+  const handleFileChange = (e) => {
+    if (e.target.files[0]) {
+      setSelectedFile(e.target.files[0]);
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!selectedFile) {
+      setError("Por favor, selecciona un archivo para subir.");
+      return;
+    }
+    setIsUploading(true);
+    setError("");
+
+    const formData = new FormData();
+    formData.append("archivo_tarea", selectedFile);
+    formData.append("comentario_alumno", comentario);
+
+    try {
+      await api.post(
+        `/alumno/aula-virtual/tarea/${tarea.id}/entregar`,
+        formData,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        }
+      );
+      onEntregaExitosa(); // Recarga la lista de tareas
+      onClose(); // Cierra el modal
+    } catch (error) {
+      console.error("Error al subir la tarea", error);
+      setError("Error al subir el archivo. Inténtalo de nuevo.");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  if (!show || !tarea) return null;
+
+  const isEntregada = !!tarea.entrega_id;
+  const isCalificada = tarea.calificacion !== null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6 relative">
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 text-gray-500 hover:text-gray-800"
+        >
+          <X size={24} />
+        </button>
+        <h3 className="text-2xl font-bold mb-2">{tarea.titulo}</h3>
+        <p className="text-sm text-gray-600 mb-4 whitespace-pre-wrap">
+          {tarea.descripcion}
+        </p>
+        {tarea.fecha_limite && (
+          <p className="text-sm font-semibold text-red-600 mb-6">
+            Fecha límite: {new Date(tarea.fecha_limite).toLocaleString()}
+          </p>
+        )}
+
+        {/* --- Sección de Estado Actual --- */}
+        {isEntregada && (
+          <div className="bg-gray-100 p-4 rounded-md mb-6 border border-gray-200">
+            <h4 className="font-semibold text-gray-800">Tu Entrega Actual:</h4>
+            <p className="text-sm text-gray-600">
+              <span className="font-medium">Estado:</span>
+              <span
+                className={`ml-2 font-semibold ${
+                  isCalificada ? "text-green-600" : "text-blue-600"
+                }`}
+              >
+                {isCalificada ? "Calificada" : "Entregada"}
+              </span>
+            </p>
+            <p className="text-sm text-gray-600">
+              <span className="font-medium">Fecha:</span>{" "}
+              {new Date(tarea.fecha_entrega).toLocaleString()}
+            </p>
+            {isCalificada && (
+              <p className="text-sm text-gray-600">
+                <span className="font-medium">Calificación:</span>{" "}
+                <span className="font-bold text-lg text-principal">
+                  {tarea.calificacion}
+                </span>
+                / 100
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* --- Formulario de Entrega --- */}
+        {!isCalificada ? (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <h4 className="font-semibold text-gray-800">
+              {isEntregada ? "Subir una nueva versión" : "Subir tu archivo"}
+            </h4>
+            <div>
+              <label
+                htmlFor="archivo_tarea"
+                className="block text-sm font-medium text-gray-700"
+              >
+                Selecciona tu archivo (PDF, Word, ZIP, etc.)
+              </label>
+              <input
+                type="file"
+                id="archivo_tarea"
+                onChange={handleFileChange}
+                required={!isEntregada} // Solo requerido si es la primera entrega
+                className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md"
+              />
+            </div>
+            <div>
+              <label
+                htmlFor="comentario_alumno"
+                className="block text-sm font-medium text-gray-700"
+              >
+                Comentario (Opcional)
+              </label>
+              <textarea
+                id="comentario_alumno"
+                rows="3"
+                value={comentario}
+                onChange={(e) => setComentario(e.target.value)}
+                placeholder="Ej. 'Profe, tuve un problema con la pregunta 3...'"
+                className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md"
+              ></textarea>
+            </div>
+            {error && <p className="text-sm text-red-600">{error}</p>}
+            <div className="flex justify-end space-x-4 mt-8">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={isUploading}
+                className="flex items-center px-4 py-2 bg-principal text-white rounded-md hover:opacity-90 disabled:bg-gray-400"
+              >
+                <UploadCloud size={18} className="mr-2" />
+                {isUploading
+                  ? "Subiendo..."
+                  : isEntregada
+                  ? "Actualizar Entrega"
+                  : "Entregar Tarea"}
+              </button>
+            </div>
+          </form>
+        ) : (
+          <p className="text-center font-semibold text-green-700">
+            Esta tarea ya ha sido calificada. No se pueden realizar más
+            entregas.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+};
+// --- INICIA NUEVO CÓDIGO (AGREGAR) ---
+
+// Modal para Calificar una entrega (solo Docente)
+const CalificarEntregaModal = ({
+  show,
+  onClose,
+  entrega,
+  onCalificacionExitosa,
+}) => {
+  const [calificacion, setCalificacion] = useState("");
+  const [comentarioDocente, setComentarioDocente] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  // Sincronizamos el estado con la entrega seleccionada
+  useEffect(() => {
+    if (entrega) {
+      // ESTA ES LA CORRECCIÓN:
+      // Maneja null, undefined y el número 0 correctamente
+      setCalificacion(
+        entrega.calificacion !== null && entrega.calificacion !== undefined
+          ? String(entrega.calificacion) // Convertimos 80 a "80" y 0 a "0"
+          : "" // Convertimos null/undefined a ""
+      );
+      setComentarioDocente(entrega.comentario_docente || "");
+      setError("");
+    }
+  }, [entrega]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!calificacion) {
+      setError("La calificación es un campo requerido.");
+      return;
+    }
+    setIsSaving(true);
+    setError("");
+
+    try {
+      await api.post(
+        `/docente/aula-virtual/entrega/${entrega.entrega_id}/calificar`,
+        {
+          calificacion: calificacion,
+          comentario_docente: comentarioDocente,
+        }
+      );
+      onCalificacionExitosa(); // Recarga la lista de entregas
+      onClose(); // Cierra el modal
+    } catch (error) {
+      console.error("Error al guardar calificación", error);
+      setError(
+        error.response?.data?.message || "Error al guardar. Inténtalo de nuevo."
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  if (!show || !entrega) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6 relative">
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 text-gray-500 hover:text-gray-800"
+        >
+          <X size={24} />
+        </button>
+        <h3 className="text-2xl font-bold mb-4">Calificar Entrega</h3>
+        <p className="text-lg font-semibold text-gray-800">
+          {entrega.nombre} {entrega.apellido_paterno}
+        </p>
+
+        {/* --- Sección de Entrega del Alumno --- */}
+        <div className="bg-gray-50 p-4 rounded-md my-4 border">
+          <h4 className="font-semibold text-gray-700">Archivo del Alumno</h4>
+          <a
+            href={`http://localhost:3001/uploads/tareas/tarea_${entrega.tarea_id}/${entrega.ruta_archivo}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center text-blue-600 hover:underline my-2"
+          >
+            <Download size={16} className="mr-2" />
+            {entrega.nombre_original}
+          </a>
+          <p className="text-sm text-gray-500">
+            Entregado: {new Date(entrega.fecha_entrega).toLocaleString()}
+          </p>
+          {entrega.comentario_alumno && (
+            <div className="mt-2 pt-2 border-t">
+              <p className="text-sm font-medium text-gray-700">
+                Comentario del Alumno:
+              </p>
+              <p className="text-sm text-gray-600 italic">
+                "{entrega.comentario_alumno}"
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* --- Formulario de Calificación --- */}
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label
+              htmlFor="calificacion"
+              className="block text-sm font-medium text-gray-700"
+            >
+              Calificación (0-100)
+            </label>
+            <input
+              type="number"
+              id="calificacion"
+              value={calificacion}
+              onChange={(e) => setCalificacion(e.target.value)}
+              required
+              min="0"
+              max="100"
+              step="0.1"
+              className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md"
+            />
+          </div>
+          <div>
+            <label
+              htmlFor="comentario_docente"
+              className="block text-sm font-medium text-gray-700"
+            >
+              Comentario de Retroalimentación (Opcional)
+            </label>
+            <textarea
+              id="comentario_docente"
+              rows="4"
+              value={comentarioDocente}
+              onChange={(e) => setComentarioDocente(e.target.value)}
+              placeholder="Ej. 'Buen trabajo, solo cuida la ortografía...'"
+              className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md"
+            ></textarea>
+          </div>
+          {error && <p className="text-sm text-red-600">{error}</p>}
+          <div className="flex justify-end space-x-4 mt-8">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={isSaving}
+              className="flex items-center px-4 py-2 bg-principal text-white rounded-md hover:opacity-90 disabled:bg-gray-400"
+            >
+              <Award size={18} className="mr-2" />
+              {isSaving ? "Guardando..." : "Guardar Calificación"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// --- AGREGA ESTE COMPONENTE MODAL COMPLETO ---
+// Modal para Agregar Recurso (solo Docente)
+const AgregarRecursoModal = ({
+  show,
+  onClose,
+  grupoId,
+  asignaturaId,
+  onRecursoAgregado, // Callback para refrescar la lista
+}) => {
+  const [tipo, setTipo] = useState("enlace"); // 'enlace' o 'archivo'
+  const [titulo, setTitulo] = useState("");
+  const [url, setUrl] = useState("");
+  const [archivo, setArchivo] = useState(undefined); // Estado para el archivo seleccionado
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  // Resetea el formulario al abrir/cerrar
+  const resetForm = () => {
+    setTitulo("");
+    setUrl("");
+    setArchivo(undefined); // Reinicia archivo a undefined
+    setError("");
+    setTipo("enlace"); // Vuelve a la pestaña 'enlace' por defecto
+  };
+
+  const handleClose = () => {
+    resetForm();
+    onClose(); // Llama a la función onClose pasada por props
+  };
+
+  // Maneja el envío del formulario
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError(""); // Limpia errores anteriores
+
+    // --- Validación ---
+    if (!titulo) {
+      setError("El título es requerido.");
+      return;
+    }
+    if (tipo === "enlace" && !url) {
+      setError("La URL es requerida para un enlace.");
+      return;
+    }
+    if (tipo === "archivo" && !archivo) {
+      setError("Debe seleccionar un archivo.");
+      return;
+    }
+    // --- Fin Validación ---
+
+    setIsSaving(true); // Empieza a guardar
+
+    try {
+      // Si es un enlace
+      if (tipo === "enlace") {
+        await api.post(
+          `/docente/aula-virtual/${grupoId}/${asignaturaId}/recurso-enlace`,
+          { titulo, url } // Envía título y url
+        );
+      }
+      // Si es un archivo
+      else {
+        const formData = new FormData(); // Necesario para enviar archivos
+        formData.append("titulo", titulo);
+        formData.append("archivo_recurso", archivo); // Adjunta el archivo
+        await api.post(
+          `/docente/aula-virtual/${grupoId}/${asignaturaId}/recurso-archivo`,
+          formData, // Envía el FormData
+          { headers: { "Content-Type": "multipart/form-data" } } // Header importante
+        );
+      }
+
+      // --- Éxito ---
+      onRecursoAgregado(); // Llama a la función para refrescar la lista de recursos
+      handleClose(); // Cierra el modal si todo salió bien
+    } catch (error) {
+      // --- Error de API ---
+      console.error("Error al agregar recurso", error);
+      setError(
+        error.response?.data?.message || "Error al guardar. Inténtalo de nuevo."
+      );
+    } finally {
+      // --- Siempre se ejecuta ---
+      setIsSaving(false); // Termina el estado de guardado
+    }
+  };
+
+  // No renderiza nada si 'show' es falso
+  if (!show) return null;
+
+  return (
+    // Fondo oscuro y contenedor del modal
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6 relative">
+        {/* Botón de cerrar (X) */}
+        <button
+          onClick={handleClose}
+          className="absolute top-4 right-4 text-gray-500 hover:text-gray-800"
+        >
+          <X size={24} />
+        </button>
+        <h3 className="text-2xl font-bold mb-6">Agregar Recurso</h3>
+
+        {/* Pestañas para elegir tipo */}
+        <div className="flex mb-4 border-b">
+          <button
+            onClick={() => setTipo("enlace")}
+            className={`flex items-center px-4 py-2 font-semibold ${
+              tipo === "enlace"
+                ? "border-b-2 border-principal text-principal" // Estilo activo
+                : "text-gray-500 hover:text-gray-700" // Estilo inactivo
+            }`}
+          >
+            <LinkIcon size={18} className="mr-2" /> Enlace (Video, Web)
+          </button>
+          <button
+            onClick={() => setTipo("archivo")}
+            className={`flex items-center px-4 py-2 font-semibold ${
+              tipo === "archivo"
+                ? "border-b-2 border-principal text-principal" // Estilo activo
+                : "text-gray-500 hover:text-gray-700" // Estilo inactivo
+            }`}
+          >
+            <Paperclip size={18} className="mr-2" /> Archivo (PDF, PPT)
+          </button>
+        </div>
+
+        {/* Formulario */}
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Campo Título (común a ambos tipos) */}
+          <div>
+            <label
+              htmlFor="recurso_titulo"
+              className="block text-sm font-medium text-gray-700"
+            >
+              Título (Ej. "Video de la Semana 1" o "Lectura PDF")
+            </label>
+            <input
+              type="text"
+              id="recurso_titulo"
+              value={titulo}
+              onChange={(e) => setTitulo(e.target.value)}
+              required
+              className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md"
+            />
+          </div>
+
+          {/* Campo URL (solo si tipo es 'enlace') */}
+          {tipo === "enlace" ? (
+            <div>
+              <label
+                htmlFor="recurso_url"
+                className="block text-sm font-medium text-gray-700"
+              >
+                URL (Enlace)
+              </label>
+              <input
+                type="url"
+                id="recurso_url"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                placeholder="https://youtube.com/..."
+                required
+                className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md"
+              />
+            </div>
+          ) : (
+            // Campo Archivo (solo si tipo es 'archivo')
+            <div>
+              <label
+                htmlFor="recurso_archivo"
+                className="block text-sm font-medium text-gray-700"
+              >
+                Subir Archivo
+              </label>
+              <input
+                type="file"
+                id="recurso_archivo"
+                // Actualiza el estado 'archivo' cuando se selecciona uno
+                onChange={(e) => setArchivo(e.target.files[0])}
+                required
+                className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md"
+              />
+            </div>
+          )}
+
+          {/* Muestra mensaje de error si existe */}
+          {error && <p className="text-sm text-red-600">{error}</p>}
+
+          {/* Botones de acción */}
+          <div className="flex justify-end space-x-4 mt-8">
+            <button
+              type="button" // Importante: type="button" para no enviar el form
+              onClick={handleClose}
+              className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit" // Este sí envía el form
+              disabled={isSaving} // Deshabilitado mientras guarda
+              className="flex items-center px-4 py-2 bg-principal text-white rounded-md hover:opacity-90 disabled:bg-gray-400"
+            >
+              <Plus size={18} className="mr-2" />
+              {isSaving ? "Guardando..." : "Agregar Recurso"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+// --- FIN AGREGAR ---
+
+// Página de Detalles de Tarea (solo Docente)
+const DetalleTareaDocentePage = () => {
+  const { grupoId, asignaturaId, tareaId } = useParams();
+  const [tarea, setTarea] = useState(null);
+  const [entregas, setEntregas] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
+
+  // Estado para el modal de calificación
+  const [showCalificarModal, setShowCalificarModal] = useState(false);
+  const [selectedEntrega, setSelectedEntrega] = useState(null);
+
+  // Función para cargar los detalles
+  const fetchDetallesTarea = useCallback(async () => {
+    try {
+      const { data } = await api.get(
+        `/docente/aula-virtual/tarea/${tareaId}/entregas`
+      );
+      setTarea(data.tarea);
+      setEntregas(data.entregas);
+    } catch (error) {
+      console.error("Error al cargar detalles de la tarea", error);
+      alert("No se pudieron cargar los detalles.");
+    } finally {
+      setLoading(false);
+    }
+  }, [tareaId]);
+
+  useEffect(() => {
+    fetchDetallesTarea();
+  }, [fetchDetallesTarea]);
+
+  // Abre el modal con la entrega seleccionada
+  const handleOpenCalificarModal = (entrega) => {
+    // Añadimos el ID de la tarea a la entrega para el link de descarga
+    const entregaConInfo = { ...entrega, tarea_id: tarea.id };
+    setSelectedEntrega(entregaConInfo);
+    setShowCalificarModal(true);
+  };
+
+  if (loading) return <p>Cargando detalles de la tarea...</p>;
+  if (!tarea) return <p>Tarea no encontrada.</p>;
+
+  const totalAlumnos = entregas.length;
+  const totalEntregas = entregas.filter((e) => e.entrega_id).length;
+  const totalCalificadas = entregas.filter((e) => e.calificacion).length;
+
+  return (
+    <div>
+      <Link
+        to={`/docente/grupo/${grupoId}/asignatura/${asignaturaId}/aula`}
+        className="flex items-center text-principal mb-6 hover:underline"
+      >
+        <ArrowLeft size={18} className="mr-2" />
+        Volver al Aula Virtual
+      </Link>
+      <h2 className="text-3xl font-bold text-gray-800 mb-2">{tarea.titulo}</h2>
+      <p className="text-gray-600 mb-6 whitespace-pre-wrap">
+        {tarea.descripcion}
+      </p>
+
+      {/* --- Resumen de Entregas --- */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="bg-white p-4 rounded-lg shadow">
+          <p className="text-sm font-medium text-gray-500">Alumnos en Grupo</p>
+          <p className="text-2xl font-bold text-gray-800">{totalAlumnos}</p>
+        </div>
+        <div className="bg-white p-4 rounded-lg shadow">
+          <p className="text-sm font-medium text-gray-500">
+            Entregas Recibidas
+          </p>
+          <p className="text-2xl font-bold text-blue-600">{totalEntregas}</p>
+        </div>
+        <div className="bg-white p-4 rounded-lg shadow">
+          <p className="text-sm font-medium text-gray-500">
+            Tareas Calificadas
+          </p>
+          <p className="text-2xl font-bold text-green-600">
+            {totalCalificadas}
+          </p>
+        </div>
+      </div>
+
+      {/* --- Tabla de Alumnos y Entregas --- */}
+      <div className="bg-white p-6 rounded-lg shadow overflow-x-auto">
+        <h3 className="text-xl font-bold mb-4">Entregas de Alumnos</h3>
+        <table className="w-full table-auto text-sm">
+          <thead className="text-left bg-gray-50">
+            <tr>
+              <th className="px-4 py-2">Alumno</th>
+              <th className="px-4 py-2">Estado</th>
+              <th className="px-4 py-2">Archivo</th>
+              <th className="px-4 py-2">Calificación</th>
+              <th className="px-4 py-2">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {entregas.map((entrega) => (
+              <tr key={entrega.alumno_id} className="border-b">
+                <td className="px-4 py-2 font-medium">
+                  {entrega.nombre} {entrega.apellido_paterno}
+                </td>
+                <td className="px-4 py-2">
+                  {entrega.entrega_id ? (
+                    <span className="text-blue-600 font-semibold">
+                      Entregado
+                    </span>
+                  ) : (
+                    <span className="text-gray-500">Pendiente</span>
+                  )}
+                </td>
+                <td className="px-4 py-2">
+                  {entrega.entrega_id ? (
+                    <a
+                      href={`http://localhost:3001/uploads/tareas/tarea_${tarea.id}/${entrega.ruta_archivo}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center text-blue-600 hover:underline"
+                    >
+                      <Download size={14} className="mr-1" />
+                      {entrega.nombre_original}
+                    </a>
+                  ) : (
+                    "N/A"
+                  )}
+                </td>
+                <td className="px-4 py-2">
+                  {entrega.calificacion ? (
+                    <span className="font-bold text-lg text-principal">
+                      {entrega.calificacion}
+                    </span>
+                  ) : (
+                    "Sin calificar"
+                  )}
+                </td>
+                <td className="px-4 py-2">
+                  {entrega.entrega_id ? (
+                    <button
+                      onClick={() => handleOpenCalificarModal(entrega)}
+                      className="px-3 py-1 text-sm font-medium text-white bg-secundario rounded-md hover:opacity-90"
+                    >
+                      {entrega.calificacion ? "Re-calificar" : "Calificar"}
+                    </button>
+                  ) : (
+                    <span className="text-gray-400">--</span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* --- El Modal de Calificación --- */}
+      <CalificarEntregaModal
+        show={showCalificarModal}
+        onClose={() => setShowCalificarModal(false)}
+        entrega={selectedEntrega}
+        onCalificacionExitosa={fetchDetallesTarea} // Recarga los datos
+      />
     </div>
   );
 };
@@ -3265,9 +4909,45 @@ function App() {
                 path="/docente/grupo/:grupoId/asignatura/:asignaturaId"
                 element={<DetalleCursoDocentePage />}
               />
+              <Route
+                path="/docente/grupo/:grupoId/asignatura/:asignaturaId"
+                element={<DetalleCursoDocentePage />}
+              />
+              {/* --- AGREGA ESTA LÍNEA (DOCENTE) --- */}
+              <Route
+                path="/docente/grupo/:grupoId/asignatura/:asignaturaId/aula"
+                element={<AulaVirtualPage />}
+              />
+              {/* --- AGREGA ESTA LÍNEA (DOCENTE) --- */}
+              <Route
+                path="/docente/grupo/:grupoId/asignatura/:asignaturaId/tarea/:tareaId"
+                element={<DetalleTareaDocentePage />}
+              />
             </Route>
           </Route>
 
+          {/* --- AÑADE ESTE BLOQUE COMPLETO --- */}
+          {/* Rutas de Alumno */}
+          <Route element={<ProtectedRoute allowedRoles={["alumno"]} />}>
+            <Route element={<AlumnoLayout />}>
+              <Route
+                path="/alumno/dashboard"
+                element={<AlumnoDashboardPage />}
+              />
+              <Route
+                path="/alumno/dashboard"
+                element={<AlumnoDashboardPage />}
+              />
+              {/* --- AGREGA ESTA LÍNEA (ALUMNO) --- */}
+              <Route
+                path="/alumno/grupo/:grupoId/asignatura/:asignaturaId/aula"
+                element={<AulaVirtualPage />}
+              />
+            </Route>
+          </Route>
+          {/* --- FIN DEL BLOQUE AÑADIDO --- */}
+
+          {/* --- AÑADE ESTE BLOQUE COMPLETO --- */}
           {/* Rutas de Aspirante */}
           <Route element={<ProtectedRoute allowedRoles={["aspirante"]} />}>
             <Route element={<AspiranteLayout />}>
@@ -3277,6 +4957,7 @@ function App() {
               />
             </Route>
           </Route>
+          {/* --- FIN DEL BLOQUE AÑADIDO --- */}
 
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>

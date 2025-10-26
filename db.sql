@@ -121,6 +121,68 @@ CREATE TABLE expediente_aspirantes (
     UNIQUE KEY (aspirante_id, tipo_documento) -- Un aspirante solo puede tener un tipo de documento
 );
 
+CREATE TABLE aula_virtual_config (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    grupo_id INT NOT NULL,
+    asignatura_id INT NOT NULL,
+    enlace_videollamada VARCHAR(500),
+    descripcion_curso TEXT,
+    FOREIGN KEY (grupo_id) REFERENCES grupos(id) ON DELETE CASCADE,
+    FOREIGN KEY (asignatura_id) REFERENCES asignaturas(id) ON DELETE CASCADE,
+    UNIQUE KEY (grupo_id, asignatura_id) -- Solo puede haber una config por clase
+);
+
+-- --- INICIA NUEVO CÓDIGO (AGREGAR AL FINAL) ---
+
+-- 9. Tabla de Tareas
+CREATE TABLE tareas (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    grupo_id INT NOT NULL,
+    asignatura_id INT NOT NULL,
+    docente_id INT NOT NULL,
+    titulo VARCHAR(255) NOT NULL,
+    descripcion TEXT,
+    fecha_limite DATETIME,
+    fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (grupo_id) REFERENCES grupos(id) ON DELETE CASCADE,
+    FOREIGN KEY (asignatura_id) REFERENCES asignaturas(id) ON DELETE CASCADE,
+    FOREIGN KEY (docente_id) REFERENCES usuarios(id)
+);
+
+-- 10. Tabla de Entregas de Tareas
+CREATE TABLE tareas_entregas (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    tarea_id INT NOT NULL,
+    alumno_id INT NOT NULL,
+    ruta_archivo VARCHAR(500) NOT NULL,
+    nombre_original VARCHAR(500) NOT NULL,
+    comentario_alumno TEXT,
+    fecha_entrega TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    calificacion DECIMAL(5, 2),
+    comentario_docente TEXT,
+    FOREIGN KEY (tarea_id) REFERENCES tareas(id) ON DELETE CASCADE,
+    FOREIGN KEY (alumno_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+    UNIQUE KEY (tarea_id, alumno_id) -- Un alumno solo puede entregar una vez por tarea
+);
+
+-- 11. Tabla de Recursos o Material de Clase
+CREATE TABLE recursos_clase (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    grupo_id INT NOT NULL,
+    asignatura_id INT NOT NULL,
+    docente_id INT NOT NULL,
+    titulo VARCHAR(255) NOT NULL,
+    tipo_recurso ENUM('archivo', 'enlace') NOT NULL,
+    ruta_o_url VARCHAR(500) NOT NULL,
+    nombre_original VARCHAR(500), -- Solo para tipo 'archivo'
+    fecha_subida TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (grupo_id) REFERENCES grupos(id) ON DELETE CASCADE,
+    FOREIGN KEY (asignatura_id) REFERENCES asignaturas(id) ON DELETE CASCADE,
+    FOREIGN KEY (docente_id) REFERENCES usuarios(id)
+);
+
+-- --- TERMINA NUEVO CÓDIGO ---
+
 
 -- INSERCIONES DE EJEMPLO (CATÁLOGOS)
 -- INSERT INTO planes_estudio (nombre_plan) VALUES ('Plan 2020'), ('Plan 2024');

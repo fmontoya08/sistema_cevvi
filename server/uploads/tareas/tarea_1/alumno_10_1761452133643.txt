@@ -1,0 +1,59 @@
+inventario/
+│
+├── config/
+│   └── config.php              # Constantes globales (rutas, DB, timezone)
+│
+├── includes/
+│   ├── auth.php                # Verificación de sesión y rol
+│   ├── db.php                  # Conexión MySQLi usando config.php
+│   ├── header.php              # Encabezado HTML común
+│   ├── footer.php              # Pie de página común
+│   └── helpers.php             # Funciones reutilizables (flash, sanitizar, etc.)
+│
+├── modules/
+│   ├── usuarios/               # CRUD de usuarios y roles
+│   │   ├── crear.php
+│   │   ├── editar.php
+│   │   ├── eliminar.php
+│   │   └── index.php
+│   │
+│   ├── productos/              # CRUD de productos
+│   │   ├── agregar.php
+│   │   ├── editar.php
+│   │   ├── eliminar.php
+│   │   ├── exportar_excel.php
+│   │   ├── index.php
+│   │   └── resumen.php
+│   │
+│   ├── almacenes/              # CRUD de almacenes y subalmacenes
+│   │   ├── crear.php
+│   │   ├── editar.php
+│   │   ├── eliminar.php
+│   │   └── index.php
+│   │
+│   ├── traslados/              # Registro y gestión de traslados entre almacenes
+│   │   ├── registrar.php
+│   │   ├── historial.php
+│   │   └── validar.php
+│   │
+│   ├── movimientos/            # Entradas y salidas de inventario
+│   │   ├── registrar.php
+│   │   └── historial.php
+│   │
+│   ├── categorias/             # CRUD de categorías de productos
+│   │   ├── crear.php
+│   │   ├── editar.php
+│   │   ├── eliminar.php
+│   │   └── index.php
+│   │
+│   └── reportes/               # Reportes y estadísticas
+│       ├── inventario.php
+│       ├── actividad.php
+│       └── stock_critico.php
+│
+├── public/
+│   ├── login.php               # Formulario de acceso
+│   ├── logout.php              # Cierre de sesión
+│   ├── dashboard.php           # Vista principal según rol
+│   ├── no_autorizado.php       # Acceso denegado
+│   └── index.php               # Redirección al login
