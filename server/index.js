@@ -37,8 +37,14 @@ const recursosDir = path.join(__dirname, "uploads/recursos");
 if (!fs.existsSync(recursosDir)) {
   fs.mkdirSync(recursosDir, { recursive: true });
 }
+
 app.use("/uploads/recursos", express.static(recursosDir));
 
+const perfilesDir = path.join(__dirname, "uploads/perfiles");
+if (!fs.existsSync(perfilesDir)) {
+  fs.mkdirSync(perfilesDir, { recursive: true });
+}
+app.use("/uploads/perfiles", express.static(perfilesDir));
 // --- FIN DE SERVIR ARCHIVOS ESTÁTICOS ---
 // --- CONFIGURACIÓN DE MULTER (PARA SUBIDA DE ARCHIVOS) ---
 const storage = multer.diskStorage({
@@ -99,6 +105,37 @@ const recursosStorage = multer.diskStorage({
 });
 
 const uploadRecurso = multer({ storage: recursosStorage });
+
+// --- INICIA NUEVO CÓDIGO (AGREGAR) ---
+// Configuración de Multer para FOTOS DE PERFIL
+const perfilesStorage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, perfilesDir); // Guarda todas las fotos en la misma carpeta
+  },
+  filename: function (req, file, cb) {
+    const userId = req.user.id; // Usamos el ID del usuario para el nombre
+    const uniqueSuffix = Date.now();
+    const ext = path.extname(file.originalname);
+    // Ej: perfil_15_1678886400000.jpg
+    cb(null, `perfil_${userId}_${uniqueSuffix}${ext}`);
+  },
+});
+
+// Filtro para aceptar solo imágenes
+const imageFileFilter = (req, file, cb) => {
+  if (file.mimetype.startsWith("image/")) {
+    cb(null, true);
+  } else {
+    cb(new Error("Solo se permiten archivos de imagen."), false);
+  }
+};
+
+const uploadPerfil = multer({
+  storage: perfilesStorage,
+  fileFilter: imageFileFilter,
+  limits: { fileSize: 5 * 1024 * 1024 }, // Límite de 5MB
+});
+// --- TERMINA NUEVO CÓDIGO ---
 // --- TERMINA NUEVO CÓDIGO ---
 // --- CONFIGURACIÓN DE LA BASE DE DATOS ---
 const dbConfig = {
@@ -192,9 +229,10 @@ app.use("/api", apiRouter); // Montamos el router principal en /api
 apiRouter.post("/login", async (req, res) => {
   const { email, password } = req.body;
   try {
-    const [results] = await db.query("SELECT * FROM usuarios WHERE email = ?", [
-      email,
-    ]);
+    const [results] = await db.query(
+      "SELECT id, email, password, nombre, apellido_paterno, rol, foto_perfil FROM usuarios WHERE email = ?", // <-- Agrega foto_perfil
+      [email]
+    );
     if (results.length === 0) {
       return res
         .status(401)
@@ -213,6 +251,7 @@ apiRouter.post("/login", async (req, res) => {
       rol: user.rol,
       nombre: user.nombre,
       apellido_paterno: user.apellido_paterno,
+      foto_perfil: user.foto_perfil, // <-- Agrega foto_perfil
     };
     const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "8h" });
     res.json({ token, user: payload });
@@ -342,8 +381,93 @@ apiRouter.delete("/unregister-push-token", async (req, res) => {
     res.status(500).send({ message: "Error en el servidor." });
   }
 });
+// --- FIN RUTAS PUSH TOKEN ---
 
-// --- FIN DE NUEVAS RUTAS ---
+// --- INICIA NUEVO CÓDIGO (RUTAS MI PERFIL) ---
+
+// GET /api/mi-perfil - Obtener datos completos del perfil del usuario logueado
+apiRouter.get("/mi-perfil", async (req, res) => {
+  if (!req.user) {
+    return res.status(401).send({ message: "No autenticado." });
+  }
+  try {
+    // Obtenemos todos los datos (excepto password)
+    const [[perfil]] = await db.query(
+      "SELECT id, email, nombre, apellido_paterno, apellido_materno, rol, foto_perfil, genero, telefono, curp, matricula, DATE_FORMAT(fecha_nacimiento, '%Y-%m-%d') as fecha_nacimiento FROM usuarios WHERE id = ?",
+      [req.user.id]
+    );
+    if (!perfil) {
+      return res.status(404).send({ message: "Perfil no encontrado." });
+    }
+    res.json(perfil);
+  } catch (error) {
+    console.error("Error al obtener mi perfil:", error);
+    res.status(500).send({ message: "Error en el servidor." });
+  }
+});
+
+// POST /api/mi-perfil/foto - Subir/Actualizar foto de perfil
+apiRouter.post(
+  "/mi-perfil/foto",
+  uploadPerfil.single("foto"), // Usamos el nuevo multer 'uploadPerfil'
+  async (req, res) => {
+    if (!req.user) {
+      return res.status(401).send({ message: "No autenticado." });
+    }
+    if (!req.file) {
+      return res.status(400).send({ message: "No se subió ninguna imagen." });
+    }
+
+    try {
+      const nuevaFotoPath = req.file.filename; // Nombre del archivo guardado
+
+      // (Opcional) Borrar foto anterior del disco si existe
+      const [[usuarioActual]] = await db.query(
+        "SELECT foto_perfil FROM usuarios WHERE id = ?",
+        [req.user.id]
+      );
+      if (usuarioActual && usuarioActual.foto_perfil) {
+        const oldPath = path.join(perfilesDir, usuarioActual.foto_perfil);
+        fs.unlink(oldPath, (err) => {
+          if (err && err.code !== "ENOENT")
+            console.error("Error al borrar foto anterior:", err);
+        });
+      }
+
+      // Actualizar la ruta de la foto en la base de datos
+      await db.query("UPDATE usuarios SET foto_perfil = ? WHERE id = ?", [
+        nuevaFotoPath,
+        req.user.id,
+      ]);
+
+      // Devolver la nueva ruta de la foto para actualizar el frontend
+      res.json({ foto_perfil: nuevaFotoPath });
+    } catch (error) {
+      console.error("Error al actualizar foto de perfil:", error);
+      // Borrar el archivo recién subido si hubo error en la BD
+      fs.unlink(req.file.path, (err) => {
+        if (err)
+          console.error("Error al borrar archivo subido tras error:", err);
+      });
+      res.status(500).send({ message: "Error en el servidor." });
+    }
+  },
+  // Middleware para manejar errores específicos de Multer (ej. tipo de archivo, tamaño)
+  (error, req, res, next) => {
+    if (error instanceof multer.MulterError) {
+      // Error de Multer (ej. archivo muy grande)
+      return res
+        .status(400)
+        .send({ message: `Error de Multer: ${error.message}` });
+    } else if (error) {
+      // Otro error (ej. filtro de tipo de archivo)
+      return res.status(400).send({ message: error.message });
+    }
+    next();
+  }
+);
+
+// --- TERMINA NUEVO CÓDIGO (RUTAS MI PERFIL) ---
 
 // --- NUEVA RUTA "GUARDAR TODO" (PARA ADMIN Y DOCENTE) ---
 apiRouter.post("/calificar-grupo-completo", async (req, res) => {
@@ -1113,6 +1237,43 @@ adminRouter.delete("/expedientes/:id", async (req, res) => {
 });
 apiRouter.use("/admin", adminRouter); // Registra el router de admin en /api/admin
 
+// --- AGREGA ESTA FUNCIÓN HELPER ---
+// Verifica si un usuario (por ID y Rol) pertenece a un curso (grupo+asignatura)
+async function checkUserCourseMembership(
+  userId,
+  userRol,
+  grupoId,
+  asignaturaId
+) {
+  if (userRol === "docente") {
+    const [[curso]] = await db.query(
+      "SELECT * FROM grupo_asignaturas_docentes WHERE grupo_id = ? AND asignatura_id = ? AND docente_id = ?",
+      [grupoId, asignaturaId, userId]
+    );
+    return !!curso; // Devuelve true si el docente da esta clase
+  } else if (userRol === "alumno") {
+    const [[inscripcion]] = await db.query(
+      "SELECT * FROM grupo_alumnos WHERE grupo_id = ? AND alumno_id = ?",
+      [grupoId, userId]
+    );
+    // Adicionalmente, verificamos que la asignatura pertenezca al plan/grado del grupo
+    const [[grupoPlanGrado]] = await db.query(
+      "SELECT plan_estudio_id, grado_id FROM grupos WHERE id = ?",
+      [grupoId]
+    );
+    if (!grupoPlanGrado) return false;
+    const [[asignaturaValida]] = await db.query(
+      "SELECT id FROM asignaturas WHERE id = ? AND plan_estudio_id = ? AND grado_id = ?",
+      [asignaturaId, grupoPlanGrado.plan_estudio_id, grupoPlanGrado.grado_id]
+    );
+    return !!inscripcion && !!asignaturaValida; // Devuelve true si está inscrito y la materia es del grupo
+  } else if (userRol === "admin") {
+    return true; // El admin tiene acceso a todo (podríamos refinar esto si quisiéramos)
+  }
+  return false; // Otros roles no tienen acceso
+}
+// --- FIN FUNCIÓN HELPER ---
+
 // --- RUTAS DE DOCENTE ---
 const docenteRouter = express.Router();
 docenteRouter.use(isDocente); // Se asegura que solo docentes entren
@@ -1255,9 +1416,40 @@ docenteRouter.put(
 
       await db.query(sql, params);
 
+      // --- INICIA EL NUEVO CÓDIGO DE NOTIFICACIÓN ---
+      try {
+        const docenteNombre = `${req.user.nombre} ${req.user.apellido_paterno}`;
+        const mensaje = `${docenteNombre} actualizó la información del curso.`;
+        // (grupoId y asignaturaId están disponibles en req.params)
+        const urlDestino = `/alumno/grupo/${grupoId}/asignatura/${asignaturaId}/aula`;
+
+        // 1. Obtener alumnos del grupo
+        const [alumnos] = await db.query(
+          "SELECT alumno_id FROM grupo_alumnos WHERE grupo_id = ?",
+          [grupoId]
+        );
+
+        if (alumnos.length > 0) {
+          // 2. Preparar notificaciones
+          const notificacionesParaInsertar = alumnos.map((alumno) => [
+            alumno.alumno_id,
+            mensaje,
+            urlDestino,
+          ]);
+
+          // 3. Insertar
+          await db.query(
+            "INSERT INTO notificaciones (user_id, mensaje, url_destino) VALUES ?",
+            [notificacionesParaInsertar]
+          );
+        }
+      } catch (notifError) {
+        console.error("Error al crear notificaciones de config:", notifError);
+      }
+      // --- TERMINA EL NUEVO CÓDIGO DE NOTIFICACIÓN ---
+
       res.send({ message: "Aula virtual actualizada con éxito." });
     } catch (error) {
-      console.error("Error al actualizar config de aula:", error);
       res.status(500).send({ message: "Error en el servidor." });
     }
   }
@@ -1577,6 +1769,41 @@ docenteRouter.post(
           req.file.originalname,
         ]
       );
+
+      // --- INICIA EL NUEVO CÓDIGO DE NOTIFICACIÓN ---
+      try {
+        const docenteNombre = `${req.user.nombre} ${req.user.apellido_paterno}`;
+        const mensaje = `${docenteNombre} agregó un nuevo recurso (archivo): '${titulo}'`;
+        const urlDestino = `/alumno/grupo/${grupoId}/asignatura/${asignaturaId}/aula`;
+
+        // 1. Obtener alumnos del grupo
+        const [alumnos] = await db.query(
+          "SELECT alumno_id FROM grupo_alumnos WHERE grupo_id = ?",
+          [grupoId]
+        );
+
+        if (alumnos.length > 0) {
+          // 2. Preparar notificaciones
+          const notificacionesParaInsertar = alumnos.map((alumno) => [
+            alumno.alumno_id,
+            mensaje,
+            urlDestino,
+          ]);
+
+          // 3. Insertar
+          await db.query(
+            "INSERT INTO notificaciones (user_id, mensaje, url_destino) VALUES ?",
+            [notificacionesParaInsertar]
+          );
+        }
+      } catch (notifError) {
+        console.error(
+          "Error al crear notificaciones de recurso (archivo):",
+          notifError
+        );
+      }
+      // --- TERMINA EL NUEVO CÓDIGO DE NOTIFICACIÓN ---
+
       res.status(201).send({ message: "Archivo subido con éxito." });
     } catch (error) {
       console.error("Error al subir recurso archivo:", error);
@@ -1604,6 +1831,41 @@ docenteRouter.post(
         "INSERT INTO recursos_clase (grupo_id, asignatura_id, docente_id, titulo, tipo_recurso, ruta_o_url) VALUES (?, ?, ?, ?, 'enlace', ?)",
         [grupoId, asignaturaId, docente_id, titulo, url]
       );
+
+      // --- INICIA EL NUEVO CÓDIGO DE NOTIFICACIÓN ---
+      try {
+        const docenteNombre = `${req.user.nombre} ${req.user.apellido_paterno}`;
+        const mensaje = `${docenteNombre} agregó un nuevo recurso (enlace): '${titulo}'`;
+        const urlDestino = `/alumno/grupo/${grupoId}/asignatura/${asignaturaId}/aula`;
+
+        // 1. Obtener alumnos del grupo
+        const [alumnos] = await db.query(
+          "SELECT alumno_id FROM grupo_alumnos WHERE grupo_id = ?",
+          [grupoId]
+        );
+
+        if (alumnos.length > 0) {
+          // 2. Preparar notificaciones
+          const notificacionesParaInsertar = alumnos.map((alumno) => [
+            alumno.alumno_id,
+            mensaje,
+            urlDestino,
+          ]);
+
+          // 3. Insertar
+          await db.query(
+            "INSERT INTO notificaciones (user_id, mensaje, url_destino) VALUES ?",
+            [notificacionesParaInsertar]
+          );
+        }
+      } catch (notifError) {
+        console.error(
+          "Error al crear notificaciones de recurso (enlace):",
+          notifError
+        );
+      }
+      // --- TERMINA EL NUEVO CÓDIGO DE NOTIFICACIÓN ---
+
       res.status(201).send({ message: "Enlace guardado con éxito." });
     } catch (error) {
       console.error("Error al guardar recurso enlace:", error);
@@ -1815,9 +2077,285 @@ docenteRouter.post(
     }
   }
 );
-// --- TERMINA NUEVO CÓDIGO ---
 
-// --- TERMINA NUEVO CÓDIGO ---
+// Middleware para proteger rutas del foro
+const canAccessForo = async (req, res, next) => {
+  // --- AGREGA ESTAS DOS LÍNEAS ---
+  console.log("canAccessForo Middleware - URL:", req.originalUrl);
+  console.log("canAccessForo Middleware - Params:", req.params);
+  // --- FIN AGREGAR ---
+  if (!req.user) return res.status(401).send({ message: "No autenticado." });
+
+  // Necesitamos grupoId y asignaturaId para verificar pertenencia
+  // Intentamos obtenerlos de params o del body (para POST) o de la info del hilo (para respuestas)
+  let grupoId, asignaturaId;
+  if (req.params.grupoId && req.params.asignaturaId) {
+    grupoId = req.params.grupoId;
+    asignaturaId = req.params.asignaturaId;
+  } else if (req.params.hiloId) {
+    // Si estamos operando sobre un hilo, buscamos sus IDs
+    const [[hiloInfo]] = await db.query(
+      "SELECT grupo_id, asignatura_id FROM foros_hilos WHERE id = ?",
+      [req.params.hiloId]
+    );
+    if (!hiloInfo)
+      return res.status(404).send({ message: "Hilo no encontrado." });
+    grupoId = hiloInfo.grupo_id;
+    asignaturaId = hiloInfo.asignatura_id;
+  } else {
+    return res
+      .status(400)
+      .send({ message: "Faltan identificadores del curso." });
+  }
+
+  const hasAccess = await checkUserCourseMembership(
+    req.user.id,
+    req.user.rol,
+    grupoId,
+    asignaturaId
+  );
+  if (!hasAccess) {
+    return res
+      .status(403)
+      .send({ message: "No tienes permiso para acceder a este foro." });
+  }
+  // Si tiene acceso, guardamos los IDs para usarlos después si es necesario
+  req.cursoInfo = { grupoId, asignaturaId };
+  next();
+};
+
+const foroRouter = express.Router(); // Creamos un router específico para el foro
+
+// foroRouter.use(canAccessForo);
+
+// GET /api/foro/:grupoId/:asignaturaId/hilos - Obtener lista de hilos
+foroRouter.get(
+  "/:grupoId/:asignaturaId/hilos",
+  canAccessForo,
+  async (req, res) => {
+    try {
+      const [hilos] = await db.query(
+        `SELECT fh.*, u.nombre as creador_nombre, u.apellido_paterno as creador_apellido, u.rol as creador_rol,
+              (SELECT COUNT(*) FROM foros_respuestas fr WHERE fr.hilo_id = fh.id) as num_respuestas,
+              (SELECT MAX(fecha_creacion) FROM foros_respuestas fr WHERE fr.hilo_id = fh.id) as ultima_respuesta_fecha
+       FROM foros_hilos fh
+       JOIN usuarios u ON fh.creado_por_usuario_id = u.id
+       WHERE fh.grupo_id = ? AND fh.asignatura_id = ?
+       ORDER BY ultima_respuesta_fecha DESC, fh.fecha_creacion DESC`, // Ordenar por actividad reciente
+        [req.params.grupoId, req.params.asignaturaId]
+      );
+      res.json(hilos);
+    } catch (error) {
+      console.error("Error al obtener hilos del foro:", error);
+      res.status(500).send({ message: "Error en el servidor." });
+    }
+  }
+);
+
+// POST /api/foro/:grupoId/:asignaturaId/hilos - Crear un nuevo hilo
+foroRouter.post(
+  "/:grupoId/:asignaturaId/hilos",
+  canAccessForo,
+  async (req, res) => {
+    try {
+      const { titulo, mensaje_original } = req.body;
+      if (!titulo || !mensaje_original) {
+        return res
+          .status(400)
+          .send({ message: "El título y el mensaje son requeridos." });
+      }
+      const [result] = await db.query(
+        "INSERT INTO foros_hilos (grupo_id, asignatura_id, titulo, mensaje_original, creado_por_usuario_id) VALUES (?, ?, ?, ?, ?)",
+        [
+          req.params.grupoId,
+          req.params.asignaturaId,
+          titulo,
+          mensaje_original,
+          req.user.id,
+        ]
+      );
+
+      // --- INICIA EL NUEVO CÓDIGO DE NOTIFICACIÓN ---
+      try {
+        const newHiloId = result.insertId;
+        const creadorId = req.user.id;
+        const creadorNombre = `${req.user.nombre} ${req.user.apellido_paterno}`;
+        const mensaje = `${creadorNombre} inició un nuevo hilo: '${titulo}'`;
+        const urlBase = `/grupo/${req.params.grupoId}/asignatura/${req.params.asignaturaId}/foro/hilo/${newHiloId}`;
+
+        // 1. Obtener docente del curso
+        const [[docente]] = await db.query(
+          "SELECT docente_id FROM grupo_asignaturas_docentes WHERE grupo_id = ? AND asignatura_id = ?",
+          [req.params.grupoId, req.params.asignaturaId]
+        );
+
+        // 2. Obtener alumnos del grupo
+        const [alumnos] = await db.query(
+          "SELECT alumno_id FROM grupo_alumnos WHERE grupo_id = ?",
+          [req.params.grupoId]
+        );
+
+        const notificacionesParaInsertar = [];
+
+        // 3. Notificar al docente (si no es el creador)
+        if (docente && docente.docente_id !== creadorId) {
+          notificacionesParaInsertar.push([
+            docente.docente_id,
+            mensaje,
+            `/docente${urlBase}`, // URL para el docente
+          ]);
+        }
+
+        // 4. Notificar a los alumnos (que no sean el creador)
+        for (const alumno of alumnos) {
+          if (alumno.alumno_id !== creadorId) {
+            notificacionesParaInsertar.push([
+              alumno.alumno_id,
+              mensaje,
+              `/alumno${urlBase}`, // URL para el alumno
+            ]);
+          }
+        }
+
+        // 5. Insertar todas las notificaciones
+        if (notificacionesParaInsertar.length > 0) {
+          await db.query(
+            "INSERT INTO notificaciones (user_id, mensaje, url_destino) VALUES ?",
+            [notificacionesParaInsertar]
+          );
+        }
+        console.log(`Notificaciones creadas para nuevo hilo ${newHiloId}`);
+      } catch (notifError) {
+        console.error("Error al crear notificaciones de hilo:", notifError);
+        // No detener la respuesta principal por esto
+      }
+      // --- TERMINA EL NUEVO CÓDIGO DE NOTIFICACIÓN ---
+
+      res
+        .status(201)
+        .json({ message: "Hilo creado con éxito.", hiloId: result.insertId });
+    } catch (error) {
+      console.error("Error al crear hilo:", error);
+      res.status(500).send({ message: "Error en el servidor." });
+    }
+  }
+);
+
+// GET /api/foro/hilo/:hiloId - Obtener detalles de un hilo y sus respuestas
+foroRouter.get("/hilo/:hiloId", canAccessForo, async (req, res) => {
+  try {
+    const { hiloId } = req.params;
+    // Obtener info del hilo
+    const [[hilo]] = await db.query(
+      `SELECT fh.*, u.nombre as creador_nombre, u.apellido_paterno as creador_apellido, u.rol as creador_rol
+          FROM foros_hilos fh
+          JOIN usuarios u ON fh.creado_por_usuario_id = u.id
+          WHERE fh.id = ?`,
+      [hiloId]
+    );
+    if (!hilo) return res.status(404).send({ message: "Hilo no encontrado." });
+
+    // Obtener respuestas
+    const [respuestas] = await db.query(
+      `SELECT fr.*, u.nombre as creador_nombre, u.apellido_paterno as creador_apellido, u.rol as creador_rol
+           FROM foros_respuestas fr
+           JOIN usuarios u ON fr.creado_por_usuario_id = u.id
+           WHERE fr.hilo_id = ?
+           ORDER BY fr.fecha_creacion ASC`, // Mostrar respuestas en orden cronológico
+      [hiloId]
+    );
+
+    res.json({ hilo, respuestas });
+  } catch (error) {
+    console.error("Error al obtener detalles del hilo:", error);
+    res.status(500).send({ message: "Error en el servidor." });
+  }
+});
+
+// POST /api/foro/hilo/:hiloId/respuestas - Publicar una respuesta
+foroRouter.post("/hilo/:hiloId/respuestas", canAccessForo, async (req, res) => {
+  try {
+    const { mensaje } = req.body;
+    if (!mensaje) {
+      return res.status(400).send({ message: "El mensaje es requerido." });
+    }
+    await db.query(
+      "INSERT INTO foros_respuestas (hilo_id, mensaje, creado_por_usuario_id) VALUES (?, ?, ?)",
+      [req.params.hiloId, mensaje, req.user.id]
+    );
+
+    // --- INICIA EL NUEVO CÓDIGO DE NOTIFICACIÓN ---
+    try {
+      const { hiloId } = req.params;
+      const replierId = req.user.id;
+      const replierNombre = `${req.user.nombre} ${req.user.apellido_paterno}`;
+
+      // 1. Obtener info del hilo (grupo, asignatura, título)
+      const [[hilo]] = await db.query(
+        "SELECT grupo_id, asignatura_id, titulo FROM foros_hilos WHERE id = ?",
+        [hiloId]
+      );
+
+      if (!hilo) throw new Error("Hilo no encontrado para notificar");
+
+      const { grupo_id, asignatura_id, titulo } = hilo;
+      const mensaje = `${replierNombre} respondió en el hilo: '${titulo}'`;
+      const urlBase = `/grupo/${grupo_id}/asignatura/${asignatura_id}/foro/hilo/${hiloId}`;
+
+      // 2. Obtener todos los participantes (docente y alumnos)
+      const [participantes] = await db.query(
+        `(SELECT docente_id as user_id, 'docente' as rol FROM grupo_asignaturas_docentes WHERE grupo_id = ? AND asignatura_id = ?)
+         UNION
+         (SELECT alumno_id as user_id, 'alumno' as rol FROM grupo_alumnos WHERE grupo_id = ?)`,
+        [grupo_id, asignatura_id, grupo_id]
+      );
+
+      const notificacionesParaInsertar = [];
+      const notifiedUserIds = new Set();
+      notifiedUserIds.add(replierId); // No notificar a quien respondió
+
+      // 3. Iterar y construir notificaciones para todos los demás
+      for (const p of participantes) {
+        // Usamos Set.has() para asegurar que no notificamos al mismo usuario dos veces
+        if (!notifiedUserIds.has(p.user_id)) {
+          const urlDestino = `/${p.rol}${urlBase}`; // Crea la URL correcta (ej. /docente/... o /alumno/...)
+          notificacionesParaInsertar.push([p.user_id, mensaje, urlDestino]);
+          notifiedUserIds.add(p.user_id);
+        }
+      }
+
+      // 4. Insertar todas las notificaciones
+      if (notificacionesParaInsertar.length > 0) {
+        await db.query(
+          "INSERT INTO notificaciones (user_id, mensaje, url_destino) VALUES ?",
+          [notificacionesParaInsertar]
+        );
+      }
+      console.log(`Notificaciones creadas para respuesta en hilo ${hiloId}`);
+    } catch (notifError) {
+      console.error("Error al crear notificaciones de respuesta:", notifError);
+      // No detener la respuesta principal por esto
+    }
+    // --- TERMINA EL NUEVO CÓDIGO DE NOTIFICACIÓN ---
+
+    res.status(201).json({ message: "Respuesta publicada con éxito." });
+  } catch (error) {
+    console.error("Error al publicar respuesta:", error);
+    res.status(500).send({ message: "Error en el servidor." });
+  }
+});
+
+// Aplicar el middleware de protección a todas las rutas del foro y registrar el router
+apiRouter.use("/foro", foroRouter);
+
+// --- TERMINA NUEVO CÓDIGO (RUTAS FORO) ---
+
+// --- RUTAS DE DOCENTE --- (Ahora estas líneas van después del bloque del foro)
+// const docenteRouter = express.Router();
+// docenteRouter.use(isDocente);
+// // ... (resto de rutas de docente) ...
+// apiRouter.use("/docente", docenteRouter);
+
 apiRouter.use("/docente", docenteRouter); // Registra el router de docente en /api/docente
 
 // --- RUTAS DE ALUMNO ---

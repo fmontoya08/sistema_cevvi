@@ -207,6 +207,31 @@ CREATE TABLE asistencia (
     UNIQUE KEY (sesion_id, alumno_id) -- Un alumno solo puede tener un registro por sesión
 );
 
+-- 14. Tabla de Hilos o Temas del Foro
+CREATE TABLE foros_hilos (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    grupo_id INT NOT NULL,
+    asignatura_id INT NOT NULL,
+    titulo VARCHAR(255) NOT NULL,
+    mensaje_original TEXT NOT NULL,
+    creado_por_usuario_id INT NOT NULL,
+    fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (grupo_id) REFERENCES grupos(id) ON DELETE CASCADE,
+    FOREIGN KEY (asignatura_id) REFERENCES asignaturas(id) ON DELETE CASCADE,
+    FOREIGN KEY (creado_por_usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
+);
+
+-- 15. Tabla de Respuestas a los Hilos del Foro
+CREATE TABLE foros_respuestas (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    hilo_id INT NOT NULL,
+    mensaje TEXT NOT NULL,
+    creado_por_usuario_id INT NOT NULL,
+    fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (hilo_id) REFERENCES foros_hilos(id) ON DELETE CASCADE,
+    FOREIGN KEY (creado_por_usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
+);
+
 -- --- TERMINA NUEVO CÓDIGO ---
 
 

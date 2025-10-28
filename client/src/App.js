@@ -52,6 +52,8 @@ import {
   Paperclip, // <-- NUEVO
   ClipboardCheck, // <-- NUEVO
   History, // <-- NUEVO
+  MessageSquare, // <-- NUEVO
+  Send, // <-- NUEVO
 } from "lucide-react";
 
 // --- CONFIGURACIÓN DE AXIOS ---
@@ -153,14 +155,26 @@ const AuthProvider = ({ children }) => {
     navigate("/login");
   }, [navigate]);
 
+  // --- AGREGA ESTA FUNCIÓN ---
+  const updateProfilePic = useCallback((newPicUrl) => {
+    setUser((currentUser) => {
+      if (!currentUser) return null; // Si no hay usuario, no hagas nada
+      const updatedUser = { ...currentUser, foto_perfil: newPicUrl };
+      localStorage.setItem("user", JSON.stringify(updatedUser)); // Actualiza localStorage
+      return updatedUser; // Actualiza el estado
+    });
+  }, []);
+  // --- FIN AGREGAR ---
+
   const value = useMemo(
     () => ({
       user,
       loading,
       login,
       logout,
+      updateProfilePic,
     }),
-    [user, loading, login, logout]
+    [user, loading, login, logout, updateProfilePic]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -401,9 +415,42 @@ const AdminLayout = () => {
           <h1 className="text-2xl font-semibold text-gray-800">
             Panel de Administrador
           </h1>
+          {/* --- REEMPLAZA ESTE DIV --- */}
           <div className="flex items-center space-x-4">
-            <NotificationBell /> {/* <-- AÑADIDO */}
-            <span className="text-gray-600">Bienvenido, {user?.nombre}</span>
+            <NotificationBell />
+            {/* Link al Perfil con Foto */}
+            <Link
+              to={
+                user?.rol === "admin" ? "/mi-perfil" : `/${user?.rol}/mi-perfil`
+              }
+              className="flex items-center space-x-2 text-gray-600 hover:text-principal"
+            >
+              <img
+                // Construye la URL de la foto o usa placeholder
+                src={
+                  user?.foto_perfil
+                    ? `http://localhost:3001/uploads/perfiles/${user.foto_perfil}`
+                    : `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                        user?.nombre || "?"
+                      )}+${encodeURIComponent(
+                        user?.apellido_paterno || "?"
+                      )}&background=random&color=fff`
+                }
+                alt="Perfil"
+                className="w-8 h-8 rounded-full object-cover border border-gray-300"
+                // Fallback por si la imagen no carga
+                onError={(e) => {
+                  e.target.onerror = null;
+                  e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                    user?.nombre || "?"
+                  )}+${encodeURIComponent(
+                    user?.apellido_paterno || "?"
+                  )}&background=random&color=fff`;
+                }}
+              />
+              <span>{user?.nombre}</span>
+            </Link>
+            {/* Botón Logout */}
             <button
               onClick={logout}
               className="text-gray-500 hover:text-principal"
@@ -412,6 +459,7 @@ const AdminLayout = () => {
               <LogOut size={22} />
             </button>
           </div>
+          {/* --- FIN REEMPLAZO --- */}
         </header>
         <div className="p-6">
           <Outlet />
@@ -470,9 +518,42 @@ const DocenteLayout = () => {
           <h1 className="text-2xl font-semibold text-gray-800">
             Portal Docente
           </h1>
+          {/* --- REEMPLAZA ESTE DIV --- */}
           <div className="flex items-center space-x-4">
-            <NotificationBell /> {/* <-- AÑADIDO */}
-            <span className="text-gray-600">Bienvenido, {user?.nombre}</span>
+            <NotificationBell />
+            {/* Link al Perfil con Foto */}
+            <Link
+              to={
+                user?.rol === "admin" ? "/mi-perfil" : `/${user?.rol}/mi-perfil`
+              }
+              className="flex items-center space-x-2 text-gray-600 hover:text-principal"
+            >
+              <img
+                // Construye la URL de la foto o usa placeholder
+                src={
+                  user?.foto_perfil
+                    ? `http://localhost:3001/uploads/perfiles/${user.foto_perfil}`
+                    : `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                        user?.nombre || "?"
+                      )}+${encodeURIComponent(
+                        user?.apellido_paterno || "?"
+                      )}&background=random&color=fff`
+                }
+                alt="Perfil"
+                className="w-8 h-8 rounded-full object-cover border border-gray-300"
+                // Fallback por si la imagen no carga
+                onError={(e) => {
+                  e.target.onerror = null;
+                  e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                    user?.nombre || "?"
+                  )}+${encodeURIComponent(
+                    user?.apellido_paterno || "?"
+                  )}&background=random&color=fff`;
+                }}
+              />
+              <span>{user?.nombre}</span>
+            </Link>
+            {/* Botón Logout */}
             <button
               onClick={logout}
               className="text-gray-500 hover:text-principal"
@@ -481,6 +562,7 @@ const DocenteLayout = () => {
               <LogOut size={22} />
             </button>
           </div>
+          {/* --- FIN REEMPLAZO --- */}
         </header>
         <div className="p-6">
           <Outlet />
@@ -528,9 +610,42 @@ const AlumnoLayout = () => {
           <h1 className="text-2xl font-semibold text-gray-800">
             Portal del Alumno
           </h1>
+          {/* --- REEMPLAZA ESTE DIV --- */}
           <div className="flex items-center space-x-4">
-            <NotificationBell /> {/* <-- AÑADIDO */}
-            <span className="text-gray-600">Bienvenido, {user?.nombre}</span>
+            <NotificationBell />
+            {/* Link al Perfil con Foto */}
+            <Link
+              to={
+                user?.rol === "admin" ? "/mi-perfil" : `/${user?.rol}/mi-perfil`
+              }
+              className="flex items-center space-x-2 text-gray-600 hover:text-principal"
+            >
+              <img
+                // Construye la URL de la foto o usa placeholder
+                src={
+                  user?.foto_perfil
+                    ? `http://localhost:3001/uploads/perfiles/${user.foto_perfil}`
+                    : `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                        user?.nombre || "?"
+                      )}+${encodeURIComponent(
+                        user?.apellido_paterno || "?"
+                      )}&background=random&color=fff`
+                }
+                alt="Perfil"
+                className="w-8 h-8 rounded-full object-cover border border-gray-300"
+                // Fallback por si la imagen no carga
+                onError={(e) => {
+                  e.target.onerror = null;
+                  e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                    user?.nombre || "?"
+                  )}+${encodeURIComponent(
+                    user?.apellido_paterno || "?"
+                  )}&background=random&color=fff`;
+                }}
+              />
+              <span>{user?.nombre}</span>
+            </Link>
+            {/* Botón Logout */}
             <button
               onClick={logout}
               className="text-gray-500 hover:text-principal"
@@ -539,6 +654,7 @@ const AlumnoLayout = () => {
               <LogOut size={22} />
             </button>
           </div>
+          {/* --- FIN REEMPLAZO --- */}
         </header>
         <div className="p-6">
           <Outlet />
@@ -586,9 +702,42 @@ const AspiranteLayout = () => {
           <h1 className="text-2xl font-semibold text-gray-800">
             Portal del Aspirante
           </h1>
+          {/* --- REEMPLAZA ESTE DIV --- */}
           <div className="flex items-center space-x-4">
-            <NotificationBell /> {/* <-- AÑADIDO */}
-            <span className="text-gray-600">Bienvenido, {user?.nombre}</span>
+            <NotificationBell />
+            {/* Link al Perfil con Foto */}
+            <Link
+              to={
+                user?.rol === "admin" ? "/mi-perfil" : `/${user?.rol}/mi-perfil`
+              }
+              className="flex items-center space-x-2 text-gray-600 hover:text-principal"
+            >
+              <img
+                // Construye la URL de la foto o usa placeholder
+                src={
+                  user?.foto_perfil
+                    ? `http://localhost:3001/uploads/perfiles/${user.foto_perfil}`
+                    : `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                        user?.nombre || "?"
+                      )}+${encodeURIComponent(
+                        user?.apellido_paterno || "?"
+                      )}&background=random&color=fff`
+                }
+                alt="Perfil"
+                className="w-8 h-8 rounded-full object-cover border border-gray-300"
+                // Fallback por si la imagen no carga
+                onError={(e) => {
+                  e.target.onerror = null;
+                  e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                    user?.nombre || "?"
+                  )}+${encodeURIComponent(
+                    user?.apellido_paterno || "?"
+                  )}&background=random&color=fff`;
+                }}
+              />
+              <span>{user?.nombre}</span>
+            </Link>
+            {/* Botón Logout */}
             <button
               onClick={logout}
               className="text-gray-500 hover:text-principal"
@@ -597,6 +746,7 @@ const AspiranteLayout = () => {
               <LogOut size={22} />
             </button>
           </div>
+          {/* --- FIN REEMPLAZO --- */}
         </header>
         <div className="p-6">
           <Outlet />
@@ -3419,55 +3569,65 @@ const AspiranteDashboardPage = () => {
   );
 };
 
-// --- INICIA NUEVO CÓDIGO (AGREGAR) ---
+// Helper para botones de Pestañas
+const TabButton = ({ label, isActive, onClick, icon: Icon }) => (
+  <button
+    onClick={onClick}
+    className={`flex items-center px-4 py-3 font-semibold border-b-2 transition-colors duration-150 ${
+      isActive
+        ? "border-principal text-principal"
+        : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+    }`}
+  >
+    {Icon && <Icon size={18} className="mr-2" />}
+    {label}
+  </button>
+);
 
-// Este es el nuevo componente de AULA VIRTUAL (MODIFICADO)
 const AulaVirtualPage = () => {
   const { grupoId, asignaturaId } = useParams();
   const { user } = useAuth();
   const [config, setConfig] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [isEditing, setIsEditing] = useState(false);
+  const [isEditing, setIsEditing] = useState(false); // Para editar la config del curso
   const [formData, setFormData] = useState({
-    enlace_videollamada: "",
-    descripcion_curso: "",
-    objetivos: "", // <-- NUEVO
-    evaluacion: "", // <-- NUEVO
-    horario: "", // <-- NUEVO
-    contacto_docente: "", // <-- NUEVO
+    /* ... estado inicial ... */
   });
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const navigate = useNavigate();
 
+  // Estados de las secciones
   const [tareas, setTareas] = useState([]);
   const [loadingTareas, setLoadingTareas] = useState(true);
-  const [showCrearTareaModal, setShowCrearTareaModal] = useState(false);
-
-  const [showEntregarModal, setShowEntregarModal] = useState(false);
-  const [selectedTask, setSelectedTask] = useState(null);
-
   const [recursos, setRecursos] = useState([]);
   const [loadingRecursos, setLoadingRecursos] = useState(true);
+  const [historialAsistencia, setHistorialAsistencia] = useState([]); // Alumno
+  const [loadingHistorial, setLoadingHistorial] = useState(false); // Alumno
+
+  // Estados de los Modales
+  const [showCrearTareaModal, setShowCrearTareaModal] = useState(false);
+  const [showEntregarModal, setShowEntregarModal] = useState(false);
+  const [selectedTask, setSelectedTask] = useState(null);
   const [showRecursoModal, setShowRecursoModal] = useState(false);
 
-  // --- INICIA NUEVO CÓDIGO (ASISTENCIA) ---
-  const [historialAsistencia, setHistorialAsistencia] = useState([]);
-  const [loadingHistorial, setLoadingHistorial] = useState(false);
-  const [isCreatingSession, setIsCreatingSession] = useState(false); // Para el botón del docente
-  // --- TERMINA NUEVO CÓDIGO (ASISTENCIA) ---
+  // --- NUEVO ESTADO PARA PESTAÑAS Y FORO ---
+  const [activeTab, setActiveTab] = useState("info"); // 'info', 'tareas', 'recursos', 'foro'
+  const [hilosForo, setHilosForo] = useState([]);
+  const [loadingHilos, setLoadingHilos] = useState(true);
+  const [showNuevoHiloModal, setShowNuevoHiloModal] = useState(false);
+  const [isCreatingSession, setIsCreatingSession] = useState(false);
+  // --- FIN NUEVO ESTADO ---
 
+  // --- Funciones de Carga (fetchAulaConfig, fetchTareas, fetchRecursos, fetchHistorialAsistencia se mantienen igual) ---
   const fetchAulaConfig = useCallback(async () => {
     try {
-      // --- ESTA ES LA LÍNEA CORREGIDA ---
       const { data } = await api.get(
         `/${user.rol}/aula-virtual/${grupoId}/${asignaturaId}/config`
       );
-      // --- FIN CORRECCIÓN ---
-      setConfig(data); // <-- Aquí ya vienen modalidad y estatus
-      // Sincroniza formData con los datos cargados
+      setConfig(data);
       setFormData({
-        enlace_videollallamada: data.enlace_videollamada || "",
+        enlace_videollamada: data.enlace_videollamada || "",
         descripcion_curso: data.descripcion_curso || "",
         objetivos: data.objetivos || "",
         evaluacion: data.evaluacion || "",
@@ -3475,11 +3635,11 @@ const AulaVirtualPage = () => {
         contacto_docente: data.contacto_docente || "",
       });
     } catch (error) {
-      console.error("Error al cargar la configuración del aula", error);
+      console.error("Error al cargar config", error);
     } finally {
-      setLoading(false); // <-- Asegúrate que setLoading esté aquí
+      setLoading(false);
     }
-  }, [user.rol, grupoId, asignaturaId]); // Las dependencias están bien
+  }, [user.rol, grupoId, asignaturaId]);
 
   const fetchTareas = useCallback(async () => {
     setLoadingTareas(true);
@@ -3507,12 +3667,10 @@ const AulaVirtualPage = () => {
     } finally {
       setLoadingRecursos(false);
     }
-  }, [user.rol, grupoId, asignaturaId]);
+  }, [user.rol, grupoId, asignaturaId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // --- INICIA NUEVO CÓDIGO (ASISTENCIA) ---
-  // Función para cargar el historial de asistencia (solo Alumno)
   const fetchHistorialAsistencia = useCallback(async () => {
-    if (user.rol !== "alumno") return; // Solo para alumnos
+    if (user.rol !== "alumno") return;
     setLoadingHistorial(true);
     try {
       const { data } = await api.get(
@@ -3520,24 +3678,49 @@ const AulaVirtualPage = () => {
       );
       setHistorialAsistencia(data);
     } catch (error) {
-      console.error("Error al cargar historial de asistencia", error);
+      console.error("Error al cargar historial", error);
     } finally {
       setLoadingHistorial(false);
     }
   }, [user.rol, grupoId, asignaturaId]);
-  // --- TERMINA NUEVO CÓDIGO (ASISTENCIA) ---
 
-  // Cargar datos al montar el componente
+  // --- NUEVA FUNCIÓN PARA CARGAR HILOS DEL FORO ---
+  const fetchHilos = useCallback(async () => {
+    setLoadingHilos(true);
+    try {
+      // Usamos la ruta /api/foro/... que creamos (accesible por ambos roles)
+      const { data } = await api.get(`/foro/${grupoId}/${asignaturaId}/hilos`);
+      setHilosForo(data);
+    } catch (error) {
+      console.error("Error al cargar hilos del foro", error);
+      setHilosForo([]);
+    } finally {
+      setLoadingHilos(false);
+    }
+  }, [grupoId, asignaturaId]);
+  // --- FIN NUEVA FUNCIÓN ---
+
+  // Cargar todos los datos al montar
   useEffect(() => {
-    fetchAulaConfig();
-    fetchTareas();
-    fetchRecursos();
-    // --- MODIFICADO ---
-    fetchHistorialAsistencia(); // Llama a la nueva función
-    // --- FIN MODIFICADO ---
-  }, [fetchAulaConfig, fetchTareas, fetchRecursos, fetchHistorialAsistencia]); // <-- Añadido fetchHistorialAsistencia
+    setLoading(true); // Ponemos el loading principal
+    Promise.all([
+      fetchAulaConfig(),
+      fetchTareas(),
+      fetchRecursos(),
+      fetchHistorialAsistencia(),
+      fetchHilos(), // <-- Llamamos a cargar hilos
+    ]).then(() => {
+      // setLoading(false); // fetchAulaConfig ya lo hace en su finally
+    });
+  }, [
+    fetchAulaConfig,
+    fetchTareas,
+    fetchRecursos,
+    fetchHistorialAsistencia,
+    fetchHilos,
+  ]); // <-- Agregamos fetchHilos
 
-  // ... (handleSave, handleChange, handleOpenEntregarModal, handleDeleteRecurso se quedan igual) ...
+  // --- Funciones de Acción (handleSave, handleChange, etc. se mantienen igual) ---
   const handleSave = async (e) => {
     e.preventDefault();
     setIsSaving(true);
@@ -3550,72 +3733,86 @@ const AulaVirtualPage = () => {
       setIsSaving(false);
       setSaveSuccess(true);
       setIsEditing(false);
+      // Actualizar config localmente para no recargar todo
       setConfig((prev) => ({ ...prev, ...formData }));
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (error) {
       console.error("Error al guardar", error);
       setIsSaving(false);
-      alert("Error al guardar la configuración.");
+      alert("Error al guardar.");
     }
   };
-
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
-
   const handleOpenEntregarModal = (tarea) => {
     setSelectedTask(tarea);
     setShowEntregarModal(true);
   };
-
   const handleDeleteRecurso = async (recursoId) => {
-    if (window.confirm("¿Estás seguro de eliminar este recurso?")) {
+    if (window.confirm("¿Seguro?")) {
       try {
         await api.delete(`/docente/aula-virtual/recurso/${recursoId}`);
         fetchRecursos();
       } catch (error) {
-        console.error("Error al eliminar recurso", error);
-        alert("Error al eliminar el recurso.");
+        console.error("Error al eliminar", error);
+        alert("Error.");
       }
     }
   };
-
-  // --- INICIA NUEVO CÓDIGO (ASISTENCIA) ---
-  // Iniciar Sesión de Hoy (solo Docente)
   const handleIniciarSesionHoy = async () => {
-    setIsCreatingSession(true);
+    setIsCreatingSession(true); // 1. Muestra "Iniciando..."
     try {
-      // (Podríamos añadir un prompt para el tema_sesion aquí si quisiéramos)
+      // 2. Llama a la API para crear/obtener la sesión de hoy
       const { data } = await api.post(
         `/docente/aula-virtual/${grupoId}/${asignaturaId}/iniciar-sesion`,
-        {} // Podríamos enviar { tema_sesion: '...' }
+        {
+          // Opcional: podrías enviar un tema si tuvieras un input para ello
+          // tema_sesion: "Clase del día"
+        }
       );
-      // Navegar a la página de asistencia con el ID de sesión devuelto
-      navigate(
-        `/docente/grupo/${grupoId}/asignatura/${asignaturaId}/asistencia/${data.sesionId}`
-      );
+
+      const { sesionId } = data; // 3. Obtiene el ID de la sesión
+
+      if (sesionId) {
+        // 4. Redirige al docente a la página de asistencia con ese ID
+        navigate(
+          `/docente/grupo/${grupoId}/asignatura/${asignaturaId}/asistencia/${sesionId}`
+        );
+      } else {
+        throw new Error("No se recibió un ID de sesión.");
+      }
     } catch (error) {
-      console.error("Error al iniciar sesión", error);
-      alert("Error al iniciar la sesión de asistencia.");
+      // 5. Maneja errores
+      console.error("Error al iniciar la sesión de asistencia:", error);
+      alert(
+        "Error al iniciar la sesión: " +
+          (error.response?.data?.message || error.message)
+      );
     } finally {
+      // 6. Restablece el botón
       setIsCreatingSession(false);
     }
   };
-  // --- TERMINA NUEVO CÓDIGO (ASISTENCIA) ---
 
-  if (loading) return <p>Cargando aula virtual...</p>;
-  if (!config) return <p>No se pudo cargar la configuración del aula.</p>;
+  if (loading)
+    return <p className="text-center mt-10">Cargando aula virtual...</p>;
+  if (!config)
+    return (
+      <p className="text-center mt-10 text-red-600">
+        No se pudo cargar la configuración del aula.
+      </p>
+    );
 
-  // Componente del formulario de edición (solo para docentes)
+  // --- Componente para Formulario de Editar Config (renderDocenteForm se mantiene igual) ---
+  // Componente para Formulario de Editar Config
   const renderDocenteForm = () => (
     <form
       onSubmit={handleSave}
       className="bg-gray-50 p-6 rounded-lg shadow-inner space-y-6"
     >
-      {" "}
-      {/* Añadido space-y-6 */}
-      {/* --- BLOQUE ENLACE VIDEOCONFERENCIA (igual que antes) --- */}
+      {/* Bloque Enlace Videoconferencia */}
       <div>
         <label
           htmlFor="enlace_videollamada"
@@ -3630,7 +3827,7 @@ const AulaVirtualPage = () => {
           value={formData.enlace_videollamada}
           onChange={handleChange}
           placeholder="https://zoom.us/j/..."
-          className="w-full ..."
+          className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-principal focus:border-principal"
         />
         <button
           type="button"
@@ -3640,13 +3837,13 @@ const AulaVirtualPage = () => {
               enlace_videollamada: `https://meet.jit.si/CEVVI-G${grupoId}-A${asignaturaId}`,
             }))
           }
-          className="flex items-center mt-2 ..."
+          className="flex items-center mt-2 px-3 py-1 text-sm text-white bg-secundario rounded-md hover:opacity-90"
         >
           <Sparkles size={16} className="mr-2" />
           Generar enlace de Jitsi Meet
         </button>
       </div>
-      {/* --- NUEVOS CAMPOS ESTRUCTURADOS --- */}
+      {/* Nuevos Campos Estructurados */}
       <div>
         <label
           htmlFor="objetivos"
@@ -3661,7 +3858,7 @@ const AulaVirtualPage = () => {
           value={formData.objetivos}
           onChange={handleChange}
           placeholder="Al finalizar el curso, el alumno será capaz de..."
-          className="w-full px-3 py-2 mt-1 border ..."
+          className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-principal focus:border-principal"
         ></textarea>
       </div>
       <div>
@@ -3678,7 +3875,7 @@ const AulaVirtualPage = () => {
           value={formData.evaluacion}
           onChange={handleChange}
           placeholder="Ej: Tareas 50%, Examen Final 30%, Participación 20%"
-          className="w-full px-3 py-2 mt-1 border ..."
+          className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-principal focus:border-principal"
         ></textarea>
       </div>
       <div>
@@ -3695,7 +3892,7 @@ const AulaVirtualPage = () => {
           value={formData.horario}
           onChange={handleChange}
           placeholder="Ej: Lunes y Miércoles 10:00 - 12:00. Consultas: Viernes 11:00"
-          className="w-full px-3 py-2 mt-1 border ..."
+          className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-principal focus:border-principal"
         ></textarea>
       </div>
       <div>
@@ -3712,10 +3909,10 @@ const AulaVirtualPage = () => {
           value={formData.contacto_docente}
           onChange={handleChange}
           placeholder="Ej: Email: profe@mail.com | Sala virtual: https://meet..."
-          className="w-full px-3 py-2 mt-1 border ..."
+          className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-principal focus:border-principal"
         ></textarea>
       </div>
-      {/* --- CAMPO DESCRIPCIÓN (Opcional, puede mantenerse o quitarse si los otros son suficientes) --- */}
+      {/* Campo Descripción General (Opcional) */}
       <div>
         <label
           htmlFor="descripcion_curso"
@@ -3730,11 +3927,10 @@ const AulaVirtualPage = () => {
           value={formData.descripcion_curso}
           onChange={handleChange}
           placeholder="Bienvenidos al curso..."
-          className="w-full px-3 py-2 mt-1 border ..."
+          className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-principal focus:border-principal"
         ></textarea>
       </div>
-      {/* --- FIN NUEVOS CAMPOS --- */}
-      {/* --- BOTONES GUARDAR/CANCELAR (igual que antes) --- */}
+      {/* Botones Guardar/Cancelar */}
       <div className="flex justify-end items-center space-x-4 mt-6">
         {saveSuccess && (
           <span className="flex items-center text-green-600">
@@ -3744,14 +3940,14 @@ const AulaVirtualPage = () => {
         <button
           type="button"
           onClick={() => setIsEditing(false)}
-          className="px-4 py-2 bg-gray-200 ..."
+          className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
         >
           Cancelar
         </button>
         <button
           type="submit"
           disabled={isSaving}
-          className="px-4 py-2 bg-principal ..."
+          className="px-4 py-2 bg-principal text-white rounded-md hover:opacity-90 disabled:bg-gray-400"
         >
           {isSaving ? "Guardando..." : "Guardar Cambios"}
         </button>
@@ -3759,7 +3955,9 @@ const AulaVirtualPage = () => {
     </form>
   );
 
-  // ... (renderTareasList y renderRecursosList se quedan igual) ...
+  // --- Componentes para Renderizar Secciones (Listas) ---
+  // renderTareasList y renderRecursosList se mantienen igual
+  // Componente para mostrar la lista de tareas
   const renderTareasList = () => {
     if (loadingTareas) return <p>Cargando tareas...</p>;
     if (tareas.length === 0) {
@@ -3771,11 +3969,11 @@ const AulaVirtualPage = () => {
         </p>
       );
     }
-
     return (
       <div className="space-y-4">
         {tareas.map((tarea) => {
           if (user.rol === "docente") {
+            // El DOCENTE ve un Link a la página de detalles
             return (
               <Link
                 key={tarea.id}
@@ -3803,7 +4001,7 @@ const AulaVirtualPage = () => {
               </Link>
             );
           }
-
+          // El ALUMNO ve un Botón que abre el modal
           const isEntregada = !!tarea.entrega_id;
           const isCalificada = tarea.calificacion !== null;
           return (
@@ -3852,7 +4050,7 @@ const AulaVirtualPage = () => {
       </div>
     );
   };
-
+  // Componente para mostrar la lista de RECURSOS
   const renderRecursosList = () => {
     if (loadingRecursos) return <p>Cargando recursos...</p>;
     if (recursos.length === 0) {
@@ -3872,7 +4070,6 @@ const AulaVirtualPage = () => {
           const url = isEnlace
             ? recurso.ruta_o_url
             : `http://localhost:3001/uploads/recursos/${recurso.ruta_o_url}`;
-
           return (
             <div
               key={recurso.id}
@@ -3908,256 +4105,401 @@ const AulaVirtualPage = () => {
     );
   };
 
-  // Componente de vista (para alumnos y docente cuando no edita)
-  const renderView = () => (
-    <div className="bg-white p-6 rounded-lg shadow">
-      {/* Botón Editar y Registrar Asistencia (Docente) */}
-      <div className="flex justify-end items-center mb-4 space-x-2">
-        {" "}
-        {/* Contenedor para botones flotantes */}
-        {user.rol === "docente" && (
-          <>
-            <button
-              onClick={handleIniciarSesionHoy}
-              disabled={isCreatingSession}
-              className="flex items-center px-4 py-2 text-sm font-semibold text-white bg-secundario rounded-md hover:opacity-90 disabled:bg-gray-400"
-            >
-              <ClipboardCheck size={16} className="mr-1" />
-              {isCreatingSession ? "Iniciando..." : "Asistencia Hoy"}
-            </button>
-            <button
-              onClick={() => setIsEditing(true)}
-              className="flex items-center px-3 py-1 text-sm bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
-            >
-              <Edit2 size={14} className="mr-1" /> Editar Info.
-            </button>
-          </>
-        )}
-      </div>
-
-      {/* Sección Sesión en Vivo (igual que antes) */}
-      <h3 className="text-xl font-semibold mb-4 text-gray-800">
-        Sesión en Vivo
-      </h3>
-      {config.enlace_videollamada ? (
-        <a href={config.enlace_videollamada} /*...*/>
-          <Video size={20} className="mr-2" />
-          Entrar a la Clase Virtual
-        </a>
-      ) : (
-        <p className="text-gray-500">{/*...*/}</p>
-      )}
-
-      {/* --- SECCIÓN ACERCA DEL CURSO (REESTRUCTURADA) --- */}
-      <div className="mt-8 pt-6 border-t">
-        <div className="flex justify-between items-start mb-4">
-          {" "}
-          {/* items-start para alinear badges */}
-          <h3 className="text-xl font-semibold text-gray-800">
-            Acerca del Curso
-          </h3>
-          {/* Indicadores de Modalidad y Estatus */}
-          <div className="flex space-x-2">
-            <span
-              className={`capitalize px-3 py-1 rounded-full text-xs font-semibold ${
-                config.modalidad === "presencial"
-                  ? "bg-blue-100 text-blue-800"
-                  : "bg-purple-100 text-purple-800"
-              }`}
-            >
-              {config.modalidad}
-            </span>
-            <span
-              className={`capitalize px-3 py-1 rounded-full text-xs font-semibold ${
-                config.estatus === "activo"
-                  ? "bg-green-100 text-green-800"
-                  : "bg-red-100 text-red-800"
-              }`}
-            >
-              {config.estatus}
-            </span>
-          </div>
-        </div>
-
-        {/* Mostrar campos estructurados si tienen contenido */}
-        {config.objetivos && (
-          <div className="mb-4 p-4 bg-gray-50 rounded border border-gray-200">
-            <h4 className="font-semibold text-gray-700 mb-1">Objetivos</h4>
-            <p className="text-sm text-gray-600 whitespace-pre-wrap">
-              {config.objetivos}
-            </p>
-          </div>
-        )}
-        {config.evaluacion && (
-          <div className="mb-4 p-4 bg-gray-50 rounded border border-gray-200">
-            <h4 className="font-semibold text-gray-700 mb-1">Evaluación</h4>
-            <p className="text-sm text-gray-600 whitespace-pre-wrap">
-              {config.evaluacion}
-            </p>
-          </div>
-        )}
-        {config.horario && (
-          <div className="mb-4 p-4 bg-gray-50 rounded border border-gray-200">
-            <h4 className="font-semibold text-gray-700 mb-1">Horario</h4>
-            <p className="text-sm text-gray-600 whitespace-pre-wrap">
-              {config.horario}
-            </p>
-          </div>
-        )}
-        {config.contacto_docente && (
-          <div className="mb-4 p-4 bg-gray-50 rounded border border-gray-200">
-            <h4 className="font-semibold text-gray-700 mb-1">
-              Contacto Docente
-            </h4>
-            <p className="text-sm text-gray-600 whitespace-pre-wrap">
-              {config.contacto_docente}
-            </p>
-          </div>
-        )}
-        {/* Descripción General (Opcional) */}
-        {config.descripcion_curso && (
-          <div className="mb-4">
-            <h4 className="font-semibold text-gray-700 mb-1">
-              Descripción General
-            </h4>
-            <p className="text-sm text-gray-600 whitespace-pre-wrap">
-              {config.descripcion_curso}
-            </p>
-          </div>
-        )}
-        {/* Mensaje si no hay nada configurado */}
-        {!config.objetivos &&
-          !config.evaluacion &&
-          !config.horario &&
-          !config.contacto_docente &&
-          !config.descripcion_curso && (
-            <p className="text-gray-500 text-sm">
-              El docente aún no ha agregado información detallada sobre el
-              curso.
-            </p>
-          )}
-      </div>
-      {/* --- FIN SECCIÓN ACERCA DEL CURSO --- */}
-
-      {/* Secciones Tareas, Recursos, Historial Asistencia (Alumno), Botón Calificación Final (Docente) - Se quedan igual */}
-      {/* ... (código existente para las otras secciones) ... */}
-      <div className="mt-8 pt-6 border-t">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-xl font-semibold text-gray-800">
-            Tareas y Actividades
-          </h3>
-          {user.rol === "docente" && (
-            <button
-              onClick={() => setShowCrearTareaModal(true)}
-              className="flex items-center px-4 py-2 font-semibold text-white bg-principal rounded-md hover:opacity-90"
-            >
-              <Plus size={18} className="mr-2" />
-              Crear Tarea
-            </button>
-          )}
-        </div>
-        {renderTareasList()}
-      </div>
-
-      <div className="mt-8 pt-6 border-t">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-xl font-semibold text-gray-800">
-            Material de Clase y Recursos
-          </h3>
-          {user.rol === "docente" && (
-            <button
-              onClick={() => setShowRecursoModal(true)}
-              className="flex items-center px-4 py-2 font-semibold text-white bg-secundario rounded-md hover:opacity-90"
-            >
-              <Plus size={18} className="mr-2" />
-              Agregar Recurso
-            </button>
-          )}
-        </div>
-        {renderRecursosList()}
-      </div>
-
-      {user.rol === "alumno" && (
-        <div className="mt-8 pt-6 border-t">
-          <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center">
-            <History size={20} className="mr-2" /> Mi Historial de Asistencia
-          </h3>
-          {loadingHistorial ? (
-            <p>Cargando historial...</p>
-          ) : historialAsistencia.length === 0 ? (
-            <p className="text-gray-500">
-              Aún no hay registros de asistencia para este curso.
-            </p>
-          ) : (
-            <div className="max-h-60 overflow-y-auto border rounded-md">
-              <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-gray-50">
-                  <tr>
-                    <th className="px-4 py-2 text-left">Fecha</th>
-                    <th className="px-4 py-2 text-left">Estatus</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {historialAsistencia.map((reg) => (
-                    <tr
-                      key={reg.sesion_id}
-                      className="border-b last:border-b-0"
-                    >
-                      <td className="px-4 py-2">
-                        {(() => {
-                          const parts = reg.fecha_sesion.split("-");
-                          const fecha = new Date(
-                            parseInt(parts[0]),
-                            parseInt(parts[1]) - 1,
-                            parseInt(parts[2])
-                          );
-                          return fecha.toLocaleDateString();
-                        })()}
-                      </td>
-                      <td className="px-4 py-2">
-                        <span
-                          className={`capitalize font-medium ${
-                            reg.mi_estatus === "presente"
-                              ? "text-green-600"
-                              : reg.mi_estatus === "justificado"
-                              ? "text-yellow-600"
-                              : "text-red-600"
-                          }`}
-                        >
-                          {reg.mi_estatus}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
-
-      {user.rol === "docente" && (
-        <div className="mt-8 pt-6 border-t">
+  // --- NUEVO: Componente para Renderizar Lista del Foro ---
+  const renderForoList = () => {
+    if (loadingHilos) return <p>Cargando discusiones...</p>;
+    if (hilosForo.length === 0) {
+      return (
+        <div className="text-center py-8 px-4 bg-gray-50 rounded-md border border-gray-200">
+          <MessageSquare size={40} className="mx-auto text-gray-400" />
+          <h4 className="font-semibold text-lg mt-3">No hay discusiones aún</h4>
+          <p className="text-gray-600 mt-1">¡Sé el primero en iniciar una!</p>
           <button
-            onClick={() =>
-              navigate(`/docente/grupo/${grupoId}/asignatura/${asignaturaId}`)
-            }
-            className="inline-flex items-center px-4 py-2 font-semibold text-gray-600 bg-gray-200 rounded-md hover:bg-gray-300"
+            onClick={() => setShowNuevoHiloModal(true)}
+            className="mt-4 flex items-center mx-auto px-4 py-2 font-semibold text-white bg-principal rounded-md hover:opacity-90"
           >
-            <GraduationCap size={18} className="mr-2" />
-            Ir a Calificación Final del Grupo
+            <Plus size={18} className="mr-2" />
+            Iniciar Nueva Discusión
           </button>
         </div>
-      )}
+      );
+    }
+    return (
+      <div className="space-y-4">
+        {/* Botón para Nuevo Hilo arriba de la lista */}
+        <div className="text-right mb-4">
+          <button
+            onClick={() => setShowNuevoHiloModal(true)}
+            className="flex items-center ml-auto px-4 py-2 font-semibold text-white bg-principal rounded-md hover:opacity-90"
+          >
+            <Plus size={18} className="mr-2" />
+            Iniciar Nueva Discusión
+          </button>
+        </div>
+        {/* Lista de Hilos */}
+        {hilosForo.map((hilo) => (
+          <Link
+            key={hilo.id}
+            // Enlace a la página del hilo (ajustar ruta si es alumno)
+            to={
+              user.rol === "docente"
+                ? `/docente/grupo/${grupoId}/asignatura/${asignaturaId}/foro/hilo/${hilo.id}`
+                : `/alumno/grupo/${grupoId}/asignatura/${asignaturaId}/foro/hilo/${hilo.id}`
+            }
+            className="block p-4 bg-white rounded-lg border shadow-sm hover:shadow-md transition-shadow"
+          >
+            <div className="flex justify-between items-start">
+              <div>
+                <h4 className="font-bold text-lg text-principal mb-1">
+                  {hilo.titulo}
+                </h4>
+                <p className="text-xs text-gray-500">
+                  Iniciado por {hilo.creador_nombre} {hilo.creador_apellido} (
+                  {hilo.creador_rol}) -{" "}
+                  {new Date(hilo.fecha_creacion).toLocaleDateString()}
+                </p>
+              </div>
+              <div className="text-right flex-shrink-0 ml-4">
+                <p className="text-sm font-semibold text-gray-700">
+                  {hilo.num_respuestas}{" "}
+                  {hilo.num_respuestas === 1 ? "Respuesta" : "Respuestas"}
+                </p>
+                {hilo.ultima_respuesta_fecha && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Última:{" "}
+                    {new Date(hilo.ultima_respuesta_fecha).toLocaleDateString()}
+                  </p>
+                )}
+              </div>
+            </div>
+          </Link>
+        ))}
+      </div>
+    );
+  };
+  // --- FIN NUEVO COMPONENTE ---
+
+  // --- Componente Principal de Vista (Rediseñado con Pestañas) ---
+  // --- Componente Principal de Vista (Rediseñado con Pestañas) ---
+  const renderView = () => (
+    <div>
+      {/* Encabezado con Nombre y Botones */}
+      <div className="mb-6 flex justify-between items-center">
+        <h2 className="text-3xl font-bold text-gray-800">Aula Virtual</h2>
+        <div className="flex items-center space-x-2">
+          {user.rol === "docente" && (
+            <>
+              {/* --- BOTÓN 1 CAMBIADO A NARANJA --- */}
+              <button
+                onClick={handleIniciarSesionHoy}
+                disabled={isCreatingSession}
+                className="flex items-center px-4 py-2 text-sm font-semibold text-white bg-orange-500 rounded-md hover:bg-orange-600 disabled:bg-gray-400"
+              >
+                <ClipboardCheck size={16} className="mr-1" />
+                {isCreatingSession ? "Iniciando..." : "Asistencia Hoy"}
+              </button>
+
+              {/* --- BOTÓN 2 CAMBIADO A NARANJA --- */}
+              <button
+                onClick={() => setIsEditing(true)}
+                className="flex items-center px-3 py-1 text-sm font-semibold text-white bg-orange-500 rounded-md hover:bg-orange-600"
+              >
+                <Edit2 size={14} className="mr-1" /> Editar Info. Curso
+              </button>
+
+              {/* --- BOTÓN 3 MOVIDO AQUÍ Y CAMBIADO A NARANJA --- */}
+              <button
+                onClick={() =>
+                  navigate(
+                    `/docente/grupo/${grupoId}/asignatura/${asignaturaId}`
+                  )
+                }
+                className="flex items-center px-4 py-2 text-sm font-semibold text-white bg-orange-500 rounded-md hover:bg-orange-600"
+              >
+                <GraduationCap size={16} className="mr-1" />
+                Calificación Final
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Barra de Pestañas */}
+      <div className="border-b border-gray-200 mb-6">
+        <nav className="-mb-px flex space-x-6" aria-label="Tabs">
+          <TabButton
+            label="Información"
+            isActive={activeTab === "info"}
+            onClick={() => setActiveTab("info")}
+            icon={Book}
+          />
+          <TabButton
+            label="Tareas"
+            isActive={activeTab === "tareas"}
+            onClick={() => setActiveTab("tareas")}
+            icon={FileText}
+          />
+          <TabButton
+            label="Recursos"
+            isActive={activeTab === "recursos"}
+            onClick={() => setActiveTab("recursos")}
+            icon={Paperclip}
+          />
+          <TabButton
+            label="Foro"
+            isActive={activeTab === "foro"}
+            onClick={() => setActiveTab("foro")}
+            icon={MessageSquare}
+          />
+        </nav>
+      </div>
+
+      {/* Contenido de la Pestaña Activa */}
+      <div className="bg-white p-6 rounded-lg shadow">
+        {/* Pestaña: Información */}
+        {activeTab === "info" && (
+          <div>
+            <div className="flex justify-between items-start mb-4">
+              <h3 className="text-xl font-semibold text-gray-800">
+                Acerca del Curso
+              </h3>
+              <div className="flex space-x-2">
+                <span
+                  className={`capitalize px-3 py-1 rounded-full text-xs font-semibold ${
+                    config.modalidad === "presencial"
+                      ? "bg-blue-100 text-blue-800"
+                      : "bg-purple-100 text-purple-800"
+                  }`}
+                >
+                  {config.modalidad}
+                </span>
+                <span
+                  className={`capitalize px-3 py-1 rounded-full text-xs font-semibold ${
+                    config.estatus === "activo"
+                      ? "bg-green-100 text-green-800"
+                      : "bg-red-100 text-red-800"
+                  }`}
+                >
+                  {config.estatus}
+                </span>
+              </div>
+            </div>
+            {/* Enlace Sesión en Vivo */}
+            <div className="mb-6 pb-6 border-b">
+              <h4 className="font-semibold text-gray-700 mb-2">
+                Sesión en Vivo
+              </h4>
+              {config.enlace_videollamada ? (
+                <a
+                  href={config.enlace_videollamada}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center px-4 py-2 text-sm font-semibold text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors"
+                >
+                  <Video size={18} className="mr-1 inline" />
+                  Entrar a Clase
+                </a>
+              ) : (
+                <p className="text-gray-500 text-sm">
+                  {user.rol === "alumno"
+                    ? "El docente aún no ha publicado el enlace."
+                    : "Aún no has configurado un enlace."}
+                </p>
+              )}
+            </div>
+            {/* Campos Estructurados */}
+            {config.objetivos && (
+              <div className="mb-4">
+                <h4 className="font-semibold text-sm text-gray-500 mb-1">
+                  Objetivos
+                </h4>
+                <p className="text-gray-700 whitespace-pre-wrap">
+                  {config.objetivos}
+                </p>
+              </div>
+            )}
+            {config.evaluacion && (
+              <div className="mb-4">
+                <h4 className="font-semibold text-sm text-gray-500 mb-1">
+                  Evaluación
+                </h4>
+                <p className="text-gray-700 whitespace-pre-wrap">
+                  {config.evaluacion}
+                </p>
+              </div>
+            )}
+            {config.horario && (
+              <div className="mb-4">
+                <h4 className="font-semibold text-sm text-gray-500 mb-1">
+                  Horario
+                </h4>
+                <p className="text-gray-700 whitespace-pre-wrap">
+                  {config.horario}
+                </p>
+              </div>
+            )}
+            {config.contacto_docente && (
+              <div className="mb-4">
+                <h4 className="font-semibold text-sm text-gray-500 mb-1">
+                  Contacto Docente
+                </h4>
+                <p className="text-gray-700 whitespace-pre-wrap">
+                  {config.contacto_docente}
+                </p>
+              </div>
+            )}
+            {config.descripcion_curso && (
+              <div className="mb-4">
+                <h4 className="font-semibold text-sm text-gray-500 mb-1">
+                  Descripción General
+                </h4>
+                <p className="text-gray-700 whitespace-pre-wrap">
+                  {config.descripcion_curso}
+                </p>
+              </div>
+            )}
+            {!config.objetivos &&
+              !config.evaluacion &&
+              !config.horario &&
+              !config.contacto_docente &&
+              !config.descripcion_curso && (
+                <p className="text-gray-500 text-sm">
+                  El docente aún no ha agregado información detallada.
+                </p>
+              )}
+
+            {/* Historial Asistencia (Alumno) */}
+            {user.rol === "alumno" && (
+              <div className="mt-6 pt-6 border-t">
+                {" "}
+                {/* Separador visual */}
+                <h4 className="font-semibold text-gray-700 mb-2 flex items-center">
+                  <History size={18} className="mr-2" /> Mi Historial de
+                  Asistencia
+                </h4>
+                {loadingHistorial ? (
+                  <p>Cargando historial...</p>
+                ) : historialAsistencia.length === 0 ? (
+                  <p className="text-gray-500 text-sm">
+                    Aún no hay registros de asistencia para este curso.
+                  </p>
+                ) : (
+                  <div className="max-h-60 overflow-y-auto border rounded-md">
+                    {" "}
+                    {/* Limita altura y añade scroll */}
+                    <table className="w-full text-sm">
+                      <thead className="sticky top-0 bg-gray-50">
+                        <tr>
+                          <th className="px-4 py-2 text-left">Fecha</th>
+                          <th className="px-4 py-2 text-left">Estatus</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {historialAsistencia.map((reg) => (
+                          <tr
+                            key={reg.sesion_id}
+                            className="border-b last:border-b-0"
+                          >
+                            <td className="px-4 py-2">
+                              {(() => {
+                                // Ejemplo: reg.fecha_sesion es "2025-10-26"
+                                const parts = reg.fecha_sesion.split("-"); // ["2025", "10", "26"]
+                                // Creamos la fecha: new Date(año, mesIndex (0-11), dia)
+                                const fecha = new Date(
+                                  parseInt(parts[0]),
+                                  parseInt(parts[1]) - 1,
+                                  parseInt(parts[2])
+                                );
+                                return fecha.toLocaleDateString(); // Formatear localmente
+                              })()}
+                            </td>
+                            <td className="px-4 py-2">
+                              <span
+                                className={`capitalize font-medium ${
+                                  reg.mi_estatus === "presente"
+                                    ? "text-green-600"
+                                    : reg.mi_estatus === "justificado"
+                                    ? "text-yellow-600"
+                                    : "text-red-600"
+                                }`}
+                              >
+                                {reg.mi_estatus}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Pestaña: Tareas */}
+        {activeTab === "tareas" && (
+          <div>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-semibold text-gray-800">
+                Tareas y Actividades
+              </h3>
+              {user.rol === "docente" && (
+                <button
+                  onClick={() => setShowCrearTareaModal(true)}
+                  className="flex items-center px-4 py-2 font-semibold text-white bg-principal rounded-md hover:opacity-90"
+                >
+                  <Plus size={18} className="mr-2" />
+                  Crear Tarea
+                </button>
+              )}
+            </div>
+            {renderTareasList()}
+          </div>
+        )}
+
+        {/* Pestaña: Recursos */}
+        {activeTab === "recursos" && (
+          <div>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-semibold text-gray-800">
+                Material de Clase y Recursos
+              </h3>
+              {user.rol === "docente" && (
+                <button
+                  onClick={() => setShowRecursoModal(true)}
+                  className="flex items-center px-4 py-2 font-semibold text-white bg-secundario rounded-md hover:opacity-90"
+                >
+                  <Plus size={18} className="mr-2" />
+                  Agregar Recurso
+                </button>
+              )}
+            </div>
+            {renderRecursosList()}
+          </div>
+        )}
+
+        {/* Pestaña: Foro */}
+        {activeTab === "foro" && (
+          <div>
+            <h3 className="text-xl font-semibold text-gray-800 mb-4">
+              Foro de Discusión
+            </h3>
+            {renderForoList()} {/* Llama a la nueva función */}
+          </div>
+        )}
+      </div>
+
+      {/* Botón Ir a Calificación Final (Docente) - YA NO ESTÁ AQUÍ */}
     </div>
   );
 
-  // ... (El return principal y los modales al final se quedan igual) ...
+  // --- Renderizado Principal y Modales ---
   return (
     <div>
-      <h2 className="text-3xl font-bold text-gray-800 mb-6">Aula Virtual</h2>
       {isEditing ? renderDocenteForm() : renderView()}
 
+      {/* Modales (se mantienen igual, solo añadimos el de Nuevo Hilo) */}
       <CrearTareaModal
         show={showCrearTareaModal}
         onClose={() => setShowCrearTareaModal(false)}
@@ -4165,14 +4507,12 @@ const AulaVirtualPage = () => {
         asignaturaId={asignaturaId}
         onTareaCreada={fetchTareas}
       />
-
       <EntregarTareaModal
         show={showEntregarModal}
         onClose={() => setShowEntregarModal(false)}
         tarea={selectedTask}
         onEntregaExitosa={fetchTareas}
       />
-
       <AgregarRecursoModal
         show={showRecursoModal}
         onClose={() => setShowRecursoModal(false)}
@@ -4180,11 +4520,18 @@ const AulaVirtualPage = () => {
         asignaturaId={asignaturaId}
         onRecursoAgregado={fetchRecursos}
       />
+      {/* --- NUEVO MODAL --- */}
+      <NuevoHiloModal
+        show={showNuevoHiloModal}
+        onClose={() => setShowNuevoHiloModal(false)}
+        grupoId={grupoId}
+        asignaturaId={asignaturaId}
+        onHiloCreado={fetchHilos}
+      />
     </div>
   );
-}; // <-- Cierre del componente AulaVirtualPage
-
-// --- INICIA CÓDIGO FALTANTE (AGREGAR) ---
+};
+// --- FIN REEMPLAZO AulaVirtualPage ---
 
 // Modal para crear una nueva tarea (solo Docente)
 const CrearTareaModal = ({
@@ -4864,6 +5211,322 @@ const AgregarRecursoModal = ({
 };
 // --- FIN AGREGAR ---
 
+// --- INICIA NUEVO CÓDIGO (AGREGAR) ---
+
+// Modal para Crear Nuevo Hilo en el Foro
+const NuevoHiloModal = ({
+  show,
+  onClose,
+  grupoId,
+  asignaturaId,
+  onHiloCreado,
+}) => {
+  const [titulo, setTitulo] = useState("");
+  const [mensaje, setMensaje] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const resetForm = () => {
+    setTitulo("");
+    setMensaje("");
+    setError("");
+  };
+
+  const handleClose = () => {
+    resetForm();
+    onClose();
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!titulo.trim() || !mensaje.trim()) {
+      setError("El título y el mensaje son requeridos.");
+      return;
+    }
+    setError("");
+    setIsSaving(true);
+    try {
+      await api.post(`/foro/${grupoId}/${asignaturaId}/hilos`, {
+        titulo,
+        mensaje_original: mensaje,
+      });
+      onHiloCreado(); // Refresca la lista de hilos
+      handleClose();
+    } catch (error) {
+      console.error("Error al crear hilo", error);
+      setError(error.response?.data?.message || "Error al crear el hilo.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  if (!show) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6 relative">
+        <button
+          onClick={handleClose}
+          className="absolute top-4 right-4 text-gray-500 hover:text-gray-800"
+        >
+          <X size={24} />
+        </button>
+        <h3 className="text-2xl font-bold mb-6">Iniciar Nueva Discusión</h3>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label
+              htmlFor="hilo_titulo"
+              className="block text-sm font-medium text-gray-700"
+            >
+              Título del Hilo
+            </label>
+            <input
+              type="text"
+              id="hilo_titulo"
+              value={titulo}
+              onChange={(e) => setTitulo(e.target.value)}
+              required
+              maxLength={255}
+              className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md"
+              placeholder="Ej: Duda sobre la Tarea 3"
+            />
+          </div>
+          <div>
+            <label
+              htmlFor="hilo_mensaje"
+              className="block text-sm font-medium text-gray-700"
+            >
+              Mensaje Inicial
+            </label>
+            <textarea
+              id="hilo_mensaje"
+              rows="6"
+              value={mensaje}
+              onChange={(e) => setMensaje(e.target.value)}
+              required
+              className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md"
+              placeholder="Describe tu pregunta o el tema de discusión..."
+            ></textarea>
+          </div>
+          {error && <p className="text-sm text-red-600">{error}</p>}
+          <div className="flex justify-end space-x-4 mt-8">
+            <button
+              type="button"
+              onClick={handleClose}
+              className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={isSaving}
+              className="flex items-center px-4 py-2 bg-principal text-white rounded-md hover:opacity-90 disabled:bg-gray-400"
+            >
+              <Plus size={18} className="mr-2" />
+              {isSaving ? "Publicando..." : "Crear Hilo"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+// --- TERMINA NUEVO CÓDIGO ---
+
+// --- INICIA NUEVO CÓDIGO (AGREGAR) ---
+
+// Página para ver un Hilo del Foro y sus Respuestas
+const HiloPage = () => {
+  const { grupoId, asignaturaId, hiloId } = useParams();
+  const { user } = useAuth(); // Para saber quién está respondiendo
+  const [hilo, setHilo] = useState(null);
+  const [respuestas, setRespuestas] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [nuevaRespuesta, setNuevaRespuesta] = useState("");
+  const [isPosting, setIsPosting] = useState(false);
+  const [errorRespuesta, setErrorRespuesta] = useState("");
+
+  // Función para cargar el hilo y sus respuestas
+  const fetchHilo = useCallback(async () => {
+    try {
+      setLoading(true);
+      const { data } = await api.get(`/foro/hilo/${hiloId}`);
+      setHilo(data.hilo);
+      setRespuestas(data.respuestas);
+    } catch (error) {
+      console.error("Error al cargar el hilo", error);
+      // Aquí podríamos redirigir si el hilo no se encuentra (404)
+    } finally {
+      setLoading(false);
+    }
+  }, [hiloId]);
+
+  useEffect(() => {
+    fetchHilo();
+  }, [fetchHilo]);
+
+  // Manejar el envío de una nueva respuesta
+  const handlePostRespuesta = async (e) => {
+    e.preventDefault();
+    if (!nuevaRespuesta.trim()) {
+      setErrorRespuesta("La respuesta no puede estar vacía.");
+      return;
+    }
+    setErrorRespuesta("");
+    setIsPosting(true);
+    try {
+      await api.post(`/foro/hilo/${hiloId}/respuestas`, {
+        mensaje: nuevaRespuesta,
+      });
+      setNuevaRespuesta(""); // Limpiar el campo
+      fetchHilo(); // Recargar las respuestas para ver la nueva
+    } catch (error) {
+      console.error("Error al publicar respuesta", error);
+      setErrorRespuesta(
+        error.response?.data?.message || "Error al enviar la respuesta."
+      );
+    } finally {
+      setIsPosting(false);
+    }
+  };
+
+  // Helper para mostrar un avatar simple basado en iniciales y rol
+  const UserAvatar = ({ nombre, apellido, rol }) => {
+    const iniciales = `${nombre?.charAt(0) || ""}${
+      apellido?.charAt(0) || ""
+    }`.toUpperCase();
+    const bgColor =
+      rol === "docente"
+        ? "bg-secundario"
+        : rol === "admin"
+        ? "bg-red-500"
+        : "bg-principal";
+    return (
+      <div
+        className={`flex-shrink-0 w-10 h-10 rounded-full ${bgColor} text-white flex items-center justify-center font-bold text-sm mr-3`}
+      >
+        {iniciales}
+      </div>
+    );
+  };
+
+  if (loading) return <p>Cargando discusión...</p>;
+  if (!hilo) return <p>Hilo no encontrado.</p>;
+
+  return (
+    <div className="max-w-4xl mx-auto">
+      <Link
+        to={`/docente/grupo/${grupoId}/asignatura/${asignaturaId}/aula`} // Ajustar si es alumno
+        className="flex items-center text-principal mb-6 hover:underline"
+      >
+        <ArrowLeft size={18} className="mr-2" />
+        Volver al Aula Virtual / Foro
+      </Link>
+
+      {/* Mensaje Original del Hilo */}
+      <div className="bg-white p-6 rounded-lg shadow mb-6 border-l-4 border-principal">
+        <h2 className="text-2xl font-bold text-gray-800 mb-3">{hilo.titulo}</h2>
+        <div className="flex items-start mb-4">
+          <UserAvatar
+            nombre={hilo.creador_nombre}
+            apellido={hilo.creador_apellido}
+            rol={hilo.creador_rol}
+          />
+          <div>
+            <p className="font-semibold text-gray-700">
+              {hilo.creador_nombre} {hilo.creador_apellido}{" "}
+              <span className="text-xs capitalize text-gray-500">
+                ({hilo.creador_rol})
+              </span>
+            </p>
+            <p className="text-xs text-gray-500">
+              {new Date(hilo.fecha_creacion).toLocaleString()}
+            </p>
+          </div>
+        </div>
+        <p className="text-gray-700 whitespace-pre-wrap">
+          {hilo.mensaje_original}
+        </p>
+      </div>
+
+      <h3 className="text-xl font-semibold text-gray-800 mb-4">
+        Respuestas ({respuestas.length})
+      </h3>
+
+      {/* Lista de Respuestas */}
+      <div className="space-y-4 mb-8">
+        {respuestas.map((respuesta) => (
+          <div
+            key={respuesta.id}
+            className="bg-white p-4 rounded-lg shadow flex items-start"
+          >
+            <UserAvatar
+              nombre={respuesta.creador_nombre}
+              apellido={respuesta.creador_apellido}
+              rol={respuesta.creador_rol}
+            />
+            <div className="flex-1">
+              <p className="font-semibold text-gray-700 text-sm">
+                {respuesta.creador_nombre} {respuesta.creador_apellido}{" "}
+                <span className="text-xs capitalize text-gray-500">
+                  ({respuesta.creador_rol})
+                </span>
+              </p>
+              <p className="text-xs text-gray-500 mb-2">
+                {new Date(respuesta.fecha_creacion).toLocaleString()}
+              </p>
+              <p className="text-gray-700 text-sm whitespace-pre-wrap">
+                {respuesta.mensaje}
+              </p>
+            </div>
+          </div>
+        ))}
+        {respuestas.length === 0 && (
+          <p className="text-gray-500 text-center py-4">
+            Aún no hay respuestas. ¡Sé el primero en participar!
+          </p>
+        )}
+      </div>
+
+      {/* Formulario para Nueva Respuesta */}
+      <form
+        onSubmit={handlePostRespuesta}
+        className="bg-white p-4 rounded-lg shadow sticky bottom-4"
+      >
+        <label
+          htmlFor="nueva_respuesta"
+          className="block text-sm font-medium text-gray-700 mb-1"
+        >
+          Escribe tu respuesta:
+        </label>
+        <textarea
+          id="nueva_respuesta"
+          rows="3"
+          value={nuevaRespuesta}
+          onChange={(e) => setNuevaRespuesta(e.target.value)}
+          required
+          className="w-full px-3 py-2 border border-gray-300 rounded-md mb-2"
+          placeholder="Aporta a la discusión..."
+        ></textarea>
+        {errorRespuesta && (
+          <p className="text-xs text-red-600 mb-2">{errorRespuesta}</p>
+        )}
+        <div className="flex justify-end">
+          <button
+            type="submit"
+            disabled={isPosting}
+            className="flex items-center px-4 py-2 font-semibold text-white bg-principal rounded-md hover:opacity-90 disabled:bg-gray-400"
+          >
+            <Send size={16} className="mr-2" />
+            {isPosting ? "Enviando..." : "Publicar Respuesta"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+};
+// --- TERMINA NUEVO CÓDIGO ---
+
 // Página de Detalles de Tarea (solo Docente)
 const DetalleTareaDocentePage = () => {
   const { grupoId, asignaturaId, tareaId } = useParams();
@@ -5178,6 +5841,204 @@ const AsistenciaPage = () => {
 };
 // --- TERMINA NUEVO CÓDIGO ---
 
+// --- INICIA NUEVO CÓDIGO (AGREGAR) ---
+
+// Página "Mi Perfil" (Común para todos los roles)
+const MiPerfilPage = () => {
+  const { user, updateProfilePic } = useAuth(); // Usamos updateProfilePic del contexto
+  const [perfil, setPerfil] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+  const [uploadSuccess, setUploadSuccess] = useState(false);
+
+  // Cargar datos del perfil
+  const fetchPerfil = useCallback(async () => {
+    try {
+      setLoading(true);
+      const { data } = await api.get("/mi-perfil");
+      setPerfil(data);
+    } catch (error) {
+      console.error("Error al cargar perfil", error);
+      // Aquí podríamos redirigir o mostrar un error persistente
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchPerfil();
+  }, [fetchPerfil]);
+
+  // Manejar selección de archivo
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file && file.type.startsWith("image/")) {
+      setSelectedFile(file);
+      setUploadError(""); // Limpiar errores previos
+      setUploadSuccess(false);
+    } else {
+      setSelectedFile(null);
+      setUploadError("Por favor, selecciona un archivo de imagen válido.");
+    }
+  };
+
+  // Manejar subida de foto
+  const handleUploadFoto = async (e) => {
+    e.preventDefault();
+    if (!selectedFile) {
+      setUploadError("No has seleccionado ninguna imagen.");
+      return;
+    }
+    setIsUploading(true);
+    setUploadError("");
+    setUploadSuccess(false);
+
+    const formData = new FormData();
+    formData.append("foto", selectedFile);
+
+    try {
+      // Llamar a la API para subir la foto
+      const { data } = await api.post("/mi-perfil/foto", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      // Actualizar el estado local Y el contexto de Auth
+      setPerfil((prev) => ({ ...prev, foto_perfil: data.foto_perfil }));
+      updateProfilePic(data.foto_perfil); // <-- Actualiza el contexto global
+
+      setUploadSuccess(true);
+      setSelectedFile(null); // Limpiar selección
+      // Ocultar mensaje de éxito después de unos segundos
+      setTimeout(() => setUploadSuccess(false), 3000);
+    } catch (error) {
+      console.error("Error al subir foto", error);
+      setUploadError(
+        error.response?.data?.message || "Error al subir la imagen."
+      );
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  if (loading) return <p>Cargando perfil...</p>;
+  if (!perfil) return <p>No se pudo cargar la información del perfil.</p>;
+
+  // Construir URL completa de la foto
+  const fotoUrl = perfil.foto_perfil
+    ? `http://localhost:3001/uploads/perfiles/${perfil.foto_perfil}`
+    : `https://ui-avatars.com/api/?name=${encodeURIComponent(
+        perfil.nombre
+      )}+${encodeURIComponent(
+        perfil.apellido_paterno
+      )}&background=random&color=fff`; // Placeholder
+
+  return (
+    <div className="bg-white p-6 rounded-lg shadow max-w-4xl mx-auto">
+      <h2 className="text-3xl font-bold text-gray-800 mb-6">Mi Perfil</h2>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
+        {/* Columna de Foto */}
+        <div className="md:col-span-1 flex flex-col items-center space-y-4">
+          <img
+            src={fotoUrl}
+            alt="Foto de perfil"
+            className="w-40 h-40 rounded-full object-cover border-4 border-gray-200 shadow-sm"
+            onError={(e) => {
+              e.target.onerror = null;
+              e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                perfil.nombre
+              )}+${encodeURIComponent(
+                perfil.apellido_paterno
+              )}&background=random&color=fff`;
+            }} // Fallback si la imagen no carga
+          />
+          <form onSubmit={handleUploadFoto} className="w-full text-center">
+            <label
+              htmlFor="fotoInput"
+              className="cursor-pointer inline-block px-4 py-2 text-sm font-medium text-white bg-secundario rounded-md hover:opacity-90"
+            >
+              {selectedFile ? "Archivo seleccionado" : "Cambiar Foto"}
+            </label>
+            <input
+              id="fotoInput"
+              type="file"
+              accept="image/*" // Aceptar solo imágenes
+              onChange={handleFileChange}
+              className="hidden" // Ocultar el input por defecto
+            />
+            {selectedFile && (
+              <p
+                className="text-xs text-gray-500 mt-1 truncate"
+                title={selectedFile.name}
+              >
+                {selectedFile.name}
+              </p>
+            )}
+            {selectedFile && (
+              <button
+                type="submit"
+                disabled={isUploading}
+                className="mt-2 w-full flex items-center justify-center px-4 py-2 text-sm font-semibold text-white bg-principal rounded-md hover:opacity-90 disabled:bg-gray-400"
+              >
+                <Upload size={16} className="mr-2" />
+                {isUploading ? "Subiendo..." : "Subir Nueva Foto"}
+              </button>
+            )}
+            {uploadError && (
+              <p className="text-xs text-red-600 mt-1">{uploadError}</p>
+            )}
+            {uploadSuccess && (
+              <p className="text-xs text-green-600 mt-1">¡Foto actualizada!</p>
+            )}
+          </form>
+        </div>
+
+        {/* Columna de Información */}
+        <div className="md:col-span-2 space-y-4">
+          <InfoItem
+            label="Nombre Completo"
+            value={`${perfil.nombre} ${perfil.apellido_paterno} ${
+              perfil.apellido_materno || ""
+            }`}
+          />
+          <InfoItem label="Correo Electrónico" value={perfil.email} />
+          <InfoItem label="Rol" value={perfil.rol} capitalize={true} />
+          {perfil.matricula && (
+            <InfoItem label="Matrícula" value={perfil.matricula} />
+          )}
+          {perfil.telefono && (
+            <InfoItem label="Teléfono" value={perfil.telefono} />
+          )}
+          {perfil.curp && <InfoItem label="CURP" value={perfil.curp} />}
+          {perfil.fecha_nacimiento && (
+            <InfoItem
+              label="Fecha de Nacimiento"
+              value={new Date(
+                perfil.fecha_nacimiento.replace(/-/g, "/")
+              ).toLocaleDateString()}
+            />
+          )}
+          {perfil.genero && <InfoItem label="Género" value={perfil.genero} />}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Componente auxiliar para mostrar la información del perfil
+const InfoItem = ({ label, value, capitalize = false }) => (
+  <div>
+    <p className="text-sm font-medium text-gray-500">{label}</p>
+    <p className={`text-lg text-gray-800 ${capitalize ? "capitalize" : ""}`}>
+      {value || "No especificado"}
+    </p>
+  </div>
+);
+
+// --- TERMINA NUEVO CÓDIGO ---
+
 // --- COMPONENTE PRINCIPAL DE LA APP ---
 function App() {
   return (
@@ -5300,6 +6161,7 @@ function App() {
                   />
                 }
               />
+              <Route path="/mi-perfil" element={<MiPerfilPage />} />
             </Route>
           </Route>
 
@@ -5333,6 +6195,11 @@ function App() {
                 path="/docente/grupo/:grupoId/asignatura/:asignaturaId/asistencia/:sesionId"
                 element={<AsistenciaPage />}
               />
+              <Route path="/docente/mi-perfil" element={<MiPerfilPage />} />
+              <Route
+                path="/docente/grupo/:grupoId/asignatura/:asignaturaId/foro/hilo/:hiloId"
+                element={<HiloPage />}
+              />
             </Route>
           </Route>
 
@@ -5353,6 +6220,11 @@ function App() {
                 path="/alumno/grupo/:grupoId/asignatura/:asignaturaId/aula"
                 element={<AulaVirtualPage />}
               />
+              <Route path="/alumno/mi-perfil" element={<MiPerfilPage />} />
+              <Route
+                path="/alumno/grupo/:grupoId/asignatura/:asignaturaId/foro/hilo/:hiloId"
+                element={<HiloPage />}
+              />
             </Route>
           </Route>
           {/* --- FIN DEL BLOQUE AÑADIDO --- */}
@@ -5365,6 +6237,7 @@ function App() {
                 path="/aspirante/dashboard"
                 element={<AspiranteDashboardPage />}
               />
+              <Route path="/aspirante/mi-perfil" element={<MiPerfilPage />} />
             </Route>
           </Route>
           {/* --- FIN DEL BLOQUE AÑADIDO --- */}
