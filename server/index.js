@@ -261,11 +261,7 @@ apiRouter.post("/login", async (req, res) => {
   }
 });
 
-// --- A PARTIR DE AQUÍ, TODAS LAS RUTAS REQUIEREN UN TOKEN VÁLIDO ---
-// Usamos el middleware 'verifyToken' para todas las rutas que siguen
 apiRouter.use(verifyToken);
-
-// --- RUTAS PARA NOTIFICACIONES WEB ---
 
 // GET /api/notificaciones/no-leidas - Obtener notificaciones no leídas y el conteo
 apiRouter.get("/notificaciones/no-leidas", async (req, res) => {
@@ -288,6 +284,69 @@ apiRouter.get("/notificaciones/no-leidas", async (req, res) => {
     res.status(500).send({ message: "Error en el servidor" });
   }
 });
+
+// PUT /api/notificaciones/:id/marcar-leida - Marcar una notificación específica como leída
+apiRouter.put("/notificaciones/:id/marcar-leida", async (req, res) => {
+  if (!req.user) {
+    return res.status(401).send({ message: "No autenticado" });
+  }
+  const userId = req.user.id;
+  const notificationId = req.params.id;
+  try {
+    const [result] = await db.query(
+      "UPDATE notificaciones SET leida = TRUE WHERE id = ? AND user_id = ?",
+      [notificationId, userId]
+    );
+    if (result.affectedRows > 0) {
+      res.send({ message: "Notificación marcada como leída" });
+    } else {
+      res.status(404).send({
+        message: "Notificación no encontrada o no pertenece al usuario",
+      });
+    }
+  } catch (error) {
+    console.error("Error al marcar notificación como leída:", error);
+    res.status(500).send({ message: "Error en el servidor" });
+  }
+});
+
+// PUT /api/notificaciones/marcar-todas-leidas - Marcar todas las notificaciones del usuario como leídas
+apiRouter.put("/notificaciones/marcar-todas-leidas", async (req, res) => {
+  if (!req.user) {
+    return res.status(401).send({ message: "No autenticado" });
+  }
+  const userId = req.user.id;
+  try {
+    await db.query(
+      "UPDATE notificaciones SET leida = TRUE WHERE user_id = ? AND leida = FALSE", // Solo actualiza las no leídas
+      [userId]
+    );
+    res.send({ message: "Todas las notificaciones marcadas como leídas" });
+  } catch (error) {
+    console.error(
+      "Error al marcar todas las notificaciones como leídas:",
+      error
+    );
+    res.status(500).send({ message: "Error en el servidor" });
+  }
+});
+
+// --- FIN RUTAS NOTIFICACIONES ---
+
+// PUT /api/notificaciones/:id/marcar-leida
+apiRouter.put("/notificaciones/:id/marcar-leida", async (req, res) => {
+  // ... (el resto de esta ruta)
+});
+
+// PUT /api/notificaciones/marcar-todas-leidas
+apiRouter.put("/notificaciones/marcar-todas-leidas", async (req, res) => {
+  // ... (el resto de esta ruta)
+});
+
+// --- FIN RUTAS NOTIFICACIONES ---
+// --- FIN DEL BLOQUE PEGADO ---
+
+// ... (El resto de tus rutas, como /register-push-token, continúan aquí)
 
 // PUT /api/notificaciones/:id/marcar-leida - Marcar una notificación específica como leída
 apiRouter.put("/notificaciones/:id/marcar-leida", async (req, res) => {
@@ -593,6 +652,81 @@ apiRouter.post("/calificar-grupo-completo", async (req, res) => {
 const adminRouter = express.Router();
 adminRouter.use(isAdmin); // ¡Importante! 'isAdmin' se aplica a todas las rutas de 'adminRouter'
 
+// ... (justo después de const adminRouter = express.Router();)
+// ... (y de adminRouter.use(isAdmin);)
+
+// --- INICIO: NUEVAS RUTAS DE ANALÍTICAS ---
+
+// Endpoint 1: Alumnos por Carrera (Gráfico de Pastel)
+adminRouter.get("/analiticas/alumnos-por-carrera", async (req, res) => {
+  try {
+    const [data] = await db.query(`
+      SELECT 
+          c.nombre_carrera, 
+          COUNT(DISTINCT ga.alumno_id) as total_alumnos
+      FROM grupo_alumnos ga
+      JOIN usuarios u ON ga.alumno_id = u.id AND u.rol = 'alumno'
+      JOIN grupos g ON ga.grupo_id = g.id
+      JOIN planes_estudio p ON g.plan_estudio_id = p.id
+      JOIN carreras c ON p.carrera_id = c.id
+      GROUP BY c.id;
+    `);
+    res.json(data);
+  } catch (error) {
+    console.error("Error en analiticas/alumnos-por-carrera:", error);
+    res.status(500).send({ message: "Error en el servidor" });
+  }
+});
+
+// Endpoint 2: Promedio General por Docente (Gráfico de Barras)
+adminRouter.get("/analiticas/promedio-docentes", async (req, res) => {
+  try {
+    const [data] = await db.query(`
+      SELECT
+          CONCAT(u.nombre, ' ', u.apellido_paterno) as nombre_docente,
+          AVG(c.calificacion) as promedio_general
+      FROM calificaciones c
+      JOIN grupo_asignaturas_docentes gad ON c.grupo_id = gad.grupo_id AND c.asignatura_id = gad.asignatura_id
+      JOIN usuarios u ON gad.docente_id = u.id
+      WHERE c.calificacion IS NOT NULL
+      GROUP BY u.id
+      ORDER BY promedio_general DESC;
+    `);
+    res.json(data);
+  } catch (error) {
+    console.error("Error en analiticas/promedio-docentes:", error);
+    res.status(500).send({ message: "Error en el servidor" });
+  }
+});
+
+// Endpoint 3: Índice de Reprobación por Asignatura (Gráfico de Barras)
+adminRouter.get("/analiticas/reprobacion-asignaturas", async (req, res) => {
+  try {
+    // Asumimos que la calificación mínima aprobatoria es 70
+    const [data] = await db.query(`
+      SELECT
+          a.nombre_asignatura,
+          COUNT(c.id) as total_calificaciones,
+          SUM(CASE WHEN c.calificacion < 70 THEN 1 ELSE 0 END) as total_reprobados,
+          (SUM(CASE WHEN c.calificacion < 70 THEN 1 ELSE 0 END) / COUNT(c.id)) * 100 as indice_reprobacion_pct
+      FROM calificaciones c
+      JOIN asignaturas a ON c.asignatura_id = a.id
+      WHERE c.calificacion IS NOT NULL
+      GROUP BY a.id
+      HAVING total_calificaciones > 0
+      ORDER BY indice_reprobacion_pct DESC;
+    `);
+    res.json(data);
+  } catch (error) {
+    console.error("Error en analiticas/reprobacion-asignaturas:", error);
+    res.status(500).send({ message: "Error en el servidor" });
+  }
+});
+
+// --- FIN: NUEVAS RUTAS DE ANALÍTICAS ---
+
+// ... (Aquí continúan tus otras rutas, como createCatalogCrudRoutes, etc.)
+
 function createCatalogCrudRoutes(router, tableName, fields) {
   router.get(`/${tableName}`, async (req, res) =>
     res.json((await db.query(`SELECT * FROM ${tableName}`))[0])
@@ -620,12 +754,258 @@ function createCatalogCrudRoutes(router, tableName, fields) {
     res.send({ message: "Eliminado con éxito" });
   });
 }
-createCatalogCrudRoutes(adminRouter, "planes_estudio", ["nombre_plan"]);
+// --- RUTAS CRUD PERSONALIZADAS PARA PLANES DE ESTUDIO ---
+
+// GET /admin/planes_estudio (Con JOIN a carreras)
+adminRouter.get("/planes_estudio", async (req, res) => {
+  try {
+    const sql = `
+      SELECT p.*, c.nombre_carrera 
+      FROM planes_estudio p 
+      LEFT JOIN carreras c ON p.carrera_id = c.id
+      ORDER BY p.nombre_plan
+    `;
+    res.json((await db.query(sql))[0]);
+  } catch (error) {
+    res.status(500).send({ message: "Error al obtener planes" });
+  }
+});
+
+// POST /admin/planes_estudio
+adminRouter.post("/planes_estudio", async (req, res) => {
+  try {
+    const { nombre_plan, carrera_id } = req.body;
+    await db.query(
+      "INSERT INTO planes_estudio (nombre_plan, carrera_id) VALUES (?, ?)",
+      [nombre_plan, carrera_id || null]
+    );
+    res.status(201).send({ message: "Plan de estudio creado" });
+  } catch (error) {
+    res.status(500).send({ message: "Error al crear el plan" });
+  }
+});
+
+// PUT /admin/planes_estudio/:id
+adminRouter.put("/planes_estudio/:id", async (req, res) => {
+  try {
+    const { nombre_plan, carrera_id } = req.body;
+    await db.query(
+      "UPDATE planes_estudio SET nombre_plan = ?, carrera_id = ? WHERE id = ?",
+      [nombre_plan, carrera_id || null, req.params.id]
+    );
+    res.send({ message: "Plan de estudio actualizado" });
+  } catch (error) {
+    res.status(500).send({ message: "Error al actualizar el plan" });
+  }
+});
+
+// DELETE /admin/planes_estudio/:id
+adminRouter.delete("/planes_estudio/:id", async (req, res) => {
+  try {
+    // (Opcional: podrías añadir lógica para no borrar si está en uso)
+    await db.query("DELETE FROM planes_estudio WHERE id = ?", [req.params.id]);
+    res.send({ message: "Plan de estudio eliminado" });
+  } catch (error) {
+    res.status(500).send({ message: "Error al eliminar el plan" });
+  }
+});
+
+// --- FIN RUTAS PLANES DE ESTUDIO ---
+
+// AHORA SÍ, CONTINÚA CON LA LÍNEA ORIGINAL:
+createCatalogCrudRoutes(adminRouter, "tipos_asignatura", ["tipo"]);
+// ... (el resto de tus rutas)
 createCatalogCrudRoutes(adminRouter, "tipos_asignatura", ["tipo"]);
 createCatalogCrudRoutes(adminRouter, "grados", ["nombre_grado"]);
 createCatalogCrudRoutes(adminRouter, "ciclos", ["nombre_ciclo"]);
 createCatalogCrudRoutes(adminRouter, "sedes", ["nombre_sede", "direccion"]);
 createCatalogCrudRoutes(adminRouter, "carreras", ["nombre_carrera"]);
+
+// ... (después del createCatalogCrudRoutes de "sedes")
+
+// --- INICIO: CRUD PARA CONCEPTOS DE PAGO ---
+// Usamos el genérico porque es un catálogo simple
+createCatalogCrudRoutes(adminRouter, "conceptos_pago", [
+  "nombre_concepto",
+  "monto_default",
+  "tipo",
+  "es_concepto_inscripcion",
+]);
+// --- FIN: CRUD PARA CONCEPTOS DE PAGO ---
+
+// --- INICIO: RUTAS DE GESTIÓN FINANCIERA ---
+
+// GET /admin/alumnos/:id/adeudos - Ver el estado de cuenta de un alumno
+adminRouter.get("/alumnos/:id/adeudos", async (req, res) => {
+  const { id: alumnoId } = req.params;
+  try {
+    const [adeudos] = await db.query(
+      `SELECT aa.*, cp.nombre_concepto
+       FROM adeudos_alumnos aa
+       JOIN conceptos_pago cp ON aa.concepto_id = cp.id
+       WHERE aa.alumno_id = ?
+       ORDER BY aa.fecha_vencimiento ASC`,
+      [alumnoId]
+    );
+    res.json(adeudos);
+  } catch (error) {
+    console.error("Error al obtener adeudos:", error);
+    res.status(500).send({ message: "Error en el servidor" });
+  }
+});
+
+// POST /admin/adeudos/generar-manual - Generar un nuevo adeudo manual
+adminRouter.post("/adeudos/generar-manual", async (req, res) => {
+  const { alumno_id, concepto_id, monto_a_pagar, fecha_vencimiento } = req.body;
+
+  try {
+    // 1. Insertar el adeudo
+    await db.query(
+      "INSERT INTO adeudos_alumnos (alumno_id, concepto_id, monto_a_pagar, fecha_vencimiento, estatus_pago) VALUES (?, ?, ?, ?, 'pendiente')",
+      [alumno_id, concepto_id, monto_a_pagar, fecha_vencimiento || null]
+    );
+
+    // --- INICIO DE NOTIFICACIÓN ---
+    try {
+      // 2. Obtener nombre del concepto para el mensaje
+      const [[concepto]] = await db.query(
+        "SELECT nombre_concepto FROM conceptos_pago WHERE id = ?",
+        [concepto_id]
+      );
+      const nombreConcepto = concepto
+        ? concepto.nombre_concepto
+        : "un nuevo cargo";
+
+      const mensaje = `Se ha generado un nuevo cargo: ${nombreConcepto} por $${monto_a_pagar}`;
+      const urlDestino = "/alumno/mis-pagos";
+
+      // 3. Crear notificación web (campanita)
+      await db.query(
+        "INSERT INTO notificaciones (user_id, mensaje, url_destino) VALUES (?, ?, ?)",
+        [alumno_id, mensaje, urlDestino]
+      );
+
+      // 4. Enviar notificación Push (móvil)
+      const [tokens] = await db.query(
+        "SELECT token FROM push_tokens WHERE user_id = ?",
+        [alumno_id]
+      );
+      if (tokens.length > 0) {
+        const messages = tokens.map((t) => ({
+          to: t.token,
+          sound: "default",
+          title: "Nuevo Cargo Generado 💳",
+          body: mensaje,
+        }));
+        await fetch("https://exp.host/--/api/v2/push/send", {
+          method: "POST",
+          headers: {
+            Accept: "application/json",
+            "Accept-encoding": "gzip, deflate",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(messages),
+        });
+      }
+    } catch (notifError) {
+      console.error("Error al enviar notificación de adeudo:", notifError);
+      // No detenemos la operación principal si la notificación falla
+    }
+    // --- FIN DE NOTIFICACIÓN ---
+
+    res.status(201).send({ message: "Adeudo generado con éxito" });
+  } catch (error) {
+    console.error("Error al generar adeudo manual:", error);
+    res.status(500).send({ message: "Error en el servidor" });
+  }
+});
+
+// POST /admin/adeudos/:id/marcar-pagado - Registrar un pago (Ruta de Caja)
+adminRouter.post("/adeudos/:id/marcar-pagado", async (req, res) => {
+  const { id: adeudoId } = req.params;
+  const adminId = req.user.id; // El admin/cajero que está registrando
+
+  try {
+    // 1. Obtener datos del adeudo ANTES de marcarlo como pagado
+    const [[adeudo]] = await db.query(
+      `SELECT aa.alumno_id, aa.estatus_pago, cp.nombre_concepto 
+       FROM adeudos_alumnos aa
+       JOIN conceptos_pago cp ON aa.concepto_id = cp.id
+       WHERE aa.id = ?`,
+      [adeudoId]
+    );
+
+    if (!adeudo) {
+      return res.status(404).send({ message: "El adeudo no existe." });
+    }
+    if (adeudo.estatus_pago === "pagado") {
+      return res.status(400).send({ message: "Este adeudo ya fue pagado." });
+    }
+
+    // 2. Actualizar el adeudo
+    const [result] = await db.query(
+      "UPDATE adeudos_alumnos SET estatus_pago = 'pagado', fecha_pago = CURRENT_TIMESTAMP, registrado_por_usuario_id = ? WHERE id = ?",
+      [adminId, adeudoId]
+    );
+
+    if (result.affectedRows === 0) {
+      // Esto es una doble verificación por si acaso
+      return res
+        .status(404)
+        .send({ message: "No se pudo actualizar el adeudo." });
+    }
+
+    // --- INICIO DE NOTIFICACIÓN ---
+    try {
+      const alumno_id = adeudo.alumno_id;
+      const nombreConcepto = adeudo.nombre_concepto;
+
+      const mensaje = `¡Tu pago para "${nombreConcepto}" ha sido registrado!`;
+      const urlDestino = "/alumno/mis-pagos";
+
+      // 3. Crear notificación web (campanita)
+      await db.query(
+        "INSERT INTO notificaciones (user_id, mensaje, url_destino) VALUES (?, ?, ?)",
+        [alumno_id, mensaje, urlDestino]
+      );
+
+      // 4. Enviar notificación Push (móvil)
+      const [tokens] = await db.query(
+        "SELECT token FROM push_tokens WHERE user_id = ?",
+        [alumno_id]
+      );
+      if (tokens.length > 0) {
+        const messages = tokens.map((t) => ({
+          to: t.token,
+          sound: "default",
+          title: "¡Pago Registrado! ✅",
+          body: mensaje,
+        }));
+        await fetch("https://exp.host/--/api/v2/push/send", {
+          method: "POST",
+          headers: {
+            Accept: "application/json",
+            "Accept-encoding": "gzip, deflate",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(messages),
+        });
+      }
+    } catch (notifError) {
+      console.error("Error al enviar notificación de pago:", notifError);
+    }
+    // --- FIN DE NOTIFICACIÓN ---
+
+    res.send({ message: "Pago registrado con éxito" });
+  } catch (error) {
+    console.error("Error al registrar pago:", error);
+    res.status(500).send({ message: "Error en el servidor" });
+  }
+});
+
+// --- FIN: RUTAS DE GESTIÓN FINANCIERA ---
+
+// ... (Ahora sí, la ruta adminRouter.get("/usuarios", ...)
 
 adminRouter.get("/usuarios", async (req, res) =>
   res.json(
@@ -1003,25 +1383,53 @@ adminRouter.post("/grupos/:id/asignar-docente", async (req, res) => {
   );
   res.send({ message: "Docente asignado/actualizado" });
 });
+
 adminRouter.post("/grupos/:id/inscribir-alumno", async (req, res) => {
   const grupo_id = req.params.id;
   const { alumno_id } = req.body;
   const connection = await db.getConnection();
+
   try {
     await connection.beginTransaction();
+
+    // 1. Inscribir al alumno al grupo
     await connection.query(
       "INSERT INTO grupo_alumnos (grupo_id, alumno_id) VALUES (?, ?)",
       [grupo_id, alumno_id]
     );
+
+    // 2. Cambiar rol de 'aspirante' a 'alumno'
     await connection.query(
       "UPDATE usuarios SET rol = 'alumno' WHERE id = ? AND rol = 'aspirante'",
-      [
-        // Solo cambia si es aspirante
-        alumno_id,
-      ]
+      [alumno_id]
     );
+
+    // --- INICIO: NUEVA LÓGICA FINANCIERA ---
+
+    // 3. Buscar el/los concepto(s) de inscripción
+    const [conceptosInscripcion] = await connection.query(
+      "SELECT id, monto_default FROM conceptos_pago WHERE es_concepto_inscripcion = TRUE"
+    );
+
+    // 4. Generar los adeudos de inscripción para este alumno
+    if (conceptosInscripcion.length > 0) {
+      const adeudos = conceptosInscripcion.map((concepto) => [
+        alumno_id,
+        concepto.id,
+        concepto.monto_default,
+        "pendiente", // estatus_pago
+        new Date(), // fecha_vencimiento (hoy)
+      ]);
+
+      await connection.query(
+        "INSERT INTO adeudos_alumnos (alumno_id, concepto_id, monto_a_pagar, estatus_pago, fecha_vencimiento) VALUES ?",
+        [adeudos]
+      );
+    }
+    // --- FIN: NUEVA LÓGICA FINANCIERA ---
+
     await connection.commit();
-    res.status(201).send({ message: "Alumno inscrito" });
+    res.status(201).send({ message: "Alumno inscrito y adeudos generados" });
   } catch (error) {
     await connection.rollback();
     if (error.code === "ER_DUP_ENTRY")
@@ -1034,6 +1442,7 @@ adminRouter.post("/grupos/:id/inscribir-alumno", async (req, res) => {
     connection.release();
   }
 });
+
 // --- REEMPLAZA LA RUTA "DAR-BAJA" CON ESTO ---
 adminRouter.delete("/grupos/:id/dar-baja/:alumnoId", async (req, res) => {
   const { id: grupo_id, alumnoId } = req.params;
@@ -2415,7 +2824,32 @@ alumnoRouter.get("/mi-grupo", async (req, res) => {
   // 4. Devolvemos el array con todos los grupos
   res.json(responseData);
 });
-// --- INICIA NUEVO CÓDIGO (AGREGAR) ---
+
+// ... (después de /alumno/mi-grupo)
+
+// --- INICIO: RUTA DE FINANZAS ALUMNO ---
+
+// GET /api/alumno/mis-adeudos - Ver mi estado de cuenta
+alumnoRouter.get("/mis-adeudos", async (req, res) => {
+  const alumno_id = req.user.id;
+  try {
+    const [adeudos] = await db.query(
+      `SELECT aa.*, cp.nombre_concepto
+       FROM adeudos_alumnos aa
+       JOIN conceptos_pago cp ON aa.concepto_id = cp.id
+       WHERE aa.alumno_id = ?
+       ORDER BY aa.estatus_pago ASC, aa.fecha_vencimiento ASC`,
+      [alumno_id]
+    );
+    res.json(adeudos);
+  } catch (error) {
+    console.error("Error al obtener mis adeudos:", error);
+    res.status(500).send({ message: "Error en el servidor" });
+  }
+});
+
+// --- FIN: RUTA DE FINANZAS ALUMNO ---
+// ... (resto de rutas de alumnoRouter)
 
 // GET (Alumno): Obtener la config del aula virtual
 alumnoRouter.get(

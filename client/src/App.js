@@ -54,7 +54,31 @@ import {
   History, // <-- NUEVO
   MessageSquare, // <-- NUEVO
   Send, // <-- NUEVO
+  DollarSign, // <-- AÑADIR
+  ClipboardEdit, // <-- AÑADIR
 } from "lucide-react";
+import { Bar, Pie } from "react-chartjs-2";
+import {
+  Chart as ChartJS,
+  ArcElement,
+  Tooltip,
+  Legend,
+  CategoryScale,
+  LinearScale, // <<< Asegúrate que esta línea exista
+  BarElement,
+  Title,
+} from "chart.js";
+
+// Esta es la línea importante de registro:
+ChartJS.register(
+  ArcElement,
+  Tooltip,
+  Legend,
+  CategoryScale,
+  LinearScale, // <<< ¡CONFIRMA que 'LinearScale' esté aquí!
+  BarElement,
+  Title
+);
 
 // --- CONFIGURACIÓN DE AXIOS ---
 const api = axios.create({
@@ -364,11 +388,21 @@ const AdminLayout = () => {
     { icon: TrendingUp, label: "Grados/Semestres", path: "/grados" },
     { icon: GraduationCap, label: "Carreras", path: "/carreras" },
     { icon: Building, label: "Sedes", path: "/sedes" },
-    // --- FIN DE CATÁLOGOS ---
+    // --- AÑADE ESTA LÍNEA ---
+    {
+      icon: ClipboardEdit,
+      label: "Conceptos de Pago",
+      path: "/conceptos-pago",
+    },
+    // --- FIN ---
 
     { icon: Book, label: "Asignaturas", path: "/asignaturas" },
     { icon: Group, label: "Grupos", path: "/grupos" },
     { icon: ArrowRightLeft, label: "Migrar Grupos", path: "/migrar-grupos" },
+
+    // --- AÑADE ESTA LÍNEA ---
+    { icon: DollarSign, label: "Caja y Finanzas", path: "/admin/finanzas" },
+    // --- FIN ---
   ];
 
   return (
@@ -383,7 +417,7 @@ const AdminLayout = () => {
             <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5-10-5-10 5z" />
           </svg>
         </div>
-        <nav className="flex-1 px-4 py-6 space-y-2">
+        <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
           {navItems.map((item) => (
             <Link
               key={item.label}
@@ -594,6 +628,15 @@ const AlumnoLayout = () => {
             <Home className="w-5 h-5 mr-3" />
             Mi Grupo
           </Link>
+          {/* --- AÑADE ESTE NUEVO LINK --- */}
+          <Link
+            to="/alumno/mis-pagos"
+            className="flex items-center px-4 py-2 rounded-lg text-gray-300 hover:bg-gray-700 hover:text-white"
+          >
+            <DollarSign className="w-5 h-5 mr-3" />
+            Mis Pagos
+          </Link>
+          {/* --- FIN --- */}
         </nav>
         <div className="px-4 py-4 border-t border-gray-700">
           <button
@@ -817,15 +860,180 @@ const LoginPage = () => {
   );
 };
 
-const DashboardPage = () => (
-  <div className="bg-white p-6 rounded-lg shadow">
-    <h2 className="text-xl font-bold mb-4">Panel de Administración</h2>
-    <p>
-      Selecciona un módulo en el menú de la izquierda para comenzar a gestionar
-      la información de la universidad.
-    </p>
-  </div>
-);
+const DashboardPage = () => {
+  const [loading, setLoading] = useState(true);
+  const [alumnosCarreraData, setAlumnosCarreraData] = useState(null);
+  const [promedioDocenteData, setPromedioDocenteData] = useState(null);
+  const [reprobacionData, setReprobacionData] = useState(null);
+
+  // Funciones helper para generar colores aleatorios
+  const getRandomColor = () => {
+    const r = Math.floor(Math.random() * 255);
+    const g = Math.floor(Math.random() * 255);
+    const b = Math.floor(Math.random() * 255);
+    return `rgba(${r}, ${g}, ${b}, 0.6)`;
+  };
+  const getBorderColor = (rgbaColor) => rgbaColor.replace("0.6", "1");
+
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        setLoading(true);
+        const [carreraRes, docenteRes, reprobacionRes] = await Promise.all([
+          api.get("/admin/analiticas/alumnos-por-carrera"),
+          api.get("/admin/analiticas/promedio-docentes"),
+          api.get("/admin/analiticas/reprobacion-asignaturas"),
+        ]);
+
+        // Procesar datos para Alumnos por Carrera (Pie Chart)
+        if (carreraRes.data.length > 0) {
+          const labels = carreraRes.data.map((d) => d.nombre_carrera);
+          const data = carreraRes.data.map((d) => d.total_alumnos);
+          const backgroundColors = data.map(() => getRandomColor());
+          const borderColors = backgroundColors.map(getBorderColor);
+
+          setAlumnosCarreraData({
+            labels,
+            datasets: [
+              {
+                label: "Total Alumnos",
+                data,
+                backgroundColor: backgroundColors,
+                borderColor: borderColors,
+                borderWidth: 1,
+              },
+            ],
+          });
+        }
+
+        // Procesar datos para Promedio por Docente (Bar Chart)
+        if (docenteRes.data.length > 0) {
+          const labels = docenteRes.data.map((d) => d.nombre_docente);
+          const data = docenteRes.data.map((d) => d.promedio_general);
+          const backgroundColors = data.map(() => getRandomColor());
+          const borderColors = backgroundColors.map(getBorderColor);
+
+          setPromedioDocenteData({
+            labels,
+            datasets: [
+              {
+                label: "Promedio General (0-100)",
+                data,
+                backgroundColor: backgroundColors,
+                borderColor: borderColors,
+                borderWidth: 1,
+              },
+            ],
+          });
+        }
+
+        // Procesar datos para Índice de Reprobación (Bar Chart)
+        if (reprobacionRes.data.length > 0) {
+          const labels = reprobacionRes.data.map((d) => d.nombre_asignatura);
+          const data = reprobacionRes.data.map((d) => d.indice_reprobacion_pct);
+          const backgroundColors = data.map(() => getRandomColor());
+          const borderColors = backgroundColors.map(getBorderColor);
+
+          setReprobacionData({
+            labels,
+            datasets: [
+              {
+                label: "Índice de Reprobación (%)",
+                data,
+                backgroundColor: backgroundColors,
+                borderColor: borderColors,
+                borderWidth: 1,
+              },
+            ],
+          });
+        }
+      } catch (error) {
+        console.error("Error al cargar datos del dashboard", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="bg-white p-6 rounded-lg shadow">
+        <h2 className="text-xl font-bold mb-4">Panel de Administración</h2>
+        <p>Cargando analíticas...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <h2 className="text-3xl font-bold text-gray-800 mb-6">
+        Dashboard de Analíticas
+      </h2>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Gráfico 1: Alumnos por Carrera */}
+        <div className="bg-white p-6 rounded-lg shadow">
+          <h3 className="text-xl font-semibold mb-4">
+            Alumnos Inscritos por Carrera
+          </h3>
+          <div className="h-80 w-full flex items-center justify-center">
+            {alumnosCarreraData ? (
+              <Pie
+                data={alumnosCarreraData}
+                options={{ responsive: true, maintainAspectRatio: false }}
+              />
+            ) : (
+              <p className="text-gray-500">No hay datos para mostrar.</p>
+            )}
+          </div>
+        </div>
+
+        {/* Gráfico 2: Promedio por Docente */}
+        <div className="bg-white p-6 rounded-lg shadow">
+          <h3 className="text-xl font-semibold mb-4">
+            Promedio General por Docente
+          </h3>
+          <div className="h-80 w-full">
+            {promedioDocenteData ? (
+              <Bar
+                data={promedioDocenteData}
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  scales: { y: { beginAtZero: true, max: 100 } },
+                }}
+              />
+            ) : (
+              <p className="text-gray-500">No hay datos para mostrar.</p>
+            )}
+          </div>
+        </div>
+
+        {/* Gráfico 3: Índice de Reprobación */}
+        <div className="bg-white p-6 rounded-lg shadow lg:col-span-2">
+          <h3 className="text-xl font-semibold mb-4">
+            Índice de Reprobación por Asignatura
+          </h3>
+          <div className="h-96 w-full">
+            {reprobacionData ? (
+              <Bar
+                data={reprobacionData}
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  scales: { y: { beginAtZero: true, max: 100 } },
+                }}
+              />
+            ) : (
+              <p className="text-gray-500">No hay datos para mostrar.</p>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const UsuariosPage = () => {
   const [usuarios, setUsuarios] = useState([]);
@@ -2463,6 +2671,723 @@ const CatalogoModal = ({
     </div>
   );
 };
+
+// --- INICIA NUEVO COMPONENTE: PlanesEstudioPage ---
+const PlanesEstudioPage = () => {
+  const [planes, setPlanes] = useState([]);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [currentPlan, setCurrentPlan] = useState(null);
+
+  const fetchPlanes = useCallback(async () => {
+    try {
+      // Usamos la nueva ruta que trae el JOIN
+      const response = await api.get("/admin/planes_estudio");
+      setPlanes(response.data);
+    } catch (error) {
+      console.error("Error al obtener planes de estudio", error);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchPlanes();
+  }, [fetchPlanes]);
+
+  const handleDelete = async (id) => {
+    if (
+      window.confirm(
+        "¿Estás seguro de que quieres eliminar este plan de estudio?"
+      )
+    ) {
+      try {
+        await api.delete(`/admin/planes_estudio/${id}`);
+        fetchPlanes();
+      } catch (error) {
+        console.error("Error al eliminar plan de estudio", error);
+        alert(
+          "Error al eliminar: " +
+            (error.response?.data?.message || "Error desconocido")
+        );
+      }
+    }
+  };
+
+  const openModal = (plan = null) => {
+    setCurrentPlan(plan);
+    setModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setModalOpen(false);
+    setCurrentPlan(null);
+  };
+
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-3xl font-bold text-gray-800">
+          Gestión de Planes de Estudio
+        </h2>
+        <button
+          onClick={() => openModal()}
+          className="flex items-center px-4 py-2 font-semibold text-white bg-principal rounded-md hover:opacity-90"
+        >
+          <Plus className="w-5 h-5 mr-2" />
+          Nuevo Plan
+        </button>
+      </div>
+
+      <div className="bg-white p-6 rounded-lg shadow">
+        <table className="w-full table-auto">
+          <thead className="text-left bg-gray-50">
+            <tr>
+              <th className="px-4 py-2">Nombre del Plan</th>
+              <th className="px-4 py-2">Carrera Asignada</th>
+              <th className="px-4 py-2">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {planes.map((plan) => (
+              <tr key={plan.id} className="border-b">
+                <td className="px-4 py-2">{plan.nombre_plan}</td>
+                <td className="px-4 py-2">{plan.nombre_carrera || "N/A"}</td>
+                <td className="px-4 py-2 flex items-center space-x-2">
+                  <button
+                    onClick={() => openModal(plan)}
+                    className="text-secundario hover:text-principal"
+                  >
+                    <Edit size={18} />
+                  </button>
+                  <button
+                    onClick={() => handleDelete(plan.id)}
+                    className="text-red-500 hover:text-red-700"
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {modalOpen && (
+        <PlanesEstudioModal
+          plan={currentPlan}
+          onClose={closeModal}
+          onSave={fetchPlanes}
+        />
+      )}
+    </div>
+  );
+};
+// --- FIN NUEVO COMPONENTE: PlanesEstudioPage ---
+
+// --- INICIA NUEVO COMPONENTE: PlanesEstudioModal ---
+const PlanesEstudioModal = ({ plan, onClose, onSave }) => {
+  const [formData, setFormData] = useState({
+    nombre_plan: plan?.nombre_plan || "",
+    carrera_id: plan?.carrera_id || "",
+  });
+
+  const [carreras, setCarreras] = useState([]);
+
+  // Cargamos el catálogo de carreras al abrir el modal
+  useEffect(() => {
+    const fetchCarreras = async () => {
+      try {
+        const res = await api.get("/admin/carreras");
+        setCarreras(res.data);
+        // Si es un plan nuevo, pre-selecciona la primera carrera si no hay una
+        if (!plan && res.data.length > 0) {
+          setFormData((prev) => ({ ...prev, carrera_id: res.data[0].id }));
+        }
+      } catch (error) {
+        console.error("Error cargando carreras", error);
+      }
+    };
+    fetchCarreras();
+  }, [plan]); // Dependencia [plan] para que se ejecute solo una vez
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      if (plan) {
+        await api.put(`/admin/planes_estudio/${plan.id}`, formData);
+      } else {
+        await api.post("/admin/planes_estudio", formData);
+      }
+      onSave();
+      onClose();
+    } catch (error) {
+      console.error("Error al guardar plan de estudio", error);
+      alert(
+        "Error al guardar: " +
+          (error.response?.data?.message || "Error desconocido")
+      );
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6 relative">
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 text-gray-500 hover:text-gray-800"
+        >
+          <X size={24} />
+        </button>
+        <h3 className="text-2xl font-bold mb-6">
+          {plan ? "Editar" : "Nuevo"} Plan de Estudio
+        </h3>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <input
+            type="text"
+            name="nombre_plan"
+            value={formData.nombre_plan}
+            onChange={handleChange}
+            placeholder="Nombre del Plan (ej. Ing. Software 2025)"
+            required
+            className="w-full px-3 py-2 border rounded-md focus:ring-principal focus:border-principal"
+          />
+
+          {/* ----- ESTE ES EL NUEVO CAMPO ----- */}
+          <div>
+            <label className="text-sm font-medium text-gray-700">
+              Carrera a la que pertenece
+            </label>
+            <select
+              name="carrera_id"
+              value={formData.carrera_id}
+              onChange={handleChange}
+              className="w-full px-3 py-2 mt-1 border rounded-md"
+            >
+              <option value="">-- Seleccione una Carrera --</option>
+              {carreras.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nombre_carrera}
+                </option>
+              ))}
+            </select>
+          </div>
+          {/* ----- FIN DEL NUEVO CAMPO ----- */}
+
+          <div className="flex justify-end space-x-4 mt-8">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              className="px-4 py-2 bg-principal text-white rounded-md hover:opacity-90"
+            >
+              Guardar
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+// --- FIN NUEVO COMPONENTE: PlanesEstudioModal ---
+
+// ... (después del componente PlanesEstudioModal)
+
+// --- INICIA NUEVO COMPONENTE: CajaPage (Admin) ---
+// Esta página será solo un buscador de alumnos
+const CajaPage = () => {
+  const [usuarios, setUsuarios] = useState([]);
+  const [filtro, setFiltro] = useState("");
+  const navigate = useNavigate();
+
+  // Carga todos los usuarios (alumnos y aspirantes)
+  useEffect(() => {
+    const fetchUsuarios = async () => {
+      try {
+        // Podríamos crear un endpoint que solo traiga alumnos,
+        // pero reutilizar este es más rápido.
+        const { data } = await api.get("/admin/usuarios");
+        setUsuarios(
+          data.filter((u) => u.rol === "alumno" || u.rol === "aspirante")
+        );
+      } catch (error) {
+        console.error("Error al cargar usuarios", error);
+      }
+    };
+    fetchUsuarios();
+  }, []);
+
+  const alumnosFiltrados = usuarios.filter(
+    (u) =>
+      u.nombre.toLowerCase().includes(filtro.toLowerCase()) ||
+      u.apellido_paterno.toLowerCase().includes(filtro.toLowerCase()) ||
+      (u.matricula && u.matricula.includes(filtro))
+  );
+
+  return (
+    <div className="bg-white p-6 rounded-lg shadow max-w-4xl mx-auto">
+      <h2 className="text-3xl font-bold text-gray-800 mb-4">
+        Portal de Caja y Finanzas
+      </h2>
+      <p className="text-gray-600 mb-6">
+        Busca un alumno por nombre, apellido o matrícula para ver su estado de
+        cuenta y registrar pagos.
+      </p>
+
+      <input
+        type="text"
+        value={filtro}
+        onChange={(e) => setFiltro(e.target.value)}
+        placeholder="Buscar alumno..."
+        className="w-full px-4 py-2 border rounded-md mb-6"
+      />
+
+      <div className="max-h-96 overflow-y-auto">
+        <table className="w-full table-auto">
+          <thead className="text-left bg-gray-50 sticky top-0">
+            <tr>
+              <th className="px-4 py-2">Nombre Completo</th>
+              <th className="px-4 py-2">Matrícula</th>
+              <th className="px-4 py-2">Rol</th>
+              <th className="px-4 py-2">Acción</th>
+            </tr>
+          </thead>
+          <tbody>
+            {alumnosFiltrados.map((user) => (
+              <tr key={user.id} className="border-b">
+                <td className="px-4 py-2">{`${user.nombre} ${user.apellido_paterno}`}</td>
+                <td className="px-4 py-2">{user.matricula || "N/A"}</td>
+                <td className="px-4 py-2 capitalize">{user.rol}</td>
+                <td className="px-4 py-2">
+                  <button
+                    onClick={() =>
+                      navigate(`/admin/finanzas/alumno/${user.id}`)
+                    }
+                    className="text-principal hover:underline"
+                  >
+                    Ver Estado de Cuenta
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+// --- FIN COMPONENTE: CajaPage (Admin) ---
+
+// --- INICIA NUEVO COMPONENTE: DetalleFinancieroAlumnoPage (Admin) ---
+const DetalleFinancieroAlumnoPage = () => {
+  const { id: alumnoId } = useParams();
+  const [alumno, setAlumno] = useState(null);
+  const [adeudos, setAdeudos] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false); // Para generar adeudo manual
+  const [conceptos, setConceptos] = useState([]); // Catálogo de conceptos
+
+  const fetchDatos = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [alumnoRes, adeudosRes, conceptosRes] = await Promise.all([
+        api.get(`/admin/usuarios/${alumnoId}`),
+        api.get(`/admin/alumnos/${alumnoId}/adeudos`),
+        api.get("/admin/conceptos_pago"), // Cargar conceptos para el modal
+      ]);
+      setAlumno(alumnoRes.data);
+      setAdeudos(adeudosRes.data);
+      setConceptos(conceptosRes.data);
+    } catch (error) {
+      console.error("Error al cargar datos financieros", error);
+      alert("No se pudieron cargar los datos.");
+    } finally {
+      setLoading(false);
+    }
+  }, [alumnoId]);
+
+  useEffect(() => {
+    fetchDatos();
+  }, [fetchDatos]);
+
+  const handleMarcarPagado = async (adeudoId) => {
+    if (window.confirm("¿Confirmas que se recibió este pago?")) {
+      try {
+        await api.post(`/admin/adeudos/${adeudoId}/marcar-pagado`);
+        fetchDatos(); // Recargar la lista de adeudos
+      } catch (error) {
+        console.error("Error al marcar pago", error);
+        alert(
+          "Error: " + (error.response?.data?.message || "Error desconocido")
+        );
+      }
+    }
+  };
+
+  const handleGenerarAdeudo = async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const conceptoId = formData.get("concepto_id");
+    const monto = formData.get("monto_a_pagar");
+    const fecha = formData.get("fecha_vencimiento");
+
+    // Buscar el monto default si no se provee uno
+    const conceptoSeleccionado = conceptos.find((c) => c.id == conceptoId);
+    const montoFinal = monto || conceptoSeleccionado.monto_default;
+
+    try {
+      await api.post("/admin/adeudos/generar-manual", {
+        alumno_id: alumnoId,
+        concepto_id: conceptoId,
+        monto_a_pagar: montoFinal,
+        fecha_vencimiento: fecha,
+      });
+      setShowModal(false);
+      fetchDatos(); // Recargar
+    } catch (error) {
+      console.error("Error al generar adeudo", error);
+      alert("Error al generar adeudo.");
+    }
+  };
+
+  const getEstatusBadge = (estatus) => {
+    switch (estatus) {
+      case "pagado":
+        return "bg-green-100 text-green-800";
+      case "pendiente":
+        return "bg-yellow-100 text-yellow-800";
+      case "vencido":
+        return "bg-red-100 text-red-800";
+      default:
+        return "bg-gray-100 text-gray-800";
+    }
+  };
+
+  // Helper para formatear fechas DATE (YYYY-MM-DD) de forma segura
+  const renderFecha = (fechaString) => {
+    // 1. Revisa si es null, undefined, o la fecha "cero" de MySQL
+    if (!fechaString || fechaString.startsWith("0000-")) {
+      return "N/A";
+    }
+
+    // 2. Separamos la fecha para evitar problemas de zona horaria (UTC)
+    // Esto toma solo la parte de la fecha (ej. "2025-10-27")
+    const parts = fechaString.split("T")[0].split("-");
+
+    if (parts.length !== 3) {
+      return "Fecha Inválida"; // Formato inesperado
+    }
+
+    // 3. Creamos la fecha como local: new Date(Año, Mes (0-11), Día)
+    const date = new Date(parts[0], parts[1] - 1, parts[2]);
+
+    if (isNaN(date.getTime())) {
+      return "Fecha Inválida";
+    }
+
+    // 4. Si todo está bien, la formatea
+    return date.toLocaleDateString();
+  };
+
+  if (loading) return <p>Cargando estado de cuenta...</p>;
+  if (!alumno) return <p>Alumno no encontrado.</p>;
+
+  return (
+    <div>
+      <Link
+        to="/admin/finanzas"
+        className="flex items-center text-principal mb-6 hover:underline"
+      >
+        <ArrowLeft size={18} className="mr-2" />
+        Volver a Caja
+      </Link>
+      <h2 className="text-3xl font-bold text-gray-800 mb-2">
+        {alumno.nombre} {alumno.apellido_paterno}
+      </h2>
+      <p className="text-lg text-secundario mb-6">
+        Matrícula: {alumno.matricula || "N/A"}
+      </p>
+
+      <div className="bg-white p-6 rounded-lg shadow">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-xl font-bold">Estado de Cuenta</h3>
+          <button
+            onClick={() => setShowModal(true)}
+            className="flex items-center px-4 py-2 font-semibold text-white bg-secundario rounded-md hover:opacity-90"
+          >
+            <Plus className="w-5 h-5 mr-2" />
+            Generar Adeudo Manual
+          </button>
+        </div>
+        <table className="w-full table-auto text-sm">
+          <thead className="text-left bg-gray-50">
+            <tr>
+              <th className="px-4 py-2">Concepto</th>
+              <th className="px-4 py-2">Monto</th>
+              <th className="px-4 py-2">Vencimiento</th>
+              <th className="px-4 py-2">Estatus</th>
+              <th className="px-4 py-2">Acción</th>
+            </tr>
+          </thead>
+          <tbody>
+            {adeudos.map((a) => (
+              <tr key={a.id} className="border-b">
+                <td className="px-4 py-2">{a.nombre_concepto}</td>
+                <td className="px-4 py-2">${a.monto_a_pagar}</td>
+                <td className="px-4 py-2">
+                  {renderFecha(a.fecha_vencimiento)}
+                </td>
+                <td className="px-4 py-2">
+                  <span
+                    className={`px-3 py-1 rounded-full text-xs font-semibold ${getEstatusBadge(
+                      a.estatus_pago
+                    )}`}
+                  >
+                    {a.estatus_pago}
+                  </span>
+                </td>
+                <td className="px-4 py-2">
+                  {a.estatus_pago === "pendiente" && (
+                    <button
+                      onClick={() => handleMarcarPagado(a.id)}
+                      className="px-3 py-1 text-sm font-medium text-white bg-principal rounded-md hover:opacity-90"
+                    >
+                      Registrar Pago
+                    </button>
+                  )}
+                  {a.estatus_pago === "pagado" && (
+                    <span className="text-green-600 font-semibold">Pagado</span>
+                  )}
+                </td>
+              </tr>
+            ))}
+            {adeudos.length === 0 && (
+              <tr>
+                <td colSpan="5" className="text-center text-gray-500 py-6">
+                  Este alumno no tiene adeudos.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Modal para Generar Adeudo Manual */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6 relative">
+            <button
+              onClick={() => setShowModal(false)}
+              className="absolute top-4 right-4 text-gray-500 hover:text-gray-800"
+            >
+              <X size={24} />
+            </button>
+            <h3 className="text-2xl font-bold mb-6">Generar Adeudo Manual</h3>
+            <form onSubmit={handleGenerarAdeudo} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Concepto de Pago
+                </label>
+                <select
+                  name="concepto_id"
+                  className="w-full px-3 py-2 mt-1 border rounded-md"
+                  required
+                >
+                  {conceptos.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.nombre_concepto} (Default: ${c.monto_default})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Monto (Opcional, si es diferente al default)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  name="monto_a_pagar"
+                  placeholder="Dejar en blanco para usar el monto default"
+                  className="w-full px-3 py-2 mt-1 border rounded-md"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Fecha de Vencimiento (Opcional)
+                </label>
+                <input
+                  type="date"
+                  name="fecha_vencimiento"
+                  className="w-full px-3 py-2 mt-1 border rounded-md"
+                />
+              </div>
+              <div className="flex justify-end space-x-4 mt-8">
+                <button
+                  type="button"
+                  onClick={() => setShowModal(false)}
+                  className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-principal text-white rounded-md hover:opacity-90"
+                >
+                  Generar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+// --- FIN COMPONENTE: DetalleFinancieroAlumnoPage (Admin) ---
+
+// --- INICIA NUEVO COMPONENTE: MisPagosPage (Alumno) ---
+const MisPagosPage = () => {
+  const [adeudos, setAdeudos] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchAdeudos = async () => {
+      try {
+        const { data } = await api.get("/alumno/mis-adeudos");
+        setAdeudos(data);
+      } catch (error) {
+        console.error("Error al cargar mis adeudos", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchAdeudos();
+  }, []);
+
+  const getEstatusBadge = (estatus) => {
+    switch (estatus) {
+      case "pagado":
+        return "bg-green-100 text-green-800";
+      case "pendiente":
+        return "bg-yellow-100 text-yellow-800";
+      case "vencido":
+        return "bg-red-100 text-red-800";
+      default:
+        return "bg-gray-100 text-gray-800";
+    }
+  };
+
+  // Helper para formatear fechas DATE (YYYY-MM-DD) de forma segura
+  const renderFecha = (fechaString) => {
+    if (!fechaString || fechaString.startsWith("0000-")) {
+      return "N/A";
+    }
+    const parts = fechaString.split("T")[0].split("-");
+    if (parts.length !== 3) {
+      return "Fecha Inválida";
+    }
+    const date = new Date(parts[0], parts[1] - 1, parts[2]);
+    if (isNaN(date.getTime())) {
+      return "Fecha Inválida";
+    }
+    return date.toLocaleDateString();
+  };
+  // Helper para formatear fechas DATETIME (con hora)
+  const renderFechaHora = (fechaString) => {
+    if (!fechaString || fechaString.startsWith("0000-")) {
+      return "N/A";
+    }
+    // Los DATETIME/TIMESTAMP de MySQL (ej. '2025-10-27T18:00:00Z')
+    // SÍ son bien interpretados por new Date()
+    const date = new Date(fechaString);
+    if (isNaN(date.getTime())) {
+      return "Fecha Inválida";
+    }
+    return date.toLocaleString(); // .toLocaleString() incluye fecha y hora
+  };
+
+  if (loading) return <p>Cargando tu estado de cuenta...</p>;
+
+  const totalAdeudado = adeudos
+    .filter(
+      (a) => a.estatus_pago === "pendiente" || a.estatus_pago === "vencido"
+    )
+    .reduce((sum, a) => sum + parseFloat(a.monto_a_pagar), 0);
+
+  return (
+    <div>
+      <h2 className="text-3xl font-bold text-gray-800 mb-6">
+        Mi Estado de Cuenta
+      </h2>
+
+      <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-md">
+        <p className="font-bold">Total Adeudado (Pendiente y Vencido):</p>
+        <p className="text-2xl font-bold">${totalAdeudado.toFixed(2)}</p>
+        <p className="text-sm mt-1">
+          Por favor, acude a caja para regularizar tu situación.
+        </p>
+      </div>
+
+      <div className="bg-white p-6 rounded-lg shadow">
+        <h3 className="text-xl font-bold mb-4">Historial de Pagos</h3>
+        <table className="w-full table-auto text-sm">
+          <thead className="text-left bg-gray-50">
+            <tr>
+              <th className="px-4 py-2">Concepto</th>
+              <th className="px-4 py-2">Monto</th>
+              <th className="px-4 py-2">Vencimiento</th>
+              <th className="px-4 py-2">Estatus</th>
+              <th className="px-4 py-2">Fecha de Pago</th>
+            </tr>
+          </thead>
+          <tbody>
+            {adeudos.map((a) => (
+              <tr key={a.id} className="border-b">
+                <td className="px-4 py-2">{a.nombre_concepto}</td>
+                <td className="px-4 py-2">${a.monto_a_pagar}</td>
+                <td className="px-4 py-2">
+                  {renderFecha(a.fecha_vencimiento)}
+                  {renderFechaHora(a.fecha_pago)}
+                </td>
+                <td className="px-4 py-2">
+                  <span
+                    className={`px-3 py-1 rounded-full text-xs font-semibold ${getEstatusBadge(
+                      a.estatus_pago
+                    )}`}
+                  >
+                    {a.estatus_pago}
+                  </span>
+                </td>
+                <td className="px-4 py-2">
+                  {a.fecha_pago
+                    ? new Date(a.fecha_pago).toLocaleString()
+                    : "N/A"}
+                </td>
+              </tr>
+            ))}
+            {adeudos.length === 0 && (
+              <tr>
+                <td colSpan="5" className="text-center text-gray-500 py-6">
+                  ¡Felicidades! No tienes adeudos registrados.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+// --- FIN COMPONENTE: MisPagosPage (Alumno) ---
+
 // --- NUEVA PÁGINA DE MIGRACIÓN ---
 const MigracionGruposPage = () => {
   const [grupos, setGrupos] = useState([]);
@@ -6091,22 +7016,7 @@ function App() {
                   />
                 }
               />
-              <Route
-                path="/planes-estudio"
-                element={
-                  <CatalogoPage
-                    title="Planes de Estudio"
-                    apiEndpoint="planes_estudio"
-                    fields={[
-                      {
-                        name: "nombre_plan",
-                        placeholder: "Nombre del Plan (ej. Ing. Software 2025)",
-                      },
-                    ]}
-                    columns={[{ key: "nombre_plan", header: "Nombre" }]}
-                  />
-                }
-              />
+              <Route path="/planes-estudio" element={<PlanesEstudioPage />} />
               <Route
                 path="/grados"
                 element={
@@ -6161,6 +7071,40 @@ function App() {
                   />
                 }
               />
+              {/* --- INICIO NUEVAS RUTAS FINANZAS (ADMIN) --- */}
+              <Route
+                path="/conceptos-pago"
+                element={
+                  <CatalogoPage
+                    title="Conceptos de Pago"
+                    apiEndpoint="conceptos_pago"
+                    fields={[
+                      {
+                        name: "nombre_concepto",
+                        placeholder: "Nombre (ej. Colegiatura)",
+                      },
+                      {
+                        name: "monto_default",
+                        placeholder: "Monto Default (ej. 1500.00)",
+                        type: "number",
+                      },
+                      // (Omitimos 'tipo' y 'es_concepto_inscripcion' por simplicidad,
+                      // pero podrías añadirlos como <select> o <input type="checkbox">)
+                    ]}
+                    columns={[
+                      { key: "nombre_concepto", header: "Concepto" },
+                      { key: "monto_default", header: "Monto Default" },
+                      { key: "tipo", header: "Tipo" },
+                    ]}
+                  />
+                }
+              />
+              <Route path="/admin/finanzas" element={<CajaPage />} />
+              <Route
+                path="/admin/finanzas/alumno/:id"
+                element={<DetalleFinancieroAlumnoPage />}
+              />
+              {/* --- FIN NUEVAS RUTAS FINANZAS (ADMIN) --- */}
               <Route path="/mi-perfil" element={<MiPerfilPage />} />
             </Route>
           </Route>
@@ -6220,6 +7164,9 @@ function App() {
                 path="/alumno/grupo/:grupoId/asignatura/:asignaturaId/aula"
                 element={<AulaVirtualPage />}
               />
+              {/* --- INICIO NUEVA RUTA FINANZAS (ALUMNO) --- */}
+              <Route path="/alumno/mis-pagos" element={<MisPagosPage />} />
+              {/* --- FIN NUEVA RUTA FINANZAS (ALUMNO) --- */}
               <Route path="/alumno/mi-perfil" element={<MiPerfilPage />} />
               <Route
                 path="/alumno/grupo/:grupoId/asignatura/:asignaturaId/foro/hilo/:hiloId"

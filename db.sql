@@ -232,6 +232,40 @@ CREATE TABLE foros_respuestas (
     FOREIGN KEY (creado_por_usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
 );
 
+
+-- 1. Tabla para los conceptos de pago (Inscripción, Colegiatura, etc.)
+CREATE TABLE IF NOT EXISTS conceptos_pago (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    nombre_concepto VARCHAR(255) NOT NULL,
+    monto_default DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
+    -- Tipo nos ayudará a saber si es un pago recurrente (como colegiatura)
+    -- o un pago único (como inscripción o examen)
+    tipo ENUM('UNICO', 'RECURRENTE') NOT NULL DEFAULT 'UNICO',
+    -- Opcional: Para saber si este concepto aplica a todos los nuevos
+    es_concepto_inscripcion BOOLEAN NOT NULL DEFAULT FALSE
+);
+
+-- 2. Tabla para los adeudos específicos de cada alumno
+CREATE TABLE IF NOT EXISTS adeudos_alumnos (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    alumno_id INT NOT NULL,
+    concepto_id INT NOT NULL,
+    monto_a_pagar DECIMAL(10, 2) NOT NULL,
+    estatus_pago ENUM('pendiente', 'pagado', 'vencido', 'cancelado') NOT NULL DEFAULT 'pendiente',
+    fecha_vencimiento DATE NULL,
+    fecha_pago DATETIME NULL,
+    -- Quién registró el pago (admin, caja)
+    registrado_por_usuario_id INT NULL, 
+    
+    FOREIGN KEY (alumno_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+    FOREIGN KEY (concepto_id) REFERENCES conceptos_pago(id),
+    FOREIGN KEY (registrado_por_usuario_id) REFERENCES usuarios(id)
+);
+
+-- 3. (OPCIONAL PERO RECOMENDADO) Insertar un concepto de inscripción
+-- Marca `es_concepto_inscripcion` como 1 (TRUE)
+INSERT INTO conceptos_pago (nombre_concepto, monto_default, tipo, es_concepto_inscripcion)
+VALUES ('Inscripción Ciclo 2025', 2500.00, 'UNICO', 1);
 -- --- TERMINA NUEVO CÓDIGO ---
 
 
