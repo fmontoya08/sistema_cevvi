@@ -56,6 +56,20 @@ import {
   Send, // <-- NUEVO
   DollarSign, // <-- AÑADIR
   ClipboardEdit, // <-- AÑADIR
+  RotateCcw,
+  FilePlus, // <-- AÑADIR
+  FileCheck, // <-- AÑADIR
+  FileClock, // <-- AÑADIR
+  FileX, // <-- AÑADIR
+  Eye,
+  School,
+  UserCheck, // Para docentes
+  Search,
+  GitBranch, // <--- NUEVO
+  AlertTriangle, // Para Alertas
+  Briefcase, // Para Docentes
+  Mail, // Para tabla de usuarios
+  Phone, // Para tabla de usuarios
 } from "lucide-react";
 import { Bar, Pie } from "react-chartjs-2";
 import {
@@ -77,7 +91,7 @@ ChartJS.register(
   CategoryScale,
   LinearScale, // <<< ¡CONFIRMA que 'LinearScale' esté aquí!
   BarElement,
-  Title
+  Title,
 );
 
 // --- CONFIGURACIÓN DE AXIOS ---
@@ -95,7 +109,7 @@ api.interceptors.request.use(
   },
   (error) => {
     return Promise.reject(error);
-  }
+  },
 );
 
 // Interceptor de RESPUESTA (para manejar errores)
@@ -125,7 +139,7 @@ api.interceptors.response.use(
     }
     // Retornamos el error para que otras partes (como el login) puedan manejarlo
     return Promise.reject(error);
-  }
+  },
 );
 // --- FIN DEL NUEVO BLOQUE ---
 
@@ -169,7 +183,7 @@ const AuthProvider = ({ children }) => {
         navigate("/login");
       }
     },
-    [navigate]
+    [navigate],
   );
 
   const logout = useCallback(() => {
@@ -198,7 +212,7 @@ const AuthProvider = ({ children }) => {
       logout,
       updateProfilePic,
     }),
-    [user, loading, login, logout, updateProfilePic]
+    [user, loading, login, logout, updateProfilePic],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -398,10 +412,12 @@ const AdminLayout = () => {
 
     { icon: Book, label: "Asignaturas", path: "/asignaturas" },
     { icon: Group, label: "Grupos", path: "/grupos" },
-    { icon: ArrowRightLeft, label: "Migrar Grupos", path: "/migrar-grupos" },
+    { icon: GitBranch, label: "Migración", path: "/admin/migracion" },
 
     // --- AÑADE ESTA LÍNEA ---
     { icon: DollarSign, label: "Caja y Finanzas", path: "/admin/finanzas" },
+    // --- FIN ---
+    { icon: ClipboardEdit, label: "Solicitudes", path: "/admin/solicitudes" },
     // --- FIN ---
   ];
 
@@ -465,9 +481,9 @@ const AdminLayout = () => {
                   user?.foto_perfil
                     ? `http://localhost:3001/uploads/perfiles/${user.foto_perfil}`
                     : `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                        user?.nombre || "?"
+                        user?.nombre || "?",
                       )}+${encodeURIComponent(
-                        user?.apellido_paterno || "?"
+                        user?.apellido_paterno || "?",
                       )}&background=random&color=fff`
                 }
                 alt="Perfil"
@@ -476,9 +492,9 @@ const AdminLayout = () => {
                 onError={(e) => {
                   e.target.onerror = null;
                   e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                    user?.nombre || "?"
+                    user?.nombre || "?",
                   )}+${encodeURIComponent(
-                    user?.apellido_paterno || "?"
+                    user?.apellido_paterno || "?",
                   )}&background=random&color=fff`;
                 }}
               />
@@ -568,9 +584,9 @@ const DocenteLayout = () => {
                   user?.foto_perfil
                     ? `http://localhost:3001/uploads/perfiles/${user.foto_perfil}`
                     : `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                        user?.nombre || "?"
+                        user?.nombre || "?",
                       )}+${encodeURIComponent(
-                        user?.apellido_paterno || "?"
+                        user?.apellido_paterno || "?",
                       )}&background=random&color=fff`
                 }
                 alt="Perfil"
@@ -579,9 +595,9 @@ const DocenteLayout = () => {
                 onError={(e) => {
                   e.target.onerror = null;
                   e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                    user?.nombre || "?"
+                    user?.nombre || "?",
                   )}+${encodeURIComponent(
-                    user?.apellido_paterno || "?"
+                    user?.apellido_paterno || "?",
                   )}&background=random&color=fff`;
                 }}
               />
@@ -637,6 +653,16 @@ const AlumnoLayout = () => {
             Mis Pagos
           </Link>
           {/* --- FIN --- */}
+          {/* --- AÑADE ESTE NUEVO LINK --- */}
+          <Link
+            to="/alumno/mis-solicitudes"
+            className="flex items-center px-4 py-2 rounded-lg text-gray-300 hover:bg-gray-700 hover:text-white"
+            // className={`flex items-center ... ${location.pathname === '/alumno/mis-solicitudes' ? 'bg-principal text-white' : '...'}`}
+          >
+            <ClipboardEdit className="w-5 h-5 mr-3" />
+            Mis Solicitudes
+          </Link>
+          {/* --- FIN --- */}
         </nav>
         <div className="px-4 py-4 border-t border-gray-700">
           <button
@@ -669,9 +695,9 @@ const AlumnoLayout = () => {
                   user?.foto_perfil
                     ? `http://localhost:3001/uploads/perfiles/${user.foto_perfil}`
                     : `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                        user?.nombre || "?"
+                        user?.nombre || "?",
                       )}+${encodeURIComponent(
-                        user?.apellido_paterno || "?"
+                        user?.apellido_paterno || "?",
                       )}&background=random&color=fff`
                 }
                 alt="Perfil"
@@ -680,9 +706,9 @@ const AlumnoLayout = () => {
                 onError={(e) => {
                   e.target.onerror = null;
                   e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                    user?.nombre || "?"
+                    user?.nombre || "?",
                   )}+${encodeURIComponent(
-                    user?.apellido_paterno || "?"
+                    user?.apellido_paterno || "?",
                   )}&background=random&color=fff`;
                 }}
               />
@@ -761,9 +787,9 @@ const AspiranteLayout = () => {
                   user?.foto_perfil
                     ? `http://localhost:3001/uploads/perfiles/${user.foto_perfil}`
                     : `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                        user?.nombre || "?"
+                        user?.nombre || "?",
                       )}+${encodeURIComponent(
-                        user?.apellido_paterno || "?"
+                        user?.apellido_paterno || "?",
                       )}&background=random&color=fff`
                 }
                 alt="Perfil"
@@ -772,9 +798,9 @@ const AspiranteLayout = () => {
                 onError={(e) => {
                   e.target.onerror = null;
                   e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                    user?.nombre || "?"
+                    user?.nombre || "?",
                   )}+${encodeURIComponent(
-                    user?.apellido_paterno || "?"
+                    user?.apellido_paterno || "?",
                   )}&background=random&color=fff`;
                 }}
               />
@@ -1035,143 +1061,1234 @@ const DashboardPage = () => {
   );
 };
 
-const UsuariosPage = () => {
-  const [usuarios, setUsuarios] = useState([]);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [currentUser, setCurrentUser] = useState(null);
-  const navigate = useNavigate();
-
-  const fetchUsuarios = useCallback(async () => {
-    try {
-      const response = await api.get("/admin/usuarios");
-      setUsuarios(response.data);
-    } catch (error) {
-      console.error("Error al obtener usuarios", error);
-    }
-  }, []);
+// --- COMPONENTE USER MODAL (Pegar ANTES de const UsuariosPage) ---
+const UserModal = ({ isOpen, onClose, userToEdit, onSuccess }) => {
+  const [formData, setFormData] = useState({
+    nombre: "",
+    apellido_paterno: "",
+    apellido_materno: "",
+    email: "",
+    password: "",
+    rol: "alumno",
+    telefono: "",
+    curp: "",
+    fecha_nacimiento: "",
+    genero: "Otro",
+  });
 
   useEffect(() => {
-    fetchUsuarios();
-  }, [fetchUsuarios]);
+    if (userToEdit) {
+      setFormData({
+        nombre: userToEdit.nombre || "",
+        apellido_paterno: userToEdit.apellido_paterno || "",
+        apellido_materno: userToEdit.apellido_materno || "",
+        email: userToEdit.email || "",
+        password: "",
+        rol: userToEdit.rol || "alumno",
+        telefono: userToEdit.telefono || "",
+        curp: userToEdit.curp || "",
+        fecha_nacimiento: userToEdit.fecha_nacimiento || "",
+        genero: userToEdit.genero || "Otro",
+      });
+    } else {
+      setFormData({
+        nombre: "",
+        apellido_paterno: "",
+        apellido_materno: "",
+        email: "",
+        password: "",
+        rol: "alumno",
+        telefono: "",
+        curp: "",
+        fecha_nacimiento: "",
+        genero: "Otro",
+      });
+    }
+  }, [userToEdit]);
 
-  const handleDelete = async (id) => {
-    if (
-      window.confirm(
-        "¿Estás seguro de que quieres eliminar este usuario? Esta acción es irreversible."
-      )
-    ) {
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      if (userToEdit) {
+        await api.put(`/admin/usuarios/${userToEdit.id}`, formData);
+      } else {
+        await api.post("/admin/usuarios", formData);
+      }
+      onSuccess();
+      onClose();
+      alert(userToEdit ? "Usuario actualizado" : "Usuario creado");
+    } catch (error) {
+      alert(error.response?.data?.message || "Error al guardar");
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-bold">
+            {userToEdit ? "Editar" : "Nuevo"} Usuario
+          </h2>
+          <button onClick={onClose}>
+            <X size={24} />
+          </button>
+        </div>
+        <form
+          onSubmit={handleSubmit}
+          className="grid grid-cols-1 md:grid-cols-2 gap-4"
+        >
+          <input
+            placeholder="Nombre"
+            name="nombre"
+            value={formData.nombre}
+            onChange={handleChange}
+            required
+            className="border p-2 rounded"
+          />
+          <input
+            placeholder="Apellido Paterno"
+            name="apellido_paterno"
+            value={formData.apellido_paterno}
+            onChange={handleChange}
+            required
+            className="border p-2 rounded"
+          />
+          <input
+            placeholder="Apellido Materno"
+            name="apellido_materno"
+            value={formData.apellido_materno}
+            onChange={handleChange}
+            className="border p-2 rounded"
+          />
+          <input
+            placeholder="Email"
+            type="email"
+            name="email"
+            value={formData.email}
+            onChange={handleChange}
+            required
+            className="border p-2 rounded"
+          />
+          <input
+            placeholder={
+              userToEdit ? "Nueva Contraseña (Opcional)" : "Contraseña"
+            }
+            type="password"
+            name="password"
+            value={formData.password}
+            onChange={handleChange}
+            required={!userToEdit}
+            className="border p-2 rounded"
+          />
+          <select
+            name="rol"
+            value={formData.rol}
+            onChange={handleChange}
+            className="border p-2 rounded bg-white"
+          >
+            <option value="alumno">Alumno</option>
+            <option value="docente">Docente</option>
+            <option value="admin">Administrador</option>
+            <option value="aspirante">Aspirante</option>
+          </select>
+          <input
+            placeholder="Teléfono"
+            name="telefono"
+            value={formData.telefono}
+            onChange={handleChange}
+            className="border p-2 rounded"
+          />
+          <input
+            placeholder="CURP"
+            name="curp"
+            value={formData.curp}
+            onChange={handleChange}
+            className="border p-2 rounded uppercase"
+          />
+          <select
+            name="genero"
+            value={formData.genero}
+            onChange={handleChange}
+            className="border p-2 rounded bg-white"
+          >
+            <option value="Masculino">Masculino</option>
+            <option value="Femenino">Femenino</option>
+            <option value="Otro">Otro</option>
+          </select>
+          <input
+            type="date"
+            name="fecha_nacimiento"
+            value={formData.fecha_nacimiento}
+            onChange={handleChange}
+            className="border p-2 rounded"
+          />
+          <div className="col-span-1 md:col-span-2 flex justify-end gap-3 mt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 border rounded"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              className="px-4 py-2 bg-blue-600 text-white rounded flex items-center gap-2"
+            >
+              <Save size={18} /> Guardar
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// --- COMPONENTE FICHA DE USUARIO (Pegar después de UserModal) ---
+const UserDetailModal = ({ user, onClose }) => {
+  if (!user) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50 p-4 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border border-gray-100">
+        {/* Encabezado con degradado */}
+        <div className="bg-gradient-to-r from-blue-600 to-blue-800 p-6 text-white text-center relative">
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 text-white/80 hover:text-white transition-colors"
+          >
+            <X size={24} />
+          </button>
+
+          <div className="w-24 h-24 bg-white rounded-full mx-auto mb-3 flex items-center justify-center text-blue-700 text-3xl font-bold shadow-lg uppercase border-4 border-white/30">
+            {user.nombre.charAt(0)}
+            {user.apellido_paterno.charAt(0)}
+          </div>
+
+          <h2 className="text-2xl font-bold">
+            {user.nombre} {user.apellido_paterno} {user.apellido_materno}
+          </h2>
+          <span
+            className={`inline-block mt-2 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider bg-white/20`}
+          >
+            {user.rol}
+          </span>
+        </div>
+
+        {/* Cuerpo de la Información */}
+        <div className="p-6 space-y-6">
+          {/* Sección de Contacto */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="col-span-2 sm:col-span-1">
+              <p className="text-xs text-gray-400 uppercase font-semibold">
+                Correo Electrónico
+              </p>
+              <p
+                className="text-gray-800 font-medium truncate"
+                title={user.email}
+              >
+                {user.email}
+              </p>
+            </div>
+            <div className="col-span-2 sm:col-span-1">
+              <p className="text-xs text-gray-400 uppercase font-semibold">
+                Teléfono
+              </p>
+              <p className="text-gray-800 font-medium">
+                {user.telefono || "No registrado"}
+              </p>
+            </div>
+          </div>
+
+          <div className="border-t border-gray-100"></div>
+
+          {/* Datos Personales */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <p className="text-xs text-gray-400 uppercase font-semibold">
+                Género
+              </p>
+              <p className="text-gray-800">{user.genero || "-"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-400 uppercase font-semibold">
+                Fecha Nacimiento
+              </p>
+              <p className="text-gray-800">{user.fecha_nacimiento || "-"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-400 uppercase font-semibold">
+                Matrícula
+              </p>
+              <p className="text-gray-800 font-mono">
+                {user.matricula || "N/A"}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-400 uppercase font-semibold">
+                CURP
+              </p>
+              <p className="text-gray-800 font-mono text-sm">
+                {user.curp || "N/A"}
+              </p>
+            </div>
+          </div>
+
+          {/* Pie de la tarjeta */}
+          <div className="pt-4 mt-2 border-t border-gray-100 text-center">
+            <button
+              onClick={onClose}
+              className="text-blue-600 hover:text-blue-800 font-medium text-sm transition-colors"
+            >
+              Cerrar Ficha
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// --- COMPONENTE FICHA DE GRUPO (Pegar después de UserDetailModal) ---
+const GroupDetailModal = ({ grupo, onClose }) => {
+  if (!grupo) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50 p-4 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border border-gray-100">
+        {/* Encabezado Lila/Morado para diferenciar de Usuarios */}
+        <div className="bg-gradient-to-r from-purple-600 to-indigo-700 p-6 text-white relative">
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 text-white/80 hover:text-white transition-colors"
+          >
+            <X size={24} />
+          </button>
+
+          <div className="flex flex-col items-start">
+            <span className="bg-white/20 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider mb-2">
+              {grupo.modalidad}
+            </span>
+            <h2 className="text-3xl font-bold">{grupo.nombre_grupo}</h2>
+            <p className="text-purple-100 text-lg mt-1">{grupo.nombre_plan}</p>
+          </div>
+        </div>
+
+        {/* Cuerpo */}
+        <div className="p-6 space-y-6">
+          <div className="grid grid-cols-2 gap-6">
+            <div className="bg-purple-50 p-3 rounded-lg">
+              <p className="text-xs text-purple-600 uppercase font-bold mb-1">
+                Grado
+              </p>
+              <p className="text-gray-800 font-medium text-lg">
+                {grupo.nombre_grado}
+              </p>
+            </div>
+            <div className="bg-blue-50 p-3 rounded-lg">
+              <p className="text-xs text-blue-600 uppercase font-bold mb-1">
+                Cupo
+              </p>
+              <p className="text-gray-800 font-medium text-lg">
+                {grupo.cupo} Alumnos
+              </p>
+            </div>
+            <div className="col-span-2 bg-gray-50 p-3 rounded-lg flex justify-between items-center">
+              <div>
+                <p className="text-xs text-gray-500 uppercase font-bold mb-1">
+                  Ciclo Escolar
+                </p>
+                <p className="text-gray-800 font-medium">
+                  {grupo.nombre_ciclo}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-gray-500 uppercase font-bold mb-1">
+                  Sede
+                </p>
+                <p className="text-gray-800 font-medium">{grupo.nombre_sede}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="pt-4 mt-2 border-t border-gray-100 text-center">
+            <button
+              onClick={onClose}
+              className="text-purple-600 hover:text-purple-800 font-medium text-sm transition-colors"
+            >
+              Cerrar Ficha
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// --- COMPONENTE USUARIOS COMPLETO (CON PAPELERA Y DATOS EXTRA) ---
+const UsuariosPage = () => {
+  const [usuarios, setUsuarios] = useState([]);
+  const [papelera, setPapelera] = useState([]); // Estado para eliminados
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState("todos");
+
+  // Modales
+  const [modalAspirante, setModalAspirante] = useState(false);
+  const [modalDocente, setModalDocente] = useState(false);
+  const [usuarioSeleccionado, setUsuarioSeleccionado] = useState(null);
+  const [modoEdicion, setModoEdicion] = useState(false);
+
+  // Catálogos
+  const [carreras, setCarreras] = useState([]);
+  const [sedes, setSedes] = useState([]);
+
+  // Formularios
+  const formInicial = {
+    nombre: "",
+    apellido_paterno: "",
+    apellido_materno: "",
+    email: "",
+    telefono: "",
+    genero: "",
+    curp: "",
+    fecha_nacimiento: "",
+  };
+  const [formAspirante, setFormAspirante] = useState({
+    ...formInicial,
+    carrera_id: "",
+    sede_id: "",
+  });
+  const [formDocente, setFormDocente] = useState({ ...formInicial });
+
+  // Carga de datos inicial
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const [uRes, papeleraRes, cRes, sRes] = await Promise.all([
+        api.get("/admin/usuarios"),
+        api.get("/admin/usuarios/eliminados"), // Cargamos la papelera
+        api.get("/admin/carreras"),
+        api.get("/admin/sedes"),
+      ]);
+      setUsuarios(uRes.data);
+      setPapelera(papeleraRes.data);
+      setCarreras(cRes.data);
+      setSedes(sRes.data);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  // --- ACCIONES ---
+  const handleVerCredencial = (u) => {
+    setUsuarioSeleccionado(u);
+    setModoEdicion(false);
+  };
+  const handleEditarUsuario = (u) => {
+    setUsuarioSeleccionado(u);
+    setModoEdicion(true);
+  };
+
+  const handleEliminarUsuario = async (id) => {
+    if (window.confirm("¿Estás seguro de desactivar este usuario?")) {
       try {
         await api.delete(`/admin/usuarios/${id}`);
-        fetchUsuarios();
+        alert("Usuario enviado a la papelera.");
+        fetchData();
       } catch (error) {
-        console.error("Error al eliminar usuario", error);
-        alert("Error al eliminar el usuario.");
+        alert("Error al eliminar");
       }
     }
   };
 
-  const openModal = (user = null) => {
-    setCurrentUser(user);
-    setModalOpen(true);
-  };
-
-  const closeModal = () => {
-    setModalOpen(false);
-    setCurrentUser(null);
-  };
-
-  const handleRowClick = (user) => {
-    if (user.rol === "aspirante") {
-      navigate(`/usuarios/aspirante/${user.id}`);
+  const handleRestaurarUsuario = async (id) => {
+    if (window.confirm("¿Restaurar este usuario?")) {
+      try {
+        await api.put(`/admin/usuarios/${id}/reactivar`);
+        alert("Usuario restaurado exitosamente.");
+        fetchData();
+      } catch (error) {
+        alert("Error al restaurar");
+      }
     }
   };
 
-  return (
-    <div>
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-3xl font-bold text-gray-800">
-          Gestión de Usuarios
-        </h2>
-        <button
-          onClick={() => openModal()}
-          className="flex items-center px-4 py-2 font-semibold text-white bg-principal rounded-md hover:opacity-90"
-        >
-          <Plus className="w-5 h-5 mr-2" />
-          Nuevo Usuario
-        </button>
-      </div>
-      {/* Añadimos 'overflow-x-auto' al contenedor */}
-      <div className="bg-white p-6 rounded-lg shadow overflow-x-auto">
-        {/* Añadimos 'text-sm' para hacer la fuente un poco más pequeña */}
-        <table className="w-full table-auto text-sm">
-          <thead className="text-left bg-gray-50">
-            <tr>
-              <th className="px-4 py-2">Nombre Completo</th>
-              <th className="px-4 py-2">Email</th>
-              <th className="px-4 py-2">Rol</th>
-              <th className="px-4 py-2">Matrícula</th>
-              {/* --- NUEVAS CABECERAS --- */}
-              <th className="px-4 py-2">Teléfono</th>
-              <th className="px-4 py-2">CURP</th>
-              <th className="px-4 py-2">Género</th>
-              {/* --- FIN NUEVAS CABECERAS --- */}
-              <th className="px-4 py-2">Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {usuarios.map((user) => (
-              <tr
-                key={user.id}
-                className={`border-b ${
-                  user.rol === "aspirante"
-                    ? "cursor-pointer hover:bg-gray-50"
-                    : ""
-                }`}
-                onClick={() => handleRowClick(user)}
-              >
-                <td className="px-4 py-2">{`${user.nombre} ${
-                  user.apellido_paterno
-                } ${user.apellido_materno || ""}`}</td>
-                <td className="px-4 py-2">{user.email}</td>
-                <td className="px-4 py-2 capitalize">{user.rol}</td>
-                <td className="px-4 py-2">{user.matricula || "N/A"}</td>
-                {/* --- NUEVAS CELDAS --- */}
-                <td className="px-4 py-2">{user.telefono || "N/A"}</td>
-                <td className="px-4 py-2">{user.curp || "N/A"}</td>
-                <td className="px-4 py-2">{user.genero || "N/A"}</td>
-                {/* --- FIN NUEVAS CELDAS --- */}
+  const handleGuardarEdicion = async (e) => {
+    e.preventDefault();
+    try {
+      // Mapeamos los campos del formulario a lo que espera la BD
+      const datosParaEnviar = {
+        ...usuarioSeleccionado,
+        carrera_interes_id: usuarioSeleccionado.carrera_interes_id || null, // Asegurar nombres correctos
+        sede_interes_id: usuarioSeleccionado.sede_interes_id || null,
+      };
 
-                <td className="px-4 py-2 flex items-center space-x-2">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      openModal(user);
-                    }}
-                    className="text-secundario hover:text-principal"
+      await api.put(
+        `/admin/usuarios/${usuarioSeleccionado.id}`,
+        datosParaEnviar,
+      );
+      alert("Usuario actualizado.");
+      setUsuarioSeleccionado(null);
+      fetchData();
+    } catch (error) {
+      alert("Error al actualizar.");
+    }
+  };
+
+  // Creación
+  const handleCrearAspirante = async (e) => {
+    e.preventDefault();
+    if (!formAspirante.carrera_id || !formAspirante.sede_id)
+      return alert("Faltan datos");
+    try {
+      await api.post("/admin/usuarios/crear-aspirante", formAspirante);
+      alert("Aspirante creado.");
+      setModalAspirante(false);
+      setFormAspirante({ ...formInicial, carrera_id: "", sede_id: "" });
+      fetchData();
+    } catch (e) {
+      alert(e.response?.data?.message);
+    }
+  };
+
+  const handleCrearDocente = async (e) => {
+    e.preventDefault();
+    try {
+      await api.post("/admin/usuarios/crear-docente", formDocente);
+      alert("Docente creado.");
+      setModalDocente(false);
+      setFormDocente({ ...formInicial });
+      fetchData();
+    } catch (e) {
+      alert(e.response?.data?.message);
+    }
+  };
+
+  // Filtrado
+  const listaAspirantes = usuarios.filter((u) => u.rol === "aspirante");
+  const listaDocentes = usuarios.filter((u) => u.rol === "docente");
+  const listaAlumnos = usuarios.filter((u) => u.rol === "alumno");
+
+  // --- TABLA REUTILIZABLE ---
+  const TablaUsuarios = ({ datos, esPapelera = false }) => (
+    <div className="bg-white rounded-xl shadow-sm border overflow-hidden animate-in fade-in">
+      <table className="w-full text-left">
+        <thead className="bg-gray-50 text-xs text-gray-500 uppercase font-bold">
+          <tr>
+            <th className="p-4">Usuario</th>
+            <th className="p-4 hidden sm:table-cell">Info Académica</th>
+            <th className="p-4">Rol / ID</th>
+            <th className="p-4 text-right">Acciones</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100 text-sm">
+          {datos.length === 0 ? (
+            <tr>
+              <td colSpan="4" className="p-8 text-center text-gray-400">
+                No hay registros aquí.
+              </td>
+            </tr>
+          ) : (
+            datos.map((u) => (
+              <tr
+                key={u.id}
+                className={`transition-colors ${esPapelera ? "bg-red-50 hover:bg-red-100" : "hover:bg-gray-50"}`}
+              >
+                <td className="p-4">
+                  <div className="font-bold text-gray-800">
+                    {u.nombre} {u.apellido_paterno}
+                  </div>
+                  <div className="text-xs text-gray-500 flex flex-col">
+                    <span>{u.email}</span>
+                    <span className="font-mono">{u.curp}</span>
+                  </div>
+                </td>
+                <td className="p-4 hidden sm:table-cell">
+                  <div className="text-gray-600 font-medium">
+                    {u.nombre_carrera || "Sin carrera"}
+                  </div>
+                  <div className="text-gray-400 text-xs flex items-center gap-1">
+                    <Building size={12} /> {u.nombre_sede || "Sin sede"}
+                  </div>
+                </td>
+                <td className="p-4">
+                  <span
+                    className={`text-[10px] px-2 py-0.5 rounded-full uppercase font-bold mb-1 inline-block
+                  ${
+                    u.rol === "aspirante"
+                      ? "bg-orange-100 text-orange-700"
+                      : u.rol === "docente"
+                        ? "bg-blue-100 text-blue-700"
+                        : "bg-green-100 text-green-700"
+                  }`}
                   >
-                    <Edit size={18} />
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDelete(user.id);
-                    }}
-                    className="text-red-500 hover:text-red-700"
-                  >
-                    <Trash2 size={18} />
-                  </button>
+                    {u.rol}
+                  </span>
+                  <div className="font-mono text-purple-700 font-bold text-xs">
+                    {u.matricula || "---"}
+                  </div>
+                </td>
+                <td className="p-4 text-right">
+                  <div className="flex justify-end gap-1">
+                    {esPapelera ? (
+                      <button
+                        onClick={() => handleRestaurarUsuario(u.id)}
+                        className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-xs font-bold flex items-center gap-1"
+                      >
+                        <RotateCcw size={14} /> Restaurar
+                      </button>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => handleVerCredencial(u)}
+                          className="p-2 text-blue-600 hover:bg-blue-50 rounded"
+                        >
+                          <Eye size={18} />
+                        </button>
+                        <button
+                          onClick={() => handleEditarUsuario(u)}
+                          className="p-2 text-orange-600 hover:bg-orange-50 rounded"
+                        >
+                          <Edit size={18} />
+                        </button>
+                        <button
+                          onClick={() => handleEliminarUsuario(u.id)}
+                          className="p-2 text-red-600 hover:bg-red-50 rounded"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </td>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            ))
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+
+  return (
+    <div className="space-y-6 animate-in fade-in">
+      {/* Header */}
+      <div className="flex flex-col lg:flex-row justify-between items-center gap-4">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-800">
+            Directorio de Usuarios
+          </h2>
+          <p className="text-gray-500 text-sm">
+            Gestiona toda la comunidad escolar.
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setModalAspirante(true)}
+            className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 font-bold flex items-center gap-2 shadow-sm"
+          >
+            <UserPlus size={18} /> Nuevo Aspirante
+          </button>
+          <button
+            onClick={() => setModalDocente(true)}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 font-bold flex items-center gap-2 shadow-sm"
+          >
+            <Briefcase size={18} /> Nuevo Docente
+          </button>
+        </div>
       </div>
-      {modalOpen && (
-        <UsuarioModal
-          usuario={currentUser}
-          onClose={closeModal}
-          onSave={fetchUsuarios}
-        />
+
+      {/* TABS DE NAVEGACIÓN */}
+      <div className="flex border-b overflow-x-auto">
+        <button
+          onClick={() => setActiveTab("todos")}
+          className={`px-5 py-3 border-b-2 font-bold text-sm whitespace-nowrap ${activeTab === "todos" ? "border-gray-800 text-gray-900" : "border-transparent text-gray-500 hover:text-gray-700"}`}
+        >
+          Todos
+        </button>
+        <button
+          onClick={() => setActiveTab("aspirantes")}
+          className={`px-5 py-3 border-b-2 font-bold text-sm whitespace-nowrap ${activeTab === "aspirantes" ? "border-orange-500 text-orange-600" : "border-transparent text-gray-500 hover:text-orange-600"}`}
+        >
+          Aspirantes ({listaAspirantes.length})
+        </button>
+        <button
+          onClick={() => setActiveTab("docentes")}
+          className={`px-5 py-3 border-b-2 font-bold text-sm whitespace-nowrap ${activeTab === "docentes" ? "border-blue-500 text-blue-600" : "border-transparent text-gray-500 hover:text-blue-600"}`}
+        >
+          Docentes ({listaDocentes.length})
+        </button>
+        <button
+          onClick={() => setActiveTab("alumnos")}
+          className={`px-5 py-3 border-b-2 font-bold text-sm whitespace-nowrap ${activeTab === "alumnos" ? "border-green-500 text-green-600" : "border-transparent text-gray-500 hover:text-green-600"}`}
+        >
+          Alumnos ({listaAlumnos.length})
+        </button>
+
+        {/* PESTAÑA PAPELERA */}
+        <button
+          onClick={() => setActiveTab("papelera")}
+          className={`px-5 py-3 border-b-2 font-bold text-sm whitespace-nowrap flex items-center gap-2 ml-auto ${activeTab === "papelera" ? "border-red-500 text-red-600 bg-red-50" : "border-transparent text-gray-400 hover:text-red-500"}`}
+        >
+          <Trash2 size={16} /> Papelera ({papelera.length})
+        </button>
+      </div>
+
+      {/* CONTENIDO DE TABLAS */}
+      {loading ? (
+        <div className="text-center py-10">Cargando...</div>
+      ) : (
+        <>
+          {activeTab === "todos" && <TablaUsuarios datos={usuarios} />}
+          {activeTab === "aspirantes" && (
+            <TablaUsuarios datos={listaAspirantes} />
+          )}
+          {activeTab === "docentes" && <TablaUsuarios datos={listaDocentes} />}
+          {activeTab === "alumnos" && <TablaUsuarios datos={listaAlumnos} />}
+          {activeTab === "papelera" && (
+            <TablaUsuarios datos={papelera} esPapelera={true} />
+          )}
+        </>
+      )}
+
+      {/* --- MODAL DETALLES / EDICIÓN --- */}
+      {usuarioSeleccionado && (
+        <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-50 p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div
+              className={`p-6 text-white flex justify-between items-start ${modoEdicion ? "bg-orange-500" : "bg-gradient-to-r from-purple-700 to-indigo-700"}`}
+            >
+              <div className="flex gap-4 items-center">
+                <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center text-2xl font-bold border-2 border-white/30">
+                  {usuarioSeleccionado.nombre.charAt(0)}
+                </div>
+                <div>
+                  <h3 className="text-2xl font-bold">
+                    {modoEdicion ? "Editando Usuario" : "Información Completa"}
+                  </h3>
+                  <p className="opacity-90">
+                    {usuarioSeleccionado.rol.toUpperCase()} •{" "}
+                    {usuarioSeleccionado.matricula}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setUsuarioSeleccionado(null)}
+                className="p-1 hover:bg-white/20 rounded-full"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto flex-1">
+              {modoEdicion ? (
+                <form
+                  onSubmit={handleGuardarEdicion}
+                  className="grid grid-cols-1 md:grid-cols-2 gap-4"
+                >
+                  <div className="col-span-2 flex gap-2">
+                    <input
+                      className="border p-2 rounded w-full"
+                      value={usuarioSeleccionado.nombre}
+                      onChange={(e) =>
+                        setUsuarioSeleccionado({
+                          ...usuarioSeleccionado,
+                          nombre: e.target.value,
+                        })
+                      }
+                      placeholder="Nombre"
+                    />
+                    <input
+                      className="border p-2 rounded w-full"
+                      value={usuarioSeleccionado.apellido_paterno}
+                      onChange={(e) =>
+                        setUsuarioSeleccionado({
+                          ...usuarioSeleccionado,
+                          apellido_paterno: e.target.value,
+                        })
+                      }
+                      placeholder="Apellido Paterno"
+                    />
+                    <input
+                      className="border p-2 rounded w-full"
+                      value={usuarioSeleccionado.apellido_materno}
+                      onChange={(e) =>
+                        setUsuarioSeleccionado({
+                          ...usuarioSeleccionado,
+                          apellido_materno: e.target.value,
+                        })
+                      }
+                      placeholder="Apellido Materno"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-gray-500">
+                      Correo
+                    </label>
+                    <input
+                      className="border p-2 rounded w-full"
+                      value={usuarioSeleccionado.email}
+                      onChange={(e) =>
+                        setUsuarioSeleccionado({
+                          ...usuarioSeleccionado,
+                          email: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-gray-500">
+                      Teléfono
+                    </label>
+                    <input
+                      className="border p-2 rounded w-full"
+                      value={usuarioSeleccionado.telefono}
+                      onChange={(e) =>
+                        setUsuarioSeleccionado({
+                          ...usuarioSeleccionado,
+                          telefono: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-gray-500">
+                      CURP
+                    </label>
+                    <input
+                      className="border p-2 rounded w-full"
+                      value={usuarioSeleccionado.curp}
+                      onChange={(e) =>
+                        setUsuarioSeleccionado({
+                          ...usuarioSeleccionado,
+                          curp: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+
+                  {/* --- AQUÍ ESTÁN LOS CAMPOS QUE FALTABAN --- */}
+                  <div>
+                    <label className="text-xs font-bold text-gray-500">
+                      Carrera de Interés
+                    </label>
+                    <select
+                      className="border p-2 rounded w-full"
+                      value={usuarioSeleccionado.carrera_interes_id || ""}
+                      onChange={(e) =>
+                        setUsuarioSeleccionado({
+                          ...usuarioSeleccionado,
+                          carrera_interes_id: e.target.value,
+                        })
+                      }
+                    >
+                      <option value="">Sin Carrera</option>
+                      {carreras.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.nombre_carrera}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-gray-500">
+                      Sede
+                    </label>
+                    <select
+                      className="border p-2 rounded w-full"
+                      value={usuarioSeleccionado.sede_interes_id || ""}
+                      onChange={(e) =>
+                        setUsuarioSeleccionado({
+                          ...usuarioSeleccionado,
+                          sede_interes_id: e.target.value,
+                        })
+                      }
+                    >
+                      <option value="">Sin Sede</option>
+                      {sedes.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.nombre_sede}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {/* ------------------------------------------ */}
+
+                  <div className="col-span-2 pt-4 flex justify-end gap-2 border-t">
+                    <button
+                      type="button"
+                      onClick={() => setModoEdicion(false)}
+                      className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-6 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 font-bold"
+                    >
+                      Guardar Cambios
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-2 gap-6">
+                    <div>
+                      <p className="text-xs font-bold text-gray-400">
+                        NOMBRE COMPLETO
+                      </p>
+                      <p className="font-medium">
+                        {usuarioSeleccionado.nombre}{" "}
+                        {usuarioSeleccionado.apellido_paterno}{" "}
+                        {usuarioSeleccionado.apellido_materno}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-gray-400">
+                        MATRÍCULA
+                      </p>
+                      <p className="font-mono font-bold text-purple-700">
+                        {usuarioSeleccionado.matricula || "---"}
+                      </p>
+                    </div>
+
+                    {/* DATOS ACADÉMICOS QUE FALTABAN */}
+                    <div className="col-span-2 bg-blue-50 p-3 rounded-lg border border-blue-100">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-xs font-bold text-blue-400">
+                            CARRERA
+                          </p>
+                          <p className="text-blue-900 font-medium">
+                            {usuarioSeleccionado.nombre_carrera ||
+                              "No asignada"}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-blue-400">
+                            SEDE
+                          </p>
+                          <p className="text-blue-900 font-medium">
+                            {usuarioSeleccionado.nombre_sede || "No asignada"}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <p className="text-xs font-bold text-gray-400">CORREO</p>
+                      <p>{usuarioSeleccionado.email}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-gray-400">
+                        TELÉFONO
+                      </p>
+                      <p>{usuarioSeleccionado.telefono}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-gray-400">CURP</p>
+                      <p className="font-mono text-xs">
+                        {usuarioSeleccionado.curp}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-gray-400">
+                        FECHA NAC.
+                      </p>
+                      <p>{usuarioSeleccionado.fecha_nacimiento}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end pt-4 border-t">
+                    <button
+                      onClick={() => setModoEdicion(true)}
+                      className="text-orange-600 hover:text-orange-700 font-medium text-sm flex items-center gap-1"
+                    >
+                      <Edit size={16} /> Editar Información Completa
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- MODAL CREAR ASPIRANTE (Sin cambios) --- */}
+      {modalAspirante && (
+        <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden">
+            <div className="bg-orange-600 p-4 text-white font-bold flex justify-between">
+              <h3>Registro de Aspirante</h3>
+              <button onClick={() => setModalAspirante(false)}>
+                <X />
+              </button>
+            </div>
+            <form
+              onSubmit={handleCrearAspirante}
+              className="p-6 grid grid-cols-2 gap-4"
+            >
+              <input
+                required
+                placeholder="Nombre(s)"
+                className="border p-2 rounded"
+                value={formAspirante.nombre}
+                onChange={(e) =>
+                  setFormAspirante({ ...formAspirante, nombre: e.target.value })
+                }
+              />
+              <input
+                required
+                placeholder="Apellido Paterno"
+                className="border p-2 rounded"
+                value={formAspirante.apellido_paterno}
+                onChange={(e) =>
+                  setFormAspirante({
+                    ...formAspirante,
+                    apellido_paterno: e.target.value,
+                  })
+                }
+              />
+              <input
+                placeholder="Apellido Materno"
+                className="border p-2 rounded"
+                value={formAspirante.apellido_materno}
+                onChange={(e) =>
+                  setFormAspirante({
+                    ...formAspirante,
+                    apellido_materno: e.target.value,
+                  })
+                }
+              />
+              <input
+                required
+                placeholder="CURP"
+                className="border p-2 rounded"
+                value={formAspirante.curp}
+                onChange={(e) =>
+                  setFormAspirante({ ...formAspirante, curp: e.target.value })
+                }
+              />
+              <input
+                required
+                type="email"
+                placeholder="Correo Personal"
+                className="border p-2 rounded"
+                value={formAspirante.email}
+                onChange={(e) =>
+                  setFormAspirante({ ...formAspirante, email: e.target.value })
+                }
+              />
+              <input
+                required
+                type="tel"
+                placeholder="Teléfono"
+                className="border p-2 rounded"
+                value={formAspirante.telefono}
+                onChange={(e) =>
+                  setFormAspirante({
+                    ...formAspirante,
+                    telefono: e.target.value,
+                  })
+                }
+              />
+              <select
+                className="border p-2 rounded"
+                value={formAspirante.genero}
+                onChange={(e) =>
+                  setFormAspirante({ ...formAspirante, genero: e.target.value })
+                }
+              >
+                <option value="">Género...</option>
+                <option value="Masculino">Masculino</option>
+                <option value="Femenino">Femenino</option>
+              </select>
+              <input
+                type="date"
+                className="border p-2 rounded"
+                value={formAspirante.fecha_nacimiento}
+                onChange={(e) =>
+                  setFormAspirante({
+                    ...formAspirante,
+                    fecha_nacimiento: e.target.value,
+                  })
+                }
+              />
+              <div className="col-span-2 border-t pt-4 mt-2">
+                <p className="text-sm font-bold text-gray-500 mb-2">
+                  Interés Académico
+                </p>
+                <div className="grid grid-cols-2 gap-4">
+                  <select
+                    required
+                    className="border p-2 rounded w-full"
+                    value={formAspirante.carrera_id}
+                    onChange={(e) =>
+                      setFormAspirante({
+                        ...formAspirante,
+                        carrera_id: e.target.value,
+                      })
+                    }
+                  >
+                    <option value="">Carrera...</option>
+                    {carreras.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.nombre_carrera}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    required
+                    className="border p-2 rounded w-full"
+                    value={formAspirante.sede_id}
+                    onChange={(e) =>
+                      setFormAspirante({
+                        ...formAspirante,
+                        sede_id: e.target.value,
+                      })
+                    }
+                  >
+                    <option value="">Sede...</option>
+                    {sedes.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.nombre_sede}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <button
+                type="submit"
+                className="col-span-2 bg-orange-600 text-white py-2 rounded font-bold hover:bg-orange-700 mt-4"
+              >
+                Registrar Aspirante
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* --- MODAL CREAR DOCENTE (Sin cambios) --- */}
+      {modalDocente && (
+        <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden">
+            <div className="bg-blue-600 p-4 text-white font-bold flex justify-between">
+              <h3>Registro de Docente</h3>
+              <button onClick={() => setModalDocente(false)}>
+                <X />
+              </button>
+            </div>
+            <form
+              onSubmit={handleCrearDocente}
+              className="p-6 grid grid-cols-2 gap-4"
+            >
+              <input
+                required
+                placeholder="Nombre(s)"
+                className="border p-2 rounded"
+                value={formDocente.nombre}
+                onChange={(e) =>
+                  setFormDocente({ ...formDocente, nombre: e.target.value })
+                }
+              />
+              <input
+                required
+                placeholder="Apellido Paterno"
+                className="border p-2 rounded"
+                value={formDocente.apellido_paterno}
+                onChange={(e) =>
+                  setFormDocente({
+                    ...formDocente,
+                    apellido_paterno: e.target.value,
+                  })
+                }
+              />
+              <input
+                placeholder="Apellido Materno"
+                className="border p-2 rounded"
+                value={formDocente.apellido_materno}
+                onChange={(e) =>
+                  setFormDocente({
+                    ...formDocente,
+                    apellido_materno: e.target.value,
+                  })
+                }
+              />
+              <input
+                required
+                placeholder="CURP"
+                className="border p-2 rounded"
+                value={formDocente.curp}
+                onChange={(e) =>
+                  setFormDocente({ ...formDocente, curp: e.target.value })
+                }
+              />
+              <input
+                required
+                type="email"
+                placeholder="Correo"
+                className="border p-2 rounded"
+                value={formDocente.email}
+                onChange={(e) =>
+                  setFormDocente({ ...formDocente, email: e.target.value })
+                }
+              />
+              <input
+                required
+                type="tel"
+                placeholder="Teléfono"
+                className="border p-2 rounded"
+                value={formDocente.telefono}
+                onChange={(e) =>
+                  setFormDocente({ ...formDocente, telefono: e.target.value })
+                }
+              />
+              <select
+                className="border p-2 rounded"
+                value={formDocente.genero}
+                onChange={(e) =>
+                  setFormDocente({ ...formDocente, genero: e.target.value })
+                }
+              >
+                <option value="">Género...</option>
+                <option value="Masculino">Masculino</option>
+                <option value="Femenino">Femenino</option>
+              </select>
+              <input
+                type="date"
+                className="border p-2 rounded"
+                value={formDocente.fecha_nacimiento}
+                onChange={(e) =>
+                  setFormDocente({
+                    ...formDocente,
+                    fecha_nacimiento: e.target.value,
+                  })
+                }
+              />
+              <button
+                type="submit"
+                className="col-span-2 bg-blue-600 text-white py-2 rounded font-bold hover:bg-blue-700 mt-4"
+              >
+                Registrar Docente
+              </button>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -1238,7 +2355,7 @@ const UsuarioModal = ({ usuario, onClose, onSave }) => {
       console.error("Error al guardar usuario", error);
       alert(
         "Error al guardar: " +
-          (error.response?.data?.message || "Error desconocido")
+          (error.response?.data?.message || "Error desconocido"),
       );
       setFormErrors({
         submit: error.response?.data?.message || "Error desconocido",
@@ -1408,154 +2525,271 @@ const UsuarioModal = ({ usuario, onClose, onSave }) => {
   );
 };
 
+// --- ASIGNATURAS PAGE COMPLETO ---
 const AsignaturasPage = () => {
   const [asignaturas, setAsignaturas] = useState([]);
+  const [catalogos, setCatalogos] = useState({
+    planes: [],
+    tipos: [],
+    grados: [],
+  });
+  const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
-  const [currentAsignatura, setCurrentAsignatura] = useState(null);
+  const [editingAsig, setEditingAsig] = useState(null);
+  const [viewingAsig, setViewingAsig] = useState(null);
+  const [verPapelera, setVerPapelera] = useState(false);
 
-  const fetchAsignaturas = useCallback(async () => {
-    try {
-      const response = await api.get("/admin/asignaturas");
-      setAsignaturas(response.data);
-    } catch (error) {
-      console.error("Error al obtener asignaturas", error);
-    }
+  // Cargar catálogos
+  useEffect(() => {
+    const loadCats = async () => {
+      try {
+        const [p, t, g] = await Promise.all([
+          api.get("/admin/planes_estudio"),
+          api.get("/admin/tipos_asignatura"),
+          api.get("/admin/grados"),
+        ]);
+        setCatalogos({ planes: p.data, tipos: t.data, grados: g.data });
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    loadCats();
   }, []);
+
+  // Cargar Asignaturas
+  const fetchAsignaturas = async () => {
+    setLoading(true);
+    try {
+      const endpoint = verPapelera
+        ? "/admin/asignaturas/eliminadas"
+        : "/admin/asignaturas";
+      const { data } = await api.get(endpoint);
+      setAsignaturas(data);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     fetchAsignaturas();
-  }, [fetchAsignaturas]);
+  }, [verPapelera]);
 
   const handleDelete = async (id) => {
-    if (
-      window.confirm("¿Estás seguro de que quieres eliminar esta asignatura?")
-    ) {
-      try {
-        await api.delete(`/admin/asignaturas/${id}`);
-        fetchAsignaturas();
-      } catch (error) {
-        console.error("Error al eliminar asignatura", error);
-      }
+    if (window.confirm("¿Enviar asignatura a la papelera?")) {
+      await api.delete(`/admin/asignaturas/${id}`);
+      fetchAsignaturas();
     }
   };
 
-  const openModal = (asignatura = null) => {
-    setCurrentAsignatura(asignatura);
-    setModalOpen(true);
-  };
-
-  const closeModal = () => {
-    setModalOpen(false);
-    setCurrentAsignatura(null);
+  const handleReactivar = async (id) => {
+    if (window.confirm("¿Recuperar asignatura?")) {
+      await api.put(`/admin/asignaturas/${id}/reactivar`);
+      fetchAsignaturas();
+    }
   };
 
   return (
-    <div>
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-3xl font-bold text-gray-800">
-          Gestión de Asignaturas
-        </h2>
-        <button
-          onClick={() => openModal()}
-          className="flex items-center px-4 py-2 font-semibold text-white bg-principal rounded-md hover:opacity-90"
-        >
-          <Plus className="w-5 h-5 mr-2" />
-          Nueva Asignatura
-        </button>
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-800">
+            {verPapelera
+              ? "🗑️ Papelera de Materias"
+              : "📖 Catálogo de Asignaturas"}
+          </h2>
+          <p className="text-gray-600 text-sm">
+            Administra las materias y sus planes de estudio.
+          </p>
+        </div>
+        <div className="flex gap-3">
+          <button
+            onClick={() => setVerPapelera(!verPapelera)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg border transition-colors ${
+              verPapelera
+                ? "bg-gray-600 text-white border-gray-600"
+                : "bg-white text-gray-700 border-gray-300"
+            }`}
+          >
+            {verPapelera ? (
+              <>
+                <Book size={20} /> Ver Activas
+              </>
+            ) : (
+              <>
+                <Trash2 size={20} /> Papelera
+              </>
+            )}
+          </button>
+          {!verPapelera && (
+            <button
+              onClick={() => {
+                setEditingAsig(null);
+                setModalOpen(true);
+              }}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-blue-700"
+            >
+              <Plus size={20} /> Nueva Materia
+            </button>
+          )}
+        </div>
       </div>
 
-      <div className="bg-white p-6 rounded-lg shadow">
-        <table className="w-full table-auto">
-          <thead className="text-left bg-gray-50">
-            <tr>
-              <th className="px-4 py-2">Nombre</th>
-              <th className="px-4 py-2">Clave</th>
-              {/* --- NUEVAS COLUMNAS --- */}
-              <th className="px-4 py-2">Plan de Estudios</th>
-              <th className="px-4 py-2">Grado</th>
-              {/* --- FIN --- */}
-              <th className="px-4 py-2">Créditos</th>
-              <th className="px-4 py-2">Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {asignaturas.map((asig) => (
-              <tr key={asig.id} className="border-b">
-                <td className="px-4 py-2">{asig.nombre_asignatura}</td>
-                <td className="px-4 py-2">{asig.clave_asignatura}</td>
-                {/* --- NUEVAS CELDAS --- */}
-                <td className="px-4 py-2">{asig.nombre_plan || "N/A"}</td>
-                <td className="px-4 py-2">{asig.nombre_grado || "N/A"}</td>
-                {/* --- FIN --- */}
-                <td className="px-4 py-2">{asig.creditos}</td>
-                <td className="px-4 py-2 flex items-center space-x-2">
-                  <button
-                    onClick={() => openModal(asig)}
-                    className="text-secundario hover:text-principal"
-                  >
-                    <Edit size={18} />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(asig.id)}
-                    className="text-red-500 hover:text-red-700"
-                  >
-                    <Trash2 size={18} />
-                  </button>
-                </td>
+      {loading ? (
+        <div className="text-center py-10 text-gray-500">Cargando...</div>
+      ) : (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <table className="w-full">
+            <thead className="bg-gray-50 border-b">
+              <tr>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">
+                  Clave/Nombre
+                </th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">
+                  Plan
+                </th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">
+                  Tipo
+                </th>
+                <th className="px-6 py-3 text-right text-sm font-semibold text-gray-600">
+                  Acciones
+                </th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {asignaturas.length === 0 ? (
+                <tr>
+                  <td colSpan="4" className="text-center py-8 text-gray-400">
+                    No hay registros.
+                  </td>
+                </tr>
+              ) : (
+                asignaturas.map((asig) => (
+                  <tr key={asig.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4">
+                      <div className="font-bold text-gray-800">
+                        {asig.nombre_asignatura}
+                      </div>
+                      <span className="text-xs bg-gray-100 px-2 py-0.5 rounded font-mono text-gray-500">
+                        {asig.clave_asignatura}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-600">
+                      <div>{asig.nombre_plan}</div>
+                      <div className="text-xs text-blue-600">
+                        {asig.nombre_grado}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-500">
+                      {asig.nombre_tipo}
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      {verPapelera ? (
+                        <button
+                          onClick={() => handleReactivar(asig.id)}
+                          className="text-green-600 hover:text-green-800 font-medium flex items-center gap-1 ml-auto justify-end"
+                        >
+                          <RotateCcw size={18} /> Reactivar
+                        </button>
+                      ) : (
+                        <div className="flex justify-end gap-2">
+                          <button
+                            onClick={() => setViewingAsig(asig)}
+                            className="p-1 text-gray-400 hover:text-gray-800 hover:bg-gray-100 rounded"
+                            title="Ver Detalles"
+                          >
+                            <Eye size={18} />
+                          </button>
+                          <button
+                            onClick={() => {
+                              setEditingAsig(asig);
+                              setModalOpen(true);
+                            }}
+                            className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded"
+                          >
+                            <Edit size={18} />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(asig.id)}
+                            className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
 
-      {modalOpen && (
+      {!verPapelera && modalOpen && (
         <AsignaturaModal
-          asignatura={currentAsignatura}
-          onClose={closeModal}
-          onSave={fetchAsignaturas}
+          isOpen={modalOpen}
+          onClose={() => setModalOpen(false)}
+          asigToEdit={editingAsig}
+          onSuccess={fetchAsignaturas}
+          catalogos={catalogos}
+        />
+      )}
+      {viewingAsig && (
+        <AsignaturaDetailModal
+          asignatura={viewingAsig}
+          onClose={() => setViewingAsig(null)}
         />
       )}
     </div>
   );
 };
 
-const AsignaturaModal = ({ asignatura, onClose, onSave }) => {
+// --- COMPONENTE MODAL ASIGNATURA (MODERNO) ---
+const AsignaturaModal = ({
+  isOpen,
+  onClose,
+  asigToEdit,
+  onSuccess,
+  catalogos,
+}) => {
   const [formData, setFormData] = useState({
-    nombre_asignatura: asignatura?.nombre_asignatura || "",
-    clave_asignatura: asignatura?.clave_asignatura || "",
-    creditos: asignatura?.creditos || "",
-    plan_estudio_id: asignatura?.plan_estudio_id || "", // <-- CAMBIO
-    tipo_asignatura_id: asignatura?.tipo_asignatura_id || 1,
-    grado_id: asignatura?.grado_id || "", // <-- CAMBIO
+    nombre_asignatura: "",
+    clave_asignatura: "",
+    creditos: 0,
+    calificacion_max: 100,
+    calificacion_min: 70,
+    plan_estudio_id: "",
+    tipo_asignatura_id: "",
+    grado_id: "",
   });
 
-  const [catalogos, setCatalogos] = useState({ planes: [], grados: [] });
-  // --- AGREGA ESTE useEffect ---
   useEffect(() => {
-    const fetchCatalogos = async () => {
-      try {
-        const [planesRes, gradosRes] = await Promise.all([
-          api.get("/admin/planes_estudio"),
-          api.get("/admin/grados"),
-        ]);
-        setCatalogos({
-          planes: planesRes.data,
-          grados: gradosRes.data,
-        });
-        // Si es una asignatura nueva, pre-selecciona el primer valor
-        if (!asignatura) {
-          setFormData((prev) => ({
-            ...prev,
-            plan_estudio_id: planesRes.data[0]?.id || "",
-            grado_id: gradosRes.data[0]?.id || "",
-          }));
-        }
-      } catch (error) {
-        console.error("Error cargando catálogos para asignaturas", error);
-      }
-    };
-    fetchCatalogos();
-  }, [asignatura]); // Depende de 'asignatura' para resetear si cambia
+    if (asigToEdit) {
+      setFormData({
+        nombre_asignatura: asigToEdit.nombre_asignatura || "",
+        clave_asignatura: asigToEdit.clave_asignatura || "",
+        creditos: asigToEdit.creditos || 0,
+        calificacion_max: asigToEdit.calificacion_max || 100,
+        calificacion_min: asigToEdit.calificacion_min || 70,
+        plan_estudio_id: asigToEdit.plan_estudio_id || "",
+        tipo_asignatura_id: asigToEdit.tipo_asignatura_id || "",
+        grado_id: asigToEdit.grado_id || "",
+      });
+    } else {
+      setFormData({
+        nombre_asignatura: "",
+        clave_asignatura: "",
+        creditos: 6,
+        calificacion_max: 100,
+        calificacion_min: 70,
+        plan_estudio_id: "",
+        tipo_asignatura_id: "",
+        grado_id: "",
+      });
+    }
+  }, [asigToEdit]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -1565,73 +2799,497 @@ const AsignaturaModal = ({ asignatura, onClose, onSave }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      if (asignatura) {
-        await api.put(`/admin/asignaturas/${asignatura.id}`, formData);
+      if (asigToEdit) {
+        await api.put(`/admin/asignaturas/${asigToEdit.id}`, formData);
+        alert("Asignatura actualizada");
       } else {
         await api.post("/admin/asignaturas", formData);
+        alert("Asignatura creada");
       }
-      onSave();
+      onSuccess();
       onClose();
     } catch (error) {
-      console.error("Error al guardar asignatura", error);
-      alert(
-        "Error al guardar: " +
-          (error.response?.data?.message || "Error desconocido")
-      );
+      console.error(error);
+      alert("Error al guardar asignatura");
     }
   };
 
+  if (!isOpen) return null;
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6 relative">
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-gray-500 hover:text-gray-800"
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4 backdrop-blur-sm">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden">
+        <div className="bg-gray-50 px-6 py-4 border-b border-gray-100 flex justify-between items-center">
+          <h2 className="text-xl font-bold text-gray-800">
+            {asigToEdit ? "Editar Materia" : "Nueva Materia"}
+          </h2>
+          <button onClick={onClose}>
+            <X size={24} className="text-gray-400 hover:text-gray-600" />
+          </button>
+        </div>
+        <form
+          onSubmit={handleSubmit}
+          className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4"
         >
-          <X size={24} />
-        </button>
-        <h3 className="text-2xl font-bold mb-6">
-          {asignatura ? "Editar" : "Nueva"} Asignatura
-        </h3>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <input
-            type="text"
-            name="nombre_asignatura"
-            value={formData.nombre_asignatura}
-            onChange={handleChange}
-            placeholder="Nombre de la Asignatura"
-            required
-            className="w-full px-3 py-2 border rounded-md focus:ring-principal focus:border-principal"
-          />
-          <input
-            type="text"
-            name="clave_asignatura"
-            value={formData.clave_asignatura}
-            onChange={handleChange}
-            placeholder="Clave de Asignatura"
-            required
-            className="w-full px-3 py-2 border rounded-md focus:ring-principal focus:border-principal"
-          />
-          <input
-            type="number"
-            name="creditos"
-            value={formData.creditos}
-            onChange={handleChange}
-            placeholder="Créditos"
-            required
-            className="w-full px-3 py-2 border rounded-md focus:ring-principal focus:border-principal"
-          />
-          {/* --- AGREGA ESTOS 2 BLOQUES --- */}
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Nombre de la Asignatura
+            </label>
+            <input
+              type="text"
+              name="nombre_asignatura"
+              value={formData.nombre_asignatura}
+              onChange={handleChange}
+              required
+              className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
           <div>
-            <label className="text-sm font-medium text-gray-700">
-              Plan de Estudios
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Clave
+            </label>
+            <input
+              type="text"
+              name="clave_asignatura"
+              value={formData.clave_asignatura}
+              onChange={handleChange}
+              required
+              className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 uppercase"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Créditos
+            </label>
+            <input
+              type="number"
+              name="creditos"
+              value={formData.creditos}
+              onChange={handleChange}
+              required
+              className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Plan de Estudio
             </label>
             <select
               name="plan_estudio_id"
               value={formData.plan_estudio_id}
               onChange={handleChange}
-              className="w-full px-3 py-2 mt-1 border rounded-md"
+              required
+              className="w-full p-2 border rounded bg-white"
             >
+              <option value="">-- Seleccionar --</option>
+              {catalogos?.planes?.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.nombre_plan}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Grado
+            </label>
+            <select
+              name="grado_id"
+              value={formData.grado_id}
+              onChange={handleChange}
+              required
+              className="w-full p-2 border rounded bg-white"
+            >
+              <option value="">-- Seleccionar --</option>
+              {catalogos?.grados?.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.nombre_grado}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Tipo
+            </label>
+            <select
+              name="tipo_asignatura_id"
+              value={formData.tipo_asignatura_id}
+              onChange={handleChange}
+              required
+              className="w-full p-2 border rounded bg-white"
+            >
+              <option value="">-- Seleccionar --</option>
+              {catalogos?.tipos?.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.nombre_tipo}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="md:col-span-2 pt-4 flex justify-end gap-3 border-t">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 border rounded hover:bg-gray-50"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-2"
+            >
+              <Save size={18} /> Guardar
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// --- FICHA TÉCNICA ASIGNATURA ---
+const AsignaturaDetailModal = ({ asignatura, onClose }) => {
+  if (!asignatura) return null;
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50 p-4 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border border-gray-100">
+        <div className="bg-gradient-to-r from-teal-600 to-emerald-600 p-6 text-white relative">
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 text-white/80 hover:text-white"
+          >
+            <X size={24} />
+          </button>
+          <div className="flex flex-col items-start">
+            <span className="bg-white/20 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider mb-2">
+              {asignatura.clave_asignatura}
+            </span>
+            <h2 className="text-2xl font-bold">
+              {asignatura.nombre_asignatura}
+            </h2>
+          </div>
+        </div>
+        <div className="p-6 space-y-4">
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div className="bg-gray-50 p-3 rounded">
+              <p className="text-gray-500 text-xs uppercase font-bold">Plan</p>
+              <p className="font-medium text-gray-800">
+                {asignatura.nombre_plan}
+              </p>
+            </div>
+            <div className="bg-gray-50 p-3 rounded">
+              <p className="text-gray-500 text-xs uppercase font-bold">Grado</p>
+              <p className="font-medium text-gray-800">
+                {asignatura.nombre_grado}
+              </p>
+            </div>
+            <div className="bg-gray-50 p-3 rounded">
+              <p className="text-gray-500 text-xs uppercase font-bold">
+                Créditos
+              </p>
+              <p className="font-medium text-gray-800">{asignatura.creditos}</p>
+            </div>
+            <div className="bg-gray-50 p-3 rounded">
+              <p className="text-gray-500 text-xs uppercase font-bold">Tipo</p>
+              <p className="font-medium text-gray-800">
+                {asignatura.nombre_tipo}
+              </p>
+            </div>
+          </div>
+          <div className="border-t pt-4">
+            <p className="text-xs text-center text-gray-400">
+              Rango de Calificación: {asignatura.calificacion_min} -{" "}
+              {asignatura.calificacion_max}
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// --- COMPONENTE GRUPOS (LIMPIO: Sin botón de migrar) ---
+const GruposPage = () => {
+  const [grupos, setGrupos] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [grupoSeleccionado, setGrupoSeleccionado] = useState(null);
+  const [filtroEstatus, setFiltroEstatus] = useState("activo");
+
+  const fetchGrupos = async () => {
+    setLoading(true);
+    try {
+      const { data } = await api.get("/admin/grupos");
+      setGrupos(data);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchGrupos();
+  }, []);
+
+  const gruposFiltrados = grupos.filter((g) => g.estatus === filtroEstatus);
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-300">
+      <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-800">
+            Gestión de Grupos
+          </h2>
+          <p className="text-gray-600 text-sm">
+            Administra los grupos actuales y revisa el historial.
+          </p>
+        </div>
+        <button
+          onClick={() => {
+            setGrupoSeleccionado(null);
+            setModalOpen(true);
+          }}
+          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2 font-bold shadow-sm"
+        >
+          <Plus size={20} /> Nuevo Grupo
+        </button>
+      </div>
+
+      <div className="flex border-b border-gray-200">
+        <button
+          onClick={() => setFiltroEstatus("activo")}
+          className={`px-6 py-3 text-sm font-medium flex items-center gap-2 border-b-2 transition-colors ${filtroEstatus === "activo" ? "border-blue-600 text-blue-600 bg-blue-50/50" : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50"}`}
+        >
+          <div
+            className={`w-2 h-2 rounded-full ${filtroEstatus === "activo" ? "bg-blue-600" : "bg-gray-400"}`}
+          ></div>{" "}
+          Grupos Activos
+        </button>
+        <button
+          onClick={() => setFiltroEstatus("finalizado")}
+          className={`px-6 py-3 text-sm font-medium flex items-center gap-2 border-b-2 transition-colors ${filtroEstatus === "finalizado" ? "border-purple-600 text-purple-600 bg-purple-50/50" : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50"}`}
+        >
+          <History size={16} /> Historial / Cerrados
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="text-center py-10 text-gray-400">Cargando...</div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {gruposFiltrados.length === 0 ? (
+            <div className="col-span-full py-12 text-center bg-gray-50 rounded-xl border border-dashed border-gray-300 text-gray-500">
+              No hay grupos en:{" "}
+              <span className="font-bold uppercase">{filtroEstatus}</span>
+            </div>
+          ) : (
+            gruposFiltrados.map((grupo) => (
+              <div
+                key={grupo.id}
+                className={`bg-white rounded-xl shadow-sm border p-5 transition-all hover:shadow-md ${grupo.estatus === "activo" ? "border-gray-200" : "border-purple-100 bg-purple-50/30"}`}
+              >
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-800">
+                      {grupo.nombre_grupo}
+                    </h3>
+                    <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                      {grupo.nombre_plan}
+                    </span>
+                  </div>
+                  <span
+                    className={`px-2 py-1 rounded text-xs font-bold uppercase ${grupo.estatus === "activo" ? "bg-green-100 text-green-700" : "bg-purple-100 text-purple-700"}`}
+                  >
+                    {grupo.estatus}
+                  </span>
+                </div>
+                <div className="space-y-2 mb-4 text-sm text-gray-600">
+                  <div className="flex items-center gap-2">
+                    <GraduationCap size={16} className="text-gray-400" />
+                    <span>{grupo.nombre_grado}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Users size={16} className="text-gray-400" />
+                    <span>{grupo.modalidad || "Presencial"}</span>
+                  </div>
+                </div>
+                {/* AQUÍ ESTÁ EL CAMBIO: El botón ya no menciona migrar */}
+                <button
+                  onClick={() => setGrupoSeleccionado(grupo)}
+                  className={`w-full py-2 rounded-lg font-medium flex items-center justify-center gap-2 transition-colors ${grupo.estatus === "activo" ? "bg-blue-600 text-white hover:bg-blue-700" : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"}`}
+                >
+                  {grupo.estatus === "activo" ? (
+                    <Edit size={16} />
+                  ) : (
+                    <Eye size={16} />
+                  )}
+                  {grupo.estatus === "activo" ? "Administrar" : "Ver Historial"}
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+      {/* Modales */}
+      {/* <GrupoModal isOpen={modalOpen} onClose={() => setModalOpen(false)} onSuccess={fetchGrupos} /> */}
+      {grupoSeleccionado && (
+        <GrupoAdminModal
+          grupo={grupoSeleccionado}
+          onClose={() => {
+            setGrupoSeleccionado(null);
+            fetchGrupos();
+          }}
+        />
+      )}
+    </div>
+  );
+};
+
+// --- COMPONENTE GRUPO MODAL (DISEÑO MODERNO) ---
+const GrupoModal = ({ isOpen, onClose, grupoToEdit, onSuccess, catalogos }) => {
+  const [formData, setFormData] = useState({
+    nombre_grupo: "",
+    cupo: 30,
+    ciclo_id: "",
+    sede_id: "",
+    plan_estudio_id: "",
+    grado_id: "",
+    modalidad: "presencial",
+  });
+
+  useEffect(() => {
+    if (grupoToEdit) {
+      setFormData({
+        nombre_grupo: grupoToEdit.nombre_grupo || "",
+        cupo: grupoToEdit.cupo || 30,
+        ciclo_id: grupoToEdit.ciclo_id || "",
+        sede_id: grupoToEdit.sede_id || "",
+        plan_estudio_id: grupoToEdit.plan_estudio_id || "",
+        grado_id: grupoToEdit.grado_id || "",
+        modalidad: grupoToEdit.modalidad || "presencial",
+      });
+    } else {
+      setFormData({
+        nombre_grupo: "",
+        cupo: 30,
+        ciclo_id: "",
+        sede_id: "",
+        plan_estudio_id: "",
+        grado_id: "",
+        modalidad: "presencial",
+      });
+    }
+  }, [grupoToEdit]);
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      if (grupoToEdit) {
+        await api.put(`/admin/grupos/${grupoToEdit.id}`, formData);
+        alert("Grupo actualizado correctamente");
+      } else {
+        await api.post("/admin/grupos", formData);
+        alert("Grupo creado correctamente");
+      }
+      onSuccess();
+      onClose();
+    } catch (error) {
+      console.error(error);
+      alert("Error al guardar el grupo.");
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4 backdrop-blur-sm">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden">
+        {/* Encabezado */}
+        <div className="bg-gray-50 px-6 py-4 border-b border-gray-100 flex justify-between items-center">
+          <h2 className="text-xl font-bold text-gray-800">
+            {grupoToEdit ? "Editar Grupo" : "Nuevo Grupo Académico"}
+          </h2>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <X size={24} />
+          </button>
+        </div>
+
+        <form
+          onSubmit={handleSubmit}
+          className="p-6 grid grid-cols-1 md:grid-cols-2 gap-5"
+        >
+          {/* Nombre del Grupo */}
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Nombre del Grupo
+            </label>
+            <input
+              type="text"
+              name="nombre_grupo"
+              value={formData.nombre_grupo}
+              onChange={handleChange}
+              placeholder="Ej: 1er Semestre A"
+              className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all"
+              required
+            />
+          </div>
+
+          {/* Modalidad y Cupo */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Modalidad
+            </label>
+            <select
+              name="modalidad"
+              value={formData.modalidad}
+              onChange={handleChange}
+              className="w-full p-2.5 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-purple-500"
+            >
+              <option value="presencial">Presencial</option>
+              <option value="virtual">Virtual</option>
+              <option value="hibrido">Híbrido</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Cupo Máximo
+            </label>
+            <input
+              type="number"
+              name="cupo"
+              value={formData.cupo}
+              onChange={handleChange}
+              className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+              required
+            />
+          </div>
+
+          {/* Selects Dinámicos */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Plan de Estudio
+            </label>
+            <select
+              name="plan_estudio_id"
+              value={formData.plan_estudio_id}
+              onChange={handleChange}
+              className="w-full p-2.5 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-purple-500"
+              required
+            >
+              <option value="">Seleccione Plan...</option>
               {catalogos.planes.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.nombre_plan}
@@ -1641,13 +3299,17 @@ const AsignaturaModal = ({ asignatura, onClose, onSave }) => {
           </div>
 
           <div>
-            <label className="text-sm font-medium text-gray-700">Grado</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Grado
+            </label>
             <select
               name="grado_id"
               value={formData.grado_id}
               onChange={handleChange}
-              className="w-full px-3 py-2 mt-1 border rounded-md"
+              className="w-full p-2.5 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-purple-500"
+              required
             >
+              <option value="">Seleccione Grado...</option>
               {catalogos.grados.map((g) => (
                 <option key={g.id} value={g.id}>
                   {g.nombre_grado}
@@ -1655,20 +3317,62 @@ const AsignaturaModal = ({ asignatura, onClose, onSave }) => {
               ))}
             </select>
           </div>
-          {/* --- FIN DE BLOQUES AGREGADOS --- */}
-          <div className="flex justify-end space-x-4 mt-8">
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Ciclo Escolar
+            </label>
+            <select
+              name="ciclo_id"
+              value={formData.ciclo_id}
+              onChange={handleChange}
+              className="w-full p-2.5 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-purple-500"
+              required
+            >
+              <option value="">Seleccione Ciclo...</option>
+              {catalogos.ciclos.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nombre_ciclo}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Sede
+            </label>
+            <select
+              name="sede_id"
+              value={formData.sede_id}
+              onChange={handleChange}
+              className="w-full p-2.5 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-purple-500"
+              required
+            >
+              <option value="">Seleccione Sede...</option>
+              {catalogos.sedes.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.nombre_sede}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Botones */}
+          <div className="md:col-span-2 flex justify-end gap-3 mt-4 pt-4 border-t border-gray-100">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
+              className="px-5 py-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium transition-colors"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-principal text-white rounded-md hover:opacity-90"
+              className="px-5 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium flex items-center gap-2 transition-colors"
             >
-              Guardar
+              <Save size={18} />
+              {grupoToEdit ? "Guardar Cambios" : "Crear Grupo"}
             </button>
           </div>
         </form>
@@ -1677,350 +3381,925 @@ const AsignaturaModal = ({ asignatura, onClose, onSave }) => {
   );
 };
 
-const GruposPage = () => {
-  const [grupos, setGrupos] = useState([]);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [currentGrupo, setCurrentGrupo] = useState(null);
+// --- COMPONENTE PÁGINA: MIGRACIÓN DE GRUPOS (CORREGIDO: Muestra Activos y Cerrados) ---
+const MigracionPage = () => {
+  const [loading, setLoading] = useState(true);
+  const [todosLosGrupos, setTodosLosGrupos] = useState([]); // <--- CAMBIO DE NOMBRE
 
-  const fetchGrupos = useCallback(async () => {
-    try {
-      const response = await api.get("/admin/grupos");
-      setGrupos(response.data);
-    } catch (error) {
-      console.error("Error al obtener grupos", error);
-    }
-  }, []);
+  // Catálogos para el destino
+  const [grados, setGrados] = useState([]);
+  const [ciclos, setCiclos] = useState([]);
+
+  // Formulario
+  const [origenId, setOrigenId] = useState("");
+  const [form, setForm] = useState({
+    nombreNuevo: "",
+    gradoNuevoId: "",
+    cicloNuevoId: "",
+    modalidad: "Presencial",
+  });
 
   useEffect(() => {
-    fetchGrupos();
-  }, [fetchGrupos]);
-
-  const handleDelete = async (id) => {
-    if (window.confirm("¿Estás seguro de que quieres eliminar este grupo?")) {
+    const cargarDatos = async () => {
       try {
-        await api.delete(`/admin/grupos/${id}`);
-        fetchGrupos();
+        const [gRes, gradosRes, ciclosRes] = await Promise.all([
+          api.get("/admin/grupos"),
+          api.get("/admin/grados"),
+          api.get("/admin/ciclos"),
+        ]);
+
+        // CORRECCIÓN: Ya no filtramos. Guardamos TODOS los grupos.
+        // Ordenamos para que salgan primero los activos
+        const gruposOrdenados = gRes.data.sort((a, b) => {
+          if (a.estatus === "activo" && b.estatus !== "activo") return -1;
+          if (a.estatus !== "activo" && b.estatus === "activo") return 1;
+          return 0;
+        });
+
+        setTodosLosGrupos(gruposOrdenados);
+        setGrados(gradosRes.data);
+        setCiclos(ciclosRes.data);
+        setLoading(false);
       } catch (error) {
-        console.error("Error al eliminar grupo", error);
+        console.error(error);
+      }
+    };
+    cargarDatos();
+  }, []);
+
+  // Al seleccionar un grupo origen, prellenamos sugerencias
+  const handleSelectOrigen = (id) => {
+    setOrigenId(id);
+    const grupo = todosLosGrupos.find((g) => g.id === parseInt(id));
+    if (grupo) {
+      setForm((prev) => ({
+        ...prev,
+        nombreNuevo: grupo.nombre_grupo + " (Siguiente)", // Sugerencia
+        modalidad: grupo.modalidad,
+      }));
+    }
+  };
+
+  const handleMigrar = async (e) => {
+    e.preventDefault();
+    if (
+      !origenId ||
+      !form.nombreNuevo ||
+      !form.gradoNuevoId ||
+      !form.cicloNuevoId
+    )
+      return alert("Llena todos los campos");
+
+    if (
+      window.confirm(
+        "¿Estás seguro? Se creará un nuevo grupo y se copiarán los alumnos.",
+      )
+    ) {
+      try {
+        await api.post("/admin/migracion/ejecutar", {
+          grupoOrigenId: origenId,
+          ...form,
+        });
+        alert("¡Migración completada con éxito!");
+
+        // Limpiar formulario
+        setOrigenId("");
+        setForm({
+          nombreNuevo: "",
+          gradoNuevoId: "",
+          cicloNuevoId: "",
+          modalidad: "Presencial",
+        });
+
+        // Recargar datos
+        const gRes = await api.get("/admin/grupos");
+        setTodosLosGrupos(gRes.data);
+      } catch (error) {
+        alert(
+          "Error al migrar: " +
+            (error.response?.data?.message || "Error desconocido"),
+        );
       }
     }
   };
 
-  const openModal = (grupo = null) => {
-    setCurrentGrupo(grupo);
-    setModalOpen(true);
-  };
-
-  const closeModal = () => {
-    setModalOpen(false);
-    setCurrentGrupo(null);
-  };
+  if (loading)
+    return (
+      <div className="p-8 text-center">Cargando módulo de migración...</div>
+    );
 
   return (
-    <div>
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-3xl font-bold text-gray-800">Gestión de Grupos</h2>
-        <button
-          onClick={() => openModal()}
-          className="flex items-center px-4 py-2 font-semibold text-white bg-principal rounded-md hover:opacity-90"
+    <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in duration-300">
+      <div>
+        <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+          <GitBranch className="text-purple-600" /> Migración de Grupos
+        </h2>
+        <p className="text-gray-500">
+          Genera el grupo del siguiente ciclo y transfiere a los alumnos.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        {/* COLUMNA IZQUIERDA: ORIGEN */}
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+          <h3 className="font-bold text-lg mb-4 text-gray-700 border-b pb-2">
+            1. Selecciona Grupo a Migrar
+          </h3>
+          <div className="space-y-4">
+            <label className="block text-sm font-medium text-gray-700">
+              Grupo Actual (Origen)
+            </label>
+            <select
+              className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-purple-500 bg-gray-50"
+              value={origenId}
+              onChange={(e) => handleSelectOrigen(e.target.value)}
+            >
+              <option value="">-- Buscar Grupo (Activo o Cerrado) --</option>
+              {todosLosGrupos.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {/* AQUÍ MOSTRAMOS EL ESTATUS CLARAMENTE */}
+                  {g.nombre_grupo}{" "}
+                  {g.estatus === "activo" ? "🟢 (Activo)" : "🔴 (Cerrado)"}
+                </option>
+              ))}
+            </select>
+
+            {origenId && (
+              <div className="p-4 bg-purple-50 text-purple-800 text-sm rounded-lg flex gap-2 items-start">
+                <GitBranch size={16} className="mt-0.5 shrink-0" />
+                <p>
+                  Se copiarán los alumnos inscritos de este grupo al nuevo que
+                  configures a la derecha.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* COLUMNA DERECHA: DESTINO */}
+        <div
+          className={`bg-white p-6 rounded-xl shadow-sm border border-gray-200 transition-opacity ${!origenId ? "opacity-50 pointer-events-none" : "opacity-100"}`}
         >
-          <Plus className="w-5 h-5 mr-2" />
-          Nuevo Grupo
-        </button>
+          <h3 className="font-bold text-lg mb-4 text-purple-700 border-b pb-2">
+            2. Configura el Nuevo Grupo
+          </h3>
+          <form onSubmit={handleMigrar} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                Nombre del Nuevo Grupo
+              </label>
+              <input
+                type="text"
+                className="w-full p-2 border rounded focus:ring-2 focus:ring-purple-500"
+                value={form.nombreNuevo}
+                onChange={(e) =>
+                  setForm({ ...form, nombreNuevo: e.target.value })
+                }
+                placeholder="Ej: Ingeniería 2o A"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                Nuevo Grado/Semestre
+              </label>
+              <select
+                className="w-full p-2 border rounded focus:ring-2 focus:ring-purple-500"
+                value={form.gradoNuevoId}
+                onChange={(e) =>
+                  setForm({ ...form, gradoNuevoId: e.target.value })
+                }
+              >
+                <option value="">-- Seleccionar Grado --</option>
+                {grados.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.nombre_grado}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                Nuevo Ciclo Escolar
+              </label>
+              <select
+                className="w-full p-2 border rounded focus:ring-2 focus:ring-purple-500"
+                value={form.cicloNuevoId}
+                onChange={(e) =>
+                  setForm({ ...form, cicloNuevoId: e.target.value })
+                }
+              >
+                <option value="">-- Seleccionar Ciclo --</option>
+                {ciclos.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.nombre_ciclo}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="pt-4">
+              <button
+                type="submit"
+                className="w-full bg-purple-600 text-white py-3 rounded-lg font-bold hover:bg-purple-700 shadow-lg flex justify-center items-center gap-2"
+              >
+                <ArrowRightLeft size={20} /> Ejecutar Migración
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
-      <div className="bg-white p-6 rounded-lg shadow">
-        <table className="w-full table-auto">
-          <thead className="text-left bg-gray-50">
-            <tr>
-              <th className="px-4 py-2">Grupo</th>
-              <th className="px-4 py-2">Cupo</th>
-              <th className="px-4 py-2">Ciclo</th>
-              <th className="px-4 py-2">Sede</th>
-              <th className="px-4 py-2">Plan de Estudios</th>
-              <th className="px-4 py-2">Grado</th>
-              {/* ASEGÚRATE DE QUE ESTÉN ASÍ, JUNTAS: */}
-              <th className="px-4 py-2">Modalidad</th>
-              <th className="px-4 py-2">Estatus</th>
-              <th className="px-4 py-2">Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {grupos.map((g) => (
-              <tr key={g.id} className="border-b">
-                <td className="px-4 py-2">
-                  <Link
-                    to={`/grupos/${g.id}`}
-                    className="text-principal hover:underline"
-                  >
-                    {g.nombre_grupo}
-                  </Link>
-                </td>
-                <td className="px-4 py-2">{g.cupo}</td>
-                <td className="px-4 py-2">{g.nombre_ciclo}</td>
-                <td className="px-4 py-2">{g.nombre_sede}</td>
-                <td className="px-4 py-2">{g.nombre_plan}</td>
-                <td className="px-4 py-2">{g.nombre_grado}</td>
-                {/* --- NUEVA CELDA CON INDICADOR VISUAL --- */}
-                <td className="px-4 py-2">
-                  <span
-                    className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                      g.modalidad === "presencial"
-                        ? "bg-blue-100 text-blue-800"
-                        : "bg-purple-100 text-purple-800"
-                    }`}
-                  >
-                    {g.modalidad === "presencial" ? "Presencial" : "Virtual"}
-                  </span>
-                </td>
-                {/* --- FIN NUEVA CELDA --- */}
-                {/* --- INSERTA ESTE BLOQUE NUEVO AQUÍ --- */}
-                <td className="px-4 py-2">
-                  <span
-                    className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                      g.estatus === "activo"
-                        ? "bg-green-100 text-green-800"
-                        : "bg-red-100 text-red-800"
-                    }`}
-                  >
-                    {g.estatus === "activo" ? "Activo" : "Inactivo"}
-                  </span>
-                </td>
-                {/* --- FIN DEL BLOQUE NUEVO --- */}
-                <td className="px-4 py-2 flex items-center space-x-2">
-                  <button
-                    onClick={() => openModal(g)}
-                    className="text-secundario hover:text-principal"
-                  >
-                    <Edit size={18} />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(g.id)}
-                    className="text-red-500 hover:text-red-700"
-                  >
-                    <Trash2 size={18} />
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {modalOpen && (
-        <GrupoModal
-          grupo={currentGrupo}
-          onClose={closeModal}
-          onSave={fetchGrupos}
-        />
-      )}
     </div>
   );
 };
 
-const GrupoModal = ({ grupo, onClose, onSave }) => {
-  const isEditing = !!grupo;
-  const [formData, setFormData] = useState({
-    nombre_grupo: grupo?.nombre_grupo || "",
-    cupo: grupo?.cupo || "",
-    ciclo_id: grupo?.ciclo_id || "",
-    sede_id: grupo?.sede_id || "",
-    plan_estudio_id: grupo?.plan_estudio_id || "",
-    grado_id: grupo?.grado_id || "",
-    estatus: grupo?.estatus || "activo", // <-- Agregado (default 'activo')
-    modalidad: grupo?.modalidad || "presencial", // <-- Agregado
-  });
+// --- COMPONENTE ADMINISTRAR GRUPO (MANUAL: Tú decides qué materias agregar) ---
+const GrupoAdminModal = ({ grupo, onClose }) => {
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState("docentes");
+  const [loading, setLoading] = useState(true);
 
-  const [catalogos, setCatalogos] = useState({
-    ciclos: [],
-    sedes: [],
-    planes: [],
-    grados: [],
-  });
+  // Datos
+  const [data, setData] = useState({ asignaturas: [], alumnos: [] });
+  const [grupoActual, setGrupoActual] = useState(grupo);
 
-  useEffect(() => {
-    const fetchCatalogos = async () => {
-      try {
-        const [ciclosRes, sedesRes, planesRes, gradosRes] = await Promise.all([
-          api.get("/admin/ciclos"),
-          api.get("/admin/sedes"),
-          api.get("/admin/planes_estudio"),
-          api.get("/admin/grados"),
-        ]);
-        setCatalogos({
-          ciclos: ciclosRes.data,
-          sedes: sedesRes.data,
-          planes: planesRes.data,
-          grados: gradosRes.data,
-        });
-        if (!isEditing) {
-          setFormData((prev) => ({
-            ...prev,
-            ciclo_id: ciclosRes.data[0]?.id || "",
-            sede_id: sedesRes.data[0]?.id || "",
-            plan_estudio_id: planesRes.data[0]?.id || "",
-            grado_id: gradosRes.data[0]?.id || "",
-          }));
-        }
-      } catch (error) {
-        console.error("Error cargando catálogos para grupos", error);
-      }
-    };
-    fetchCatalogos();
-  }, [isEditing]);
+  // Catálogos
+  const [docentes, setDocentes] = useState([]);
+  const [alumnosDisponibles, setAlumnosDisponibles] = useState([]);
+  const [materiasDisponibles, setMateriasDisponibles] = useState([]); // <--- NUEVO
+  const [todosLosGrupos, setTodosLosGrupos] = useState([]);
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+  // Estados de trabajo
+  const [alumnoSeleccionado, setAlumnoSeleccionado] = useState("");
+  const [materiaSeleccionada, setMateriaSeleccionada] = useState(""); // <--- NUEVO
+  const [transferMode, setTransferMode] = useState(null);
+  const [targetGroup, setTargetGroup] = useState("");
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const groupRes = await api.get(`/admin/grupos/${grupo.id}`);
+      setData(groupRes.data);
+      setGrupoActual(groupRes.data.grupo);
+
+      const [docRes, dispRes, gruposRes, matRes] = await Promise.all([
+        api.get("/admin/docentes"),
+        api.get(`/admin/grupos/${grupo.id}/alumnos-disponibles`),
+        api.get("/admin/grupos"),
+        api.get(`/admin/grupos/${grupo.id}/materias-disponibles`), // <--- NUEVO
+      ]);
+
+      setDocentes(docRes.data);
+      setAlumnosDisponibles(dispRes.data);
+      setTodosLosGrupos(
+        gruposRes.data.filter(
+          (g) => g.id !== grupo.id && g.estatus === "activo",
+        ),
+      );
+      setMateriasDisponibles(matRes.data); // <--- NUEVO
+    } catch (error) {
+      console.error(error);
+      alert("Error al cargar datos.");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  useEffect(() => {
+    if (grupo) fetchData();
+  }, [grupo]);
+
+  // --- FUNCIONES NUEVAS DE MATERIAS ---
+  const handleAgregarMateria = async () => {
+    if (!materiaSeleccionada) return;
     try {
-      if (isEditing) {
-        await api.put(`/admin/grupos/${grupo.id}`, formData);
-      } else {
-        await api.post("/admin/grupos", formData);
-      }
-      onSave();
-      onClose();
+      await api.post(`/admin/grupos/${grupo.id}/agregar-materia`, {
+        asignatura_id: materiaSeleccionada,
+      });
+      alert("Materia agregada al grupo");
+      setMateriaSeleccionada("");
+      fetchData(); // Recargar para ver la nueva materia y actualizar la lista de disponibles
     } catch (error) {
-      console.error("Error al guardar el grupo", error);
+      alert("Error al agregar materia");
+    }
+  };
+
+  const handleQuitarMateria = async (asignaturaId) => {
+    if (
+      window.confirm(
+        "¿Quitar esta materia del grupo? Se perderá la asignación del docente (pero no las calificaciones guardadas).",
+      )
+    ) {
+      try {
+        await api.delete(
+          `/admin/grupos/${grupo.id}/quitar-materia/${asignaturaId}`,
+        );
+        fetchData();
+      } catch (error) {
+        alert("Error al quitar materia");
+      }
+    }
+  };
+
+  // --- FUNCIONES EXISTENTES ---
+  const handleAsignarDocente = async (aId, dId) => {
+    try {
+      // En este modo manual, usamos UPDATE porque el registro ya existe (lo creaste al agregar materia)
+      // Pero mi backend anterior usaba "INSERT ON DUPLICATE", así que funcionará igual.
+      // Ojo: Si tu backend usa INSERT puro, cámbialo a UPDATE en este caso,
+      // pero la ruta "asignar-docente" que tienes hace un UPSERT o UPDATE sobre el registro existente.
+      await api.post(`/admin/grupos/${grupo.id}/asignar-docente`, {
+        asignatura_id: aId,
+        docente_id: dId,
+      });
+      const updated = data.asignaturas.map((a) =>
+        a.id === aId ? { ...a, docente_id: dId } : a,
+      );
+      setData((p) => ({ ...p, asignaturas: updated }));
+    } catch (e) {
+      alert("Error al asignar docente");
+    }
+  };
+  const handleSubirCalificaciones = (asig) => {
+    onClose();
+    navigate(`/admin/grupos/${grupo.id}/asignatura/${asig.id}/calificaciones`);
+  };
+  const handleInscribirAlumno = async () => {
+    if (!alumnoSeleccionado) return;
+    try {
+      await api.post(`/admin/grupos/${grupo.id}/inscribir-alumno`, {
+        alumno_id: alumnoSeleccionado,
+      });
+      setAlumnoSeleccionado("");
+      fetchData();
+    } catch (e) {
+      alert(e.response?.data?.message);
+    }
+  };
+  const handleTransferir = async (id) => {
+    if (!targetGroup) return;
+    if (window.confirm("¿Transferir?")) {
+      try {
+        await api.post("/admin/grupos/transferir-alumno", {
+          alumnoId: id,
+          sourceGroupId: grupo.id,
+          destinationGroupId: targetGroup,
+        });
+        alert("Transferido");
+        setTransferMode(null);
+        fetchData();
+      } catch (e) {
+        alert("Error");
+      }
+    }
+  };
+  const handleBajaAlumno = async (id) => {
+    if (window.confirm("¿Baja?")) {
+      try {
+        await api.delete(`/admin/grupos/${grupo.id}/dar-baja/${id}`);
+        fetchData();
+      } catch (e) {
+        alert("Error");
+      }
+    }
+  };
+  const handleCerrarCiclo = async () => {
+    if (window.confirm("¿Cerrar grupo?")) {
+      try {
+        await api.put(`/admin/grupos/${grupo.id}/finalizar`);
+        alert("Cerrado");
+        fetchData();
+      } catch (e) {
+        alert(e.response?.data?.message);
+      }
+    }
+  };
+
+  if (!grupo) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50 p-4 backdrop-blur-sm">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl h-[85vh] flex flex-col overflow-hidden">
+        {/* HEADER */}
+        <div className="bg-white p-6 border-b border-gray-200 flex justify-between items-center">
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-2xl font-bold text-gray-800">
+                Administrar Grupo
+              </h2>
+              <span
+                className={`px-2 py-0.5 rounded text-xs font-bold uppercase ${
+                  grupoActual?.estatus === "activo"
+                    ? "bg-green-100 text-green-700"
+                    : "bg-red-100 text-red-700"
+                }`}
+              >
+                {grupoActual?.estatus}
+              </span>
+            </div>
+            <p className="text-gray-500 text-sm">
+              {grupo.nombre_grupo} • {grupo.nombre_plan}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {grupoActual?.estatus === "activo" && (
+              <button
+                onClick={handleCerrarCiclo}
+                className="bg-orange-50 text-orange-700 border border-orange-200 px-4 py-2 rounded-lg hover:bg-orange-100 font-bold text-sm flex items-center gap-2"
+              >
+                <CheckCircle size={18} /> Validar y Cerrar
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-gray-100 rounded-full"
+            >
+              <X size={24} />
+            </button>
+          </div>
+        </div>
+
+        {/* TABS */}
+        <div className="flex border-b border-gray-200 bg-gray-50">
+          <button
+            onClick={() => setActiveTab("docentes")}
+            className={`flex-1 py-4 text-sm font-medium ${
+              activeTab === "docentes"
+                ? "text-purple-600 border-b-2 border-purple-600 bg-white"
+                : "text-gray-500"
+            }`}
+          >
+            Carga Académica
+          </button>
+          <button
+            onClick={() => setActiveTab("alumnos")}
+            className={`flex-1 py-4 text-sm font-medium ${
+              activeTab === "alumnos"
+                ? "text-blue-600 border-b-2 border-blue-600 bg-white"
+                : "text-gray-500"
+            }`}
+          >
+            Alumnos
+          </button>
+        </div>
+
+        {/* CONTENIDO */}
+        <div className="flex-1 overflow-y-auto p-6 bg-white">
+          {loading ? (
+            <div className="text-center py-10">Cargando...</div>
+          ) : (
+            <>
+              {activeTab === "docentes" && (
+                <div className="space-y-6">
+                  {/* --- ZONA DE AGREGAR MATERIA (NUEVO) --- */}
+                  {grupoActual?.estatus === "activo" && (
+                    <div className="p-4 bg-purple-50 border border-purple-100 rounded-lg flex gap-3 items-end">
+                      <div className="flex-1">
+                        <label className="block text-xs font-bold text-purple-800 mb-1 ml-1">
+                          Agregar Materia al Grupo
+                        </label>
+                        <select
+                          className="w-full p-2.5 border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 text-sm"
+                          value={materiaSeleccionada}
+                          onChange={(e) =>
+                            setMateriaSeleccionada(e.target.value)
+                          }
+                        >
+                          <option value="">
+                            Selecciona una materia del catálogo...
+                          </option>
+                          {materiasDisponibles.map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.nombre_asignatura} ({m.clave_asignatura})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <button
+                        onClick={handleAgregarMateria}
+                        disabled={!materiaSeleccionada}
+                        className="bg-purple-600 text-white px-5 py-2.5 rounded-lg hover:bg-purple-700 font-medium text-sm flex items-center gap-2 disabled:opacity-50"
+                      >
+                        <Plus size={16} /> Agregar
+                      </button>
+                    </div>
+                  )}
+
+                  {/* LISTA DE MATERIAS AGREGADAS */}
+                  <div className="space-y-3">
+                    {data.asignaturas.length === 0 ? (
+                      <p className="text-center text-gray-400 py-4 border-2 border-dashed border-gray-100 rounded-lg">
+                        Este grupo aún no tiene materias. Agrega una arriba.
+                      </p>
+                    ) : (
+                      data.asignaturas.map((asig) => (
+                        <div
+                          key={asig.id}
+                          className="bg-white p-4 border rounded flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 hover:border-purple-200 transition-colors group"
+                        >
+                          <div className="flex-1">
+                            <h4 className="font-bold text-gray-800">
+                              {asig.nombre_asignatura}
+                            </h4>
+                            <span className="text-xs bg-gray-100 px-1 rounded text-gray-500">
+                              {asig.clave_asignatura}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 w-full sm:w-auto">
+                            <select
+                              value={asig.docente_id || ""}
+                              onChange={(e) =>
+                                handleAsignarDocente(asig.id, e.target.value)
+                              }
+                              className="border p-2 rounded text-sm w-full sm:w-48"
+                              disabled={grupoActual?.estatus !== "activo"}
+                            >
+                              <option value="">-- Sin Docente --</option>
+                              {docentes.map((d) => (
+                                <option key={d.id} value={d.id}>
+                                  {d.nombre} {d.apellido_paterno}
+                                </option>
+                              ))}
+                            </select>
+
+                            <button
+                              onClick={() => handleSubirCalificaciones(asig)}
+                              className="p-2 text-blue-600 hover:bg-blue-50 border border-blue-200 rounded flex items-center gap-1 text-xs font-bold"
+                              title="Subir Calificaciones"
+                            >
+                              <Upload size={16} /> Notas
+                            </button>
+
+                            {/* Botón para quitar materia */}
+                            {grupoActual?.estatus === "activo" && (
+                              <button
+                                onClick={() => handleQuitarMateria(asig.id)}
+                                className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded"
+                                title="Quitar materia del grupo"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {activeTab === "alumnos" && (
+                /* ... (TU CÓDIGO DE ALUMNOS SE MANTIENE IGUAL) ... */
+                <div className="space-y-6">
+                  {grupoActual?.estatus === "activo" && (
+                    <div className="p-4 bg-blue-50 border border-blue-100 rounded flex gap-2">
+                      <select
+                        className="flex-1 border p-2 rounded"
+                        value={alumnoSeleccionado}
+                        onChange={(e) => setAlumnoSeleccionado(e.target.value)}
+                      >
+                        <option value="">Seleccionar Alumno...</option>
+                        {alumnosDisponibles.map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.nombre} {a.apellido_paterno}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={handleInscribirAlumno}
+                        className="bg-blue-600 text-white px-4 rounded hover:bg-blue-700"
+                      >
+                        Inscribir
+                      </button>
+                    </div>
+                  )}
+                  <table className="w-full">
+                    <thead>
+                      <tr className="bg-gray-50 text-left">
+                        <th className="p-3">Alumno</th>
+                        <th className="p-3 text-right">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.alumnos.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan="2"
+                            className="text-center py-4 text-gray-400"
+                          >
+                            Sin alumnos.
+                          </td>
+                        </tr>
+                      ) : (
+                        data.alumnos.map((alum) => (
+                          <tr
+                            key={alum.id}
+                            className="border-b hover:bg-gray-50"
+                          >
+                            <td className="p-3">
+                              <div className="font-medium text-gray-800">
+                                {alum.nombre} {alum.apellido_paterno}
+                              </div>
+                              <div className="text-xs text-gray-400">
+                                {alum.email}
+                              </div>
+                            </td>
+                            <td className="p-3 text-right">
+                              {transferMode === alum.id ? (
+                                <div className="flex justify-end gap-2 items-center animate-in slide-in-from-right-5">
+                                  <select
+                                    className="border p-1.5 rounded text-sm w-40"
+                                    value={targetGroup}
+                                    onChange={(e) =>
+                                      setTargetGroup(e.target.value)
+                                    }
+                                    autoFocus
+                                  >
+                                    <option value="">Destino...</option>
+                                    {todosLosGrupos.map((g) => (
+                                      <option key={g.id} value={g.id}>
+                                        {g.nombre_grupo}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  <button
+                                    onClick={() => handleTransferir(alum.id)}
+                                    className="bg-green-600 text-white p-1.5 rounded hover:bg-green-700"
+                                  >
+                                    <Check size={16} />
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setTransferMode(null);
+                                      setTargetGroup("");
+                                    }}
+                                    className="bg-gray-200 text-gray-600 p-1.5 rounded hover:bg-gray-300"
+                                  >
+                                    <X size={16} />
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="flex justify-end gap-2">
+                                  {grupoActual?.estatus === "activo" && (
+                                    <>
+                                      <button
+                                        onClick={() => {
+                                          setTransferMode(alum.id);
+                                          setTargetGroup("");
+                                        }}
+                                        className="text-purple-600 hover:text-purple-800 text-xs font-medium border border-purple-200 px-3 py-1.5 rounded hover:bg-purple-50 flex items-center gap-1"
+                                      >
+                                        <ArrowRightLeft size={14} /> Transferir
+                                      </button>
+                                      <button
+                                        onClick={() =>
+                                          handleBajaAlumno(alum.id)
+                                        }
+                                        className="text-red-500 hover:text-red-700 text-xs font-medium border border-red-200 px-3 py-1.5 rounded hover:bg-red-50"
+                                      >
+                                        Baja
+                                      </button>
+                                    </>
+                                  )}
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// --- COMPONENTE PÁGINA: SUBIR CALIFICACIONES (CORREGIDO) ---
+const SubirCalificacionesPage = () => {
+  const { grupoId, asignaturaId } = useParams();
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+  const [alumnos, setAlumnos] = useState([]);
+  const [info, setInfo] = useState({ materia: "", grupo: "", clave: "" });
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // 1. Obtener Info del Grupo y Alumnos
+        const groupRes = await api.get(`/admin/grupos/${grupoId}`);
+
+        // Datos del encabezado
+        const materia = groupRes.data.asignaturas.find(
+          (a) => a.id === parseInt(asignaturaId),
+        );
+        setInfo({
+          grupo: groupRes.data.grupo.nombre_grupo,
+          materia: materia ? materia.nombre_asignatura : "Materia Desconocida",
+          clave: materia ? materia.clave_asignatura : "",
+        });
+
+        // 2. Obtener Calificaciones YA GUARDADAS de esta materia
+        // (Si esta ruta falla, es porque no pegaste el código del PASO 2 en index.js)
+        let calificacionesMap = {};
+        try {
+          const califRes = await api.get(
+            `/admin/calificaciones/${grupoId}/${asignaturaId}`,
+          );
+          // Creamos un mapa: { id_alumno: calificacion }
+          califRes.data.forEach((item) => {
+            calificacionesMap[item.alumno_id] = item.calificacion;
+          });
+        } catch (err) {
+          console.error("No hay calificaciones previas o error al cargar", err);
+        }
+
+        // 3. Fusionar Alumnos con sus Calificaciones
+        const listaFinal = groupRes.data.alumnos.map((alumno) => ({
+          ...alumno,
+          // Si existe calificación en el mapa, la ponemos. Si no, cadena vacía.
+          calificacion:
+            calificacionesMap[alumno.id] !== undefined
+              ? calificacionesMap[alumno.id]
+              : "",
+        }));
+
+        setAlumnos(listaFinal);
+      } catch (error) {
+        console.error(error);
+        alert("Error al cargar el listado. Revisa la consola.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, [grupoId, asignaturaId]);
+
+  const handleCalificacionChange = (alumnoId, valor) => {
+    // Validar que sea número o vacío
+    if (valor !== "" && (valor < 0 || valor > 100)) return;
+
+    setAlumnos((prev) =>
+      prev.map((a) => (a.id === alumnoId ? { ...a, calificacion: valor } : a)),
+    );
+  };
+
+  const handleGuardar = async () => {
+    try {
+      // Filtramos calificaciones válidas (no vacías)
+      const calificacionesAEnviar = alumnos
+        .filter((a) => a.calificacion !== "" && a.calificacion !== null)
+        .map((a) => ({
+          alumno_id: a.id,
+          calificacion: parseFloat(a.calificacion),
+        }));
+
+      if (calificacionesAEnviar.length === 0) {
+        return alert("No hay calificaciones para guardar.");
+      }
+
+      await api.post("/admin/calificaciones/guardar-lote", {
+        grupo_id: grupoId,
+        asignatura_id: asignaturaId,
+        calificaciones: calificacionesAEnviar,
+      });
+
+      // Insertamos una alerta visual de éxito
       alert(
-        "Error al guardar: " +
-          (error.response?.data?.message || "Error desconocido")
+        `¡Éxito! Se guardaron ${calificacionesAEnviar.length} calificaciones correctamente.`,
+      );
+
+      // Opcional: No salir de la página para verificar que siguen ahí
+      // navigate(-1);
+    } catch (error) {
+      console.error(error);
+      alert(
+        "Error grave al guardar. Verifica: 1. Que hayas corrido el SQL del 'unique key'. 2. Que el backend esté corriendo.",
       );
     }
   };
 
+  if (loading)
+    return (
+      <div className="p-10 text-center text-gray-500">
+        Cargando acta de calificaciones...
+      </div>
+    );
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6 relative">
+    <div className="p-6 max-w-5xl mx-auto animate-in fade-in duration-300">
+      {/* Encabezado */}
+      <div className="flex items-center gap-4 mb-6">
         <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-gray-500 hover:text-gray-800"
+          onClick={() => navigate(-1)}
+          className="p-2 hover:bg-gray-100 rounded-full transition-colors"
         >
-          <X size={24} />
+          <ArrowLeft size={24} className="text-gray-600" />
         </button>
-        <h3 className="text-2xl font-bold mb-6">
-          {isEditing ? "Editar" : "Nuevo"} Grupo
-        </h3>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <input
-            type="text"
-            name="nombre_grupo"
-            value={formData.nombre_grupo}
-            onChange={handleChange}
-            placeholder="Nombre del Grupo (ej. A, B)"
-            required
-            className="w-full px-3 py-2 border rounded-md"
-          />
-          <input
-            type="number"
-            name="cupo"
-            value={formData.cupo}
-            onChange={handleChange}
-            placeholder="Cupo"
-            required
-            className="w-full px-3 py-2 border rounded-md"
-          />
-
-          <select
-            name="ciclo_id"
-            value={formData.ciclo_id}
-            onChange={handleChange}
-            className="w-full px-3 py-2 border rounded-md"
-          >
-            {catalogos.ciclos.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.nombre_ciclo}
-              </option>
-            ))}
-          </select>
-          <select
-            name="sede_id"
-            value={formData.sede_id}
-            onChange={handleChange}
-            className="w-full px-3 py-2 border rounded-md"
-          >
-            {catalogos.sedes.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.nombre_sede}
-              </option>
-            ))}
-          </select>
-          <select
-            name="plan_estudio_id"
-            value={formData.plan_estudio_id}
-            onChange={handleChange}
-            className="w-full px-3 py-2 border rounded-md"
-          >
-            {catalogos.planes.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.nombre_plan}
-              </option>
-            ))}
-          </select>
-          <select
-            name="grado_id"
-            value={formData.grado_id}
-            onChange={handleChange}
-            className="w-full px-3 py-2 border rounded-md"
-          >
-            {catalogos.grados.map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.nombre_grado}
-              </option>
-            ))}
-          </select>
-
-          {/* --- INSERTA ESTE BLOQUE NUEVO AQUÍ --- */}
-          <div>
-            <label className="text-sm font-medium text-gray-700">
-              Estatus del Grupo
-            </label>
-            <select
-              name="estatus"
-              value={formData.estatus}
-              onChange={handleChange}
-              className="w-full px-3 py-2 mt-1 border rounded-md"
-            >
-              <option value="activo">Activo</option>
-              <option value="inactivo">Inactivo</option>
-            </select>
+        <div>
+          <h1 className="text-2xl font-bold text-gray-800">
+            Captura de Calificaciones
+          </h1>
+          <div className="flex gap-2 text-sm text-gray-500 mt-1">
+            <span className="font-semibold text-purple-600 bg-purple-50 px-2 py-0.5 rounded">
+              {info.grupo}
+            </span>
+            <span>•</span>
+            <span>
+              {info.materia} ({info.clave})
+            </span>
           </div>
-          {/* --- FIN DEL BLOQUE NUEVO --- */}
-          {/* --- CAMPO NUEVO --- */}
-          <div>
-            <label className="text-sm font-medium text-gray-700">
-              Modalidad
-            </label>
-            <select
-              name="modalidad"
-              value={formData.modalidad}
-              onChange={handleChange}
-              className="w-full px-3 py-2 mt-1 border rounded-md"
-            >
-              <option value="presencial">Presencial</option>
-              <option value="virtual">Virtual</option>
-            </select>
-          </div>
-          {/* --- FIN CAMPO NUEVO --- */}
+        </div>
+      </div>
 
-          <div className="flex justify-end space-x-4 mt-8">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              className="px-4 py-2 bg-principal text-white rounded-md hover:opacity-90"
-            >
-              Guardar
-            </button>
+      {/* Tabla */}
+      <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
+        <div className="p-4 bg-gray-50 border-b border-gray-200 flex justify-between items-center sticky top-0 z-10">
+          <span className="font-bold text-gray-700">
+            Alumnos Inscritos: {alumnos.length}
+          </span>
+          <button
+            onClick={handleGuardar}
+            className="bg-blue-600 text-white px-6 py-2.5 rounded-lg hover:bg-blue-700 font-bold flex items-center gap-2 shadow-md hover:shadow-lg transition-all"
+          >
+            <Save size={18} /> Guardar Cambios
+          </button>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-100 text-xs text-gray-500 uppercase font-semibold">
+              <tr>
+                <th className="px-6 py-4 text-left w-1/2">Nombre del Alumno</th>
+                <th className="px-6 py-4 text-center w-48">
+                  Calificación (0-100)
+                </th>
+                <th className="px-6 py-4 text-left text-gray-400 font-normal">
+                  Estado
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {alumnos.map((alum) => (
+                <tr
+                  key={alum.id}
+                  className="hover:bg-blue-50 transition-colors group"
+                >
+                  <td className="px-6 py-4">
+                    <div className="font-bold text-gray-800">
+                      {alum.nombre} {alum.apellido_paterno}
+                    </div>
+                    <div className="text-xs text-gray-500">{alum.email}</div>
+                  </td>
+                  <td className="px-6 py-4 text-center">
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.1"
+                      className={`w-24 text-center p-2 border-2 rounded-lg focus:ring-4 focus:ring-blue-200 font-bold text-lg transition-all outline-none
+                        ${
+                          alum.calificacion !== ""
+                            ? alum.calificacion >= 70
+                              ? "border-green-400 bg-green-50 text-green-800"
+                              : "border-red-300 bg-red-50 text-red-800"
+                            : "border-gray-300 text-gray-800 focus:border-blue-500"
+                        }`}
+                      placeholder="-"
+                      value={alum.calificacion}
+                      onChange={(e) =>
+                        handleCalificacionChange(alum.id, e.target.value)
+                      }
+                    />
+                  </td>
+                  <td className="px-6 py-4">
+                    {alum.calificacion !== "" && (
+                      <span
+                        className={`text-xs font-bold px-2 py-1 rounded ${
+                          alum.calificacion >= 70
+                            ? "text-green-600 bg-green-100"
+                            : "text-red-600 bg-red-100"
+                        }`}
+                      >
+                        {alum.calificacion >= 70 ? "APROBADO" : "REPROBADO"}
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {alumnos.length === 0 && (
+          <div className="p-10 text-center text-gray-400">
+            No se encontraron alumnos en este grupo.
           </div>
-        </form>
+        )}
       </div>
     </div>
   );
@@ -2298,7 +4577,7 @@ const DetalleGrupoPage = () => {
 const AsignarDocenteModal = ({ grupoId, asignatura, onClose, onSave }) => {
   const [docentes, setDocentes] = useState([]);
   const [selectedDocente, setSelectedDocente] = useState(
-    asignatura.docente_id || ""
+    asignatura.docente_id || "",
   );
 
   useEffect(() => {
@@ -2329,7 +4608,7 @@ const AsignarDocenteModal = ({ grupoId, asignatura, onClose, onSave }) => {
       console.error("Error al asignar docente", error);
       alert(
         "Error al asignar: " +
-          (error.response?.data?.message || "Error desconocido")
+          (error.response?.data?.message || "Error desconocido"),
       );
     }
   };
@@ -2393,7 +4672,7 @@ const InscribirAlumnoModal = ({ grupoId, onClose, onSave }) => {
       try {
         // --- 1. USA EL NUEVO ENDPOINT ---
         const { data } = await api.get(
-          `/admin/grupos/${grupoId}/alumnos-disponibles`
+          `/admin/grupos/${grupoId}/alumnos-disponibles`,
         );
         setAlumnosDisponibles(data);
         if (data.length > 0) {
@@ -2423,7 +4702,7 @@ const InscribirAlumnoModal = ({ grupoId, onClose, onSave }) => {
       console.error("Error al inscribir alumno", error);
       alert(
         "Error al inscribir: " +
-          (error.response?.data?.message || "Error desconocido")
+          (error.response?.data?.message || "Error desconocido"),
       );
     }
   };
@@ -2621,7 +4900,7 @@ const CatalogoModal = ({
       console.error(`Error al guardar ${title}`, error);
       alert(
         "Error al guardar: " +
-          (error.response?.data?.message || "Error desconocido")
+          (error.response?.data?.message || "Error desconocido"),
       );
     }
   };
@@ -2695,7 +4974,7 @@ const PlanesEstudioPage = () => {
   const handleDelete = async (id) => {
     if (
       window.confirm(
-        "¿Estás seguro de que quieres eliminar este plan de estudio?"
+        "¿Estás seguro de que quieres eliminar este plan de estudio?",
       )
     ) {
       try {
@@ -2705,7 +4984,7 @@ const PlanesEstudioPage = () => {
         console.error("Error al eliminar plan de estudio", error);
         alert(
           "Error al eliminar: " +
-            (error.response?.data?.message || "Error desconocido")
+            (error.response?.data?.message || "Error desconocido"),
         );
       }
     }
@@ -2827,7 +5106,7 @@ const PlanesEstudioModal = ({ plan, onClose, onSave }) => {
       console.error("Error al guardar plan de estudio", error);
       alert(
         "Error al guardar: " +
-          (error.response?.data?.message || "Error desconocido")
+          (error.response?.data?.message || "Error desconocido"),
       );
     }
   };
@@ -2915,7 +5194,7 @@ const CajaPage = () => {
         // pero reutilizar este es más rápido.
         const { data } = await api.get("/admin/usuarios");
         setUsuarios(
-          data.filter((u) => u.rol === "alumno" || u.rol === "aspirante")
+          data.filter((u) => u.rol === "alumno" || u.rol === "aspirante"),
         );
       } catch (error) {
         console.error("Error al cargar usuarios", error);
@@ -2928,7 +5207,7 @@ const CajaPage = () => {
     (u) =>
       u.nombre.toLowerCase().includes(filtro.toLowerCase()) ||
       u.apellido_paterno.toLowerCase().includes(filtro.toLowerCase()) ||
-      (u.matricula && u.matricula.includes(filtro))
+      (u.matricula && u.matricula.includes(filtro)),
   );
 
   return (
@@ -3025,7 +5304,7 @@ const DetalleFinancieroAlumnoPage = () => {
       } catch (error) {
         console.error("Error al marcar pago", error);
         alert(
-          "Error: " + (error.response?.data?.message || "Error desconocido")
+          "Error: " + (error.response?.data?.message || "Error desconocido"),
         );
       }
     }
@@ -3147,7 +5426,7 @@ const DetalleFinancieroAlumnoPage = () => {
                 <td className="px-4 py-2">
                   <span
                     className={`px-3 py-1 rounded-full text-xs font-semibold ${getEstatusBadge(
-                      a.estatus_pago
+                      a.estatus_pago,
                     )}`}
                   >
                     {a.estatus_pago}
@@ -3318,7 +5597,7 @@ const MisPagosPage = () => {
 
   const totalAdeudado = adeudos
     .filter(
-      (a) => a.estatus_pago === "pendiente" || a.estatus_pago === "vencido"
+      (a) => a.estatus_pago === "pendiente" || a.estatus_pago === "vencido",
     )
     .reduce((sum, a) => sum + parseFloat(a.monto_a_pagar), 0);
 
@@ -3360,7 +5639,7 @@ const MisPagosPage = () => {
                 <td className="px-4 py-2">
                   <span
                     className={`px-3 py-1 rounded-full text-xs font-semibold ${getEstatusBadge(
-                      a.estatus_pago
+                      a.estatus_pago,
                     )}`}
                   >
                     {a.estatus_pago}
@@ -3387,6 +5666,560 @@ const MisPagosPage = () => {
   );
 };
 // --- FIN COMPONENTE: MisPagosPage (Alumno) ---
+
+// ... (después del componente MisPagosPage)
+
+// --- INICIA NUEVO COMPONENTE: MisSolicitudesPage (Alumno) ---
+const MisSolicitudesPage = () => {
+  const [solicitudes, setSolicitudes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [tipoSolicitud, setTipoSolicitud] = useState("constancia_estudios"); // Valor inicial
+  const [motivo, setMotivo] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  // Tipos de solicitud predefinidos (puedes expandir esto)
+  const tiposDisponibles = [
+    { value: "constancia_estudios", label: "Constancia de Estudios" },
+    { value: "kardex_impreso", label: "Historial Académico (Kardex Impreso)" },
+    { value: "baja_temporal", label: "Baja Temporal" },
+    { value: "otro", label: "Otro (Especificar en motivo)" },
+  ];
+
+  const fetchSolicitudes = useCallback(async () => {
+    try {
+      setLoading(true);
+      const { data } = await api.get("/alumno/mis-solicitudes");
+      setSolicitudes(data);
+    } catch (error) {
+      console.error("Error al cargar mis solicitudes", error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchSolicitudes();
+  }, [fetchSolicitudes]);
+
+  const handleOpenModal = () => {
+    setTipoSolicitud("constancia_estudios"); // Resetea al abrir
+    setMotivo("");
+    setError("");
+    setShowModal(true);
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+    setIsSubmitting(true);
+    try {
+      await api.post("/alumno/solicitudes", {
+        tipo_solicitud: tipoSolicitud,
+        motivo,
+      });
+      setShowModal(false);
+      fetchSolicitudes(); // Recargar la lista
+    } catch (error) {
+      console.error("Error al enviar solicitud", error);
+      setError(
+        error.response?.data?.message || "Error al enviar la solicitud.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const getEstatusInfo = (estatus) => {
+    switch (estatus) {
+      case "solicitado":
+        return {
+          text: "Solicitado",
+          color: "bg-blue-100 text-blue-800",
+          icon: FileClock,
+        };
+      case "en_revision":
+        return {
+          text: "En Revisión",
+          color: "bg-yellow-100 text-yellow-800",
+          icon: FileClock,
+        };
+      case "listo_para_entrega":
+        return {
+          text: "Listo para Entrega",
+          color: "bg-green-100 text-green-800",
+          icon: FileCheck,
+        };
+      case "rechazado":
+        return {
+          text: "Rechazado",
+          color: "bg-red-100 text-red-800",
+          icon: FileX,
+        };
+      case "cancelado":
+        return {
+          text: "Cancelado",
+          color: "bg-gray-100 text-gray-800",
+          icon: FileX,
+        };
+      default:
+        return {
+          text: estatus,
+          color: "bg-gray-100 text-gray-800",
+          icon: FileClock,
+        };
+    }
+  };
+
+  // Helper para formatear fechas DATETIME (copiado de MisPagosPage)
+  const renderFechaHora = (fechaString) => {
+    if (!fechaString || fechaString.startsWith("0000-")) return "N/A";
+    const date = new Date(fechaString);
+    if (isNaN(date.getTime())) return "Fecha Inválida";
+    return date.toLocaleString();
+  };
+
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-3xl font-bold text-gray-800">Mis Solicitudes</h2>
+        <button
+          onClick={handleOpenModal}
+          className="flex items-center px-4 py-2 font-semibold text-white bg-principal rounded-md hover:opacity-90"
+        >
+          <FilePlus className="w-5 h-5 mr-2" />
+          Nueva Solicitud
+        </button>
+      </div>
+
+      <div className="bg-white p-6 rounded-lg shadow">
+        <h3 className="text-xl font-bold mb-4">Historial</h3>
+        {loading ? (
+          <p>Cargando historial...</p>
+        ) : solicitudes.length === 0 ? (
+          <p className="text-gray-500">
+            No has realizado ninguna solicitud aún.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full table-auto text-sm">
+              <thead className="text-left bg-gray-50">
+                <tr>
+                  <th className="px-4 py-2">Tipo</th>
+                  <th className="px-4 py-2">Fecha Solicitud</th>
+                  <th className="px-4 py-2">Estatus</th>
+                  <th className="px-4 py-2">Comentarios Admin</th>
+                  <th className="px-4 py-2">Última Actualización</th>
+                </tr>
+              </thead>
+              <tbody>
+                {solicitudes.map((s) => {
+                  const estatusInfo = getEstatusInfo(s.estatus);
+                  return (
+                    <tr key={s.id} className="border-b">
+                      <td className="px-4 py-2 font-medium">
+                        {tiposDisponibles.find(
+                          (t) => t.value === s.tipo_solicitud,
+                        )?.label || s.tipo_solicitud}
+                      </td>
+                      <td className="px-4 py-2">
+                        {renderFechaHora(s.fecha_solicitud)}
+                      </td>
+                      <td className="px-4 py-2">
+                        <span
+                          className={`flex items-center px-3 py-1 rounded-full text-xs font-semibold ${estatusInfo.color}`}
+                        >
+                          <estatusInfo.icon size={14} className="mr-1" />
+                          {estatusInfo.text}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2 italic text-gray-600">
+                        {s.comentarios_admin || "--"}
+                      </td>
+                      <td className="px-4 py-2">
+                        {renderFechaHora(s.fecha_ultima_actualizacion)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Modal para Nueva Solicitud */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6 relative">
+            <button
+              onClick={() => setShowModal(false)}
+              className="absolute top-4 right-4 text-gray-500 hover:text-gray-800"
+            >
+              <X size={24} />
+            </button>
+            <h3 className="text-2xl font-bold mb-6">Nueva Solicitud</h3>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label
+                  htmlFor="tipo_solicitud"
+                  className="block text-sm font-medium text-gray-700"
+                >
+                  Tipo de Solicitud
+                </label>
+                <select
+                  id="tipo_solicitud"
+                  value={tipoSolicitud}
+                  onChange={(e) => setTipoSolicitud(e.target.value)}
+                  className="w-full px-3 py-2 mt-1 border rounded-md"
+                  required
+                >
+                  {tiposDisponibles.map((tipo) => (
+                    <option key={tipo.value} value={tipo.value}>
+                      {tipo.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label
+                  htmlFor="motivo"
+                  className="block text-sm font-medium text-gray-700"
+                >
+                  Motivo / Detalles (Opcional)
+                </label>
+                <textarea
+                  id="motivo"
+                  rows="4"
+                  value={motivo}
+                  onChange={(e) => setMotivo(e.target.value)}
+                  placeholder={
+                    tipoSolicitud === "otro"
+                      ? "Por favor, especifica qué necesitas..."
+                      : "Si necesitas añadir detalles, hazlo aquí..."
+                  }
+                  className="w-full px-3 py-2 mt-1 border rounded-md"
+                />
+              </div>
+              {error && <p className="text-sm text-red-600">{error}</p>}
+              <div className="flex justify-end space-x-4 mt-8">
+                <button
+                  type="button"
+                  onClick={() => setShowModal(false)}
+                  className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="px-4 py-2 bg-principal text-white rounded-md hover:opacity-90 disabled:bg-gray-400"
+                >
+                  {isSubmitting ? "Enviando..." : "Enviar Solicitud"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+// --- FIN COMPONENTE: MisSolicitudesPage (Alumno) ---
+
+// --- INICIA NUEVO COMPONENTE: GestionSolicitudesPage (Admin) ---
+const GestionSolicitudesPage = () => {
+  const [solicitudes, setSolicitudes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filtroEstatus, setFiltroEstatus] = useState("solicitado"); // Mostrar solicitadas por defecto
+  const [showModal, setShowModal] = useState(false);
+  const [selectedSolicitud, setSelectedSolicitud] = useState(null);
+  const [nuevoEstatus, setNuevoEstatus] = useState("");
+  const [comentariosAdmin, setComentariosAdmin] = useState("");
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [errorModal, setErrorModal] = useState("");
+
+  const estatusDisponibles = [
+    "solicitado",
+    "en_revision",
+    "listo_para_entrega",
+    "rechazado",
+    "cancelado",
+  ];
+
+  const fetchSolicitudes = useCallback(async () => {
+    try {
+      setLoading(true);
+      // Pide las solicitudes filtrando por el estatus seleccionado
+      const { data } = await api.get(
+        `/admin/solicitudes?estatus=${filtroEstatus}`,
+      );
+      setSolicitudes(data);
+    } catch (error) {
+      console.error("Error al cargar solicitudes", error);
+    } finally {
+      setLoading(false);
+    }
+  }, [filtroEstatus]); // Se ejecuta de nuevo si cambia el filtro
+
+  useEffect(() => {
+    fetchSolicitudes();
+  }, [fetchSolicitudes]);
+
+  const handleOpenModal = (solicitud) => {
+    setSelectedSolicitud(solicitud);
+    setNuevoEstatus(solicitud.estatus); // Inicia con el estatus actual
+    setComentariosAdmin(solicitud.comentarios_admin || "");
+    setErrorModal("");
+    setShowModal(true);
+  };
+
+  const handleUpdateEstatus = async (e) => {
+    e.preventDefault();
+    setErrorModal("");
+    setIsUpdating(true);
+    try {
+      await api.put(`/admin/solicitudes/${selectedSolicitud.id}/estatus`, {
+        nuevo_estatus: nuevoEstatus,
+        comentarios_admin: comentariosAdmin,
+      });
+      setShowModal(false);
+      fetchSolicitudes(); // Recargar la lista
+    } catch (error) {
+      console.error("Error al actualizar estatus", error);
+      setErrorModal(error.response?.data?.message || "Error al actualizar.");
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  // Copiamos los helpers de la vista de alumno para consistencia
+  const getEstatusInfo = (estatus) => {
+    switch (estatus) {
+      case "solicitado":
+        return {
+          text: "Solicitado",
+          color: "bg-blue-100 text-blue-800",
+          icon: FileClock,
+        };
+      case "en_revision":
+        return {
+          text: "En Revisión",
+          color: "bg-yellow-100 text-yellow-800",
+          icon: FileClock,
+        };
+      case "listo_para_entrega":
+        return {
+          text: "Listo",
+          color: "bg-green-100 text-green-800",
+          icon: FileCheck,
+        };
+      case "rechazado":
+        return {
+          text: "Rechazado",
+          color: "bg-red-100 text-red-800",
+          icon: FileX,
+        };
+      case "cancelado":
+        return {
+          text: "Cancelado",
+          color: "bg-gray-100 text-gray-800",
+          icon: FileX,
+        };
+      default:
+        return {
+          text: estatus,
+          color: "bg-gray-100 text-gray-800",
+          icon: FileClock,
+        };
+    }
+  };
+  const renderFechaHora = (fechaString) => {
+    if (!fechaString || fechaString.startsWith("0000-")) return "N/A";
+    const date = new Date(fechaString);
+    if (isNaN(date.getTime())) return "Fecha Inválida";
+    return date.toLocaleString();
+  };
+
+  return (
+    <div>
+      <h2 className="text-3xl font-bold text-gray-800 mb-6">
+        Gestión de Solicitudes
+      </h2>
+
+      {/* Filtro por estatus */}
+      <div className="mb-4">
+        <label
+          htmlFor="filtroEstatus"
+          className="block text-sm font-medium text-gray-700 mb-1"
+        >
+          Filtrar por Estatus:
+        </label>
+        <select
+          id="filtroEstatus"
+          value={filtroEstatus}
+          onChange={(e) => setFiltroEstatus(e.target.value)}
+          className="px-3 py-2 border rounded-md"
+        >
+          {estatusDisponibles.map((e) => (
+            <option key={e} value={e} className="capitalize">
+              {e.replace("_", " ")}
+            </option>
+          ))}
+          <option value="">-- Todos --</option> {/* Opción para ver todas */}
+        </select>
+      </div>
+
+      <div className="bg-white p-6 rounded-lg shadow">
+        <h3 className="text-xl font-bold mb-4">
+          Solicitudes{" "}
+          {filtroEstatus ? `(${filtroEstatus.replace("_", " ")})` : "(Todas)"}
+        </h3>
+        {loading ? (
+          <p>Cargando solicitudes...</p>
+        ) : solicitudes.length === 0 ? (
+          <p className="text-gray-500">No hay solicitudes con este estatus.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full table-auto text-sm">
+              <thead className="text-left bg-gray-50">
+                <tr>
+                  <th className="px-4 py-2">Alumno</th>
+                  <th className="px-4 py-2">Tipo</th>
+                  <th className="px-4 py-2">Fecha Solicitud</th>
+                  <th className="px-4 py-2">Estatus Actual</th>
+                  <th className="px-4 py-2">Acción</th>
+                </tr>
+              </thead>
+              <tbody>
+                {solicitudes.map((s) => {
+                  const estatusInfo = getEstatusInfo(s.estatus);
+                  return (
+                    <tr key={s.id} className="border-b">
+                      <td className="px-4 py-2 font-medium">
+                        {s.nombre_alumno}
+                      </td>
+                      <td className="px-4 py-2">
+                        {s.tipo_solicitud.replace("_", " ")}
+                      </td>
+                      <td className="px-4 py-2">
+                        {renderFechaHora(s.fecha_solicitud)}
+                      </td>
+                      <td className="px-4 py-2">
+                        <span
+                          className={`flex items-center px-3 py-1 rounded-full text-xs font-semibold ${estatusInfo.color}`}
+                        >
+                          <estatusInfo.icon size={14} className="mr-1" />
+                          {estatusInfo.text}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2">
+                        <button
+                          onClick={() => handleOpenModal(s)}
+                          className="px-3 py-1 text-sm font-medium text-white bg-secundario rounded-md hover:opacity-90"
+                        >
+                          Actualizar Estatus
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Modal para Actualizar Estatus */}
+      {showModal && selectedSolicitud && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6 relative">
+            <button
+              onClick={() => setShowModal(false)}
+              className="absolute top-4 right-4 text-gray-500 hover:text-gray-800"
+            >
+              <X size={24} />
+            </button>
+            <h3 className="text-2xl font-bold mb-2">Actualizar Solicitud</h3>
+            <p className="text-gray-600 mb-1">
+              Alumno:{" "}
+              <span className="font-semibold">
+                {selectedSolicitud.nombre_alumno}
+              </span>
+            </p>
+            <p className="text-gray-600 mb-4">
+              Tipo:{" "}
+              <span className="font-semibold">
+                {selectedSolicitud.tipo_solicitud.replace("_", " ")}
+              </span>
+            </p>
+
+            <form onSubmit={handleUpdateEstatus} className="space-y-4">
+              <div>
+                <label
+                  htmlFor="nuevoEstatus"
+                  className="block text-sm font-medium text-gray-700"
+                >
+                  Nuevo Estatus
+                </label>
+                <select
+                  id="nuevoEstatus"
+                  value={nuevoEstatus}
+                  onChange={(e) => setNuevoEstatus(e.target.value)}
+                  className="w-full px-3 py-2 mt-1 border rounded-md capitalize"
+                  required
+                >
+                  {estatusDisponibles.map((e) => (
+                    <option key={e} value={e}>
+                      {e.replace("_", " ")}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label
+                  htmlFor="comentariosAdmin"
+                  className="block text-sm font-medium text-gray-700"
+                >
+                  Comentarios para el Alumno (Opcional)
+                </label>
+                <textarea
+                  id="comentariosAdmin"
+                  rows="3"
+                  value={comentariosAdmin}
+                  onChange={(e) => setComentariosAdmin(e.target.value)}
+                  placeholder="Ej: Documento listo en ventanilla 3 / Favor de pasar a pagar..."
+                  className="w-full px-3 py-2 mt-1 border rounded-md"
+                />
+              </div>
+              {errorModal && (
+                <p className="text-sm text-red-600">{errorModal}</p>
+              )}
+              <div className="flex justify-end space-x-4 mt-8">
+                <button
+                  type="button"
+                  onClick={() => setShowModal(false)}
+                  className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUpdating}
+                  className="px-4 py-2 bg-principal text-white rounded-md hover:opacity-90 disabled:bg-gray-400"
+                >
+                  {isUpdating ? "Actualizando..." : "Guardar Cambios"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+// --- FIN COMPONENTE: GestionSolicitudesPage (Admin) ---
 
 // --- NUEVA PÁGINA DE MIGRACIÓN ---
 const MigracionGruposPage = () => {
@@ -3416,11 +6249,11 @@ const MigracionGruposPage = () => {
   // 2. Filtrar grupos en listas separadas (memoizado para eficiencia)
   const inactivos = useMemo(
     () => grupos.filter((g) => g.estatus === "inactivo"),
-    [grupos]
+    [grupos],
   );
   const activos = useMemo(
     () => grupos.filter((g) => g.estatus === "activo"),
-    [grupos]
+    [grupos],
   );
 
   // 3. Manejar el envío del formulario
@@ -3438,7 +6271,7 @@ const MigracionGruposPage = () => {
 
     if (
       window.confirm(
-        "¿Estás seguro de que quieres migrar a TODOS los alumnos de este grupo? Esta acción es irreversible."
+        "¿Estás seguro de que quieres migrar a TODOS los alumnos de este grupo? Esta acción es irreversible.",
       )
     ) {
       setLoading(true);
@@ -3600,7 +6433,7 @@ const TransferirAlumnoModal = ({
     } catch (error) {
       console.error("Error al transferir", error);
       alert(
-        "Error al transferir: " + (error.response?.data?.message || "Error")
+        "Error al transferir: " + (error.response?.data?.message || "Error"),
       );
     }
   };
@@ -3698,7 +6531,7 @@ const DocenteDashboardPage = () => {
             className="bg-white p-6 rounded-lg shadow hover:shadow-lg transition-shadow cursor-pointer"
             onClick={() =>
               navigate(
-                `/docente/grupo/${curso.grupo_id}/asignatura/${curso.asignatura_id}/aula`
+                `/docente/grupo/${curso.grupo_id}/asignatura/${curso.asignatura_id}/aula`,
               )
             }
           >
@@ -3752,7 +6585,7 @@ const DetalleCursoDocentePage = () => {
       setLoading(true);
       // Esta ruta es la del DOCENTE
       const { data } = await api.get(
-        `/docente/grupo/${grupoId}/asignatura/${asignaturaId}/alumnos`
+        `/docente/grupo/${grupoId}/asignatura/${asignaturaId}/alumnos`,
       );
       setAlumnos(data.alumnos);
       setCursoInfo(data.cursoInfo);
@@ -3913,7 +6746,7 @@ const AdminCalificarPage = () => {
       setLoading(true);
       // Esta ruta es la del ADMIN
       const { data } = await api.get(
-        `/admin/grupo/${grupoId}/asignatura/${asignaturaId}/alumnos`
+        `/admin/grupo/${grupoId}/asignatura/${asignaturaId}/alumnos`,
       );
       setAlumnos(data.alumnos);
       setCursoInfo(data.cursoInfo);
@@ -4191,7 +7024,7 @@ const DetalleAspirantePage = () => {
       console.error("Error al subir el archivo", error);
       alert(
         "Error al subir archivo: " +
-          (error.response?.data?.message || "Error desconocido")
+          (error.response?.data?.message || "Error desconocido"),
       );
     }
   };
@@ -4379,7 +7212,7 @@ const AspiranteDashboardPage = () => {
   // 6. Lógica para el recordatorio
   const documentosSubidos = expediente.map((doc) => doc.tipo_documento);
   const faltantes = tiposRequeridos.filter(
-    (tipo) => !documentosSubidos.includes(tipo.id)
+    (tipo) => !documentosSubidos.includes(tipo.id),
   );
 
   if (!user) return <p>Cargando...</p>;
@@ -4548,7 +7381,7 @@ const AulaVirtualPage = () => {
   const fetchAulaConfig = useCallback(async () => {
     try {
       const { data } = await api.get(
-        `/${user.rol}/aula-virtual/${grupoId}/${asignaturaId}/config`
+        `/${user.rol}/aula-virtual/${grupoId}/${asignaturaId}/config`,
       );
       setConfig(data);
       setFormData({
@@ -4570,7 +7403,7 @@ const AulaVirtualPage = () => {
     setLoadingTareas(true);
     try {
       const { data } = await api.get(
-        `/${user.rol}/aula-virtual/${grupoId}/${asignaturaId}/tareas`
+        `/${user.rol}/aula-virtual/${grupoId}/${asignaturaId}/tareas`,
       );
       setTareas(data);
     } catch (error) {
@@ -4584,7 +7417,7 @@ const AulaVirtualPage = () => {
     setLoadingRecursos(true);
     try {
       const { data } = await api.get(
-        `/${user.rol}/aula-virtual/${grupoId}/${asignaturaId}/recursos`
+        `/${user.rol}/aula-virtual/${grupoId}/${asignaturaId}/recursos`,
       );
       setRecursos(data);
     } catch (error) {
@@ -4599,7 +7432,7 @@ const AulaVirtualPage = () => {
     setLoadingHistorial(true);
     try {
       const { data } = await api.get(
-        `/alumno/aula-virtual/${grupoId}/${asignaturaId}/mis-asistencias`
+        `/alumno/aula-virtual/${grupoId}/${asignaturaId}/mis-asistencias`,
       );
       setHistorialAsistencia(data);
     } catch (error) {
@@ -4653,7 +7486,7 @@ const AulaVirtualPage = () => {
     try {
       await api.put(
         `/docente/aula-virtual/${grupoId}/${asignaturaId}/config`,
-        formData
+        formData,
       );
       setIsSaving(false);
       setSaveSuccess(true);
@@ -4695,7 +7528,7 @@ const AulaVirtualPage = () => {
         {
           // Opcional: podrías enviar un tema si tuvieras un input para ello
           // tema_sesion: "Clase del día"
-        }
+        },
       );
 
       const { sesionId } = data; // 3. Obtiene el ID de la sesión
@@ -4703,7 +7536,7 @@ const AulaVirtualPage = () => {
       if (sesionId) {
         // 4. Redirige al docente a la página de asistencia con ese ID
         navigate(
-          `/docente/grupo/${grupoId}/asignatura/${asignaturaId}/asistencia/${sesionId}`
+          `/docente/grupo/${grupoId}/asignatura/${asignaturaId}/asistencia/${sesionId}`,
         );
       } else {
         throw new Error("No se recibió un ID de sesión.");
@@ -4713,7 +7546,7 @@ const AulaVirtualPage = () => {
       console.error("Error al iniciar la sesión de asistencia:", error);
       alert(
         "Error al iniciar la sesión: " +
-          (error.response?.data?.message || error.message)
+          (error.response?.data?.message || error.message),
       );
     } finally {
       // 6. Restablece el botón
@@ -4914,7 +7747,7 @@ const AulaVirtualPage = () => {
                     <p className="text-sm text-gray-600">
                       {tarea.fecha_limite
                         ? `Fecha límite: ${new Date(
-                            tarea.fecha_limite
+                            tarea.fecha_limite,
                           ).toLocaleString()}`
                         : "Sin fecha límite"}
                     </p>
@@ -4944,7 +7777,7 @@ const AulaVirtualPage = () => {
                   <p className="text-sm text-gray-600">
                     {tarea.fecha_limite
                       ? `Fecha límite: ${new Date(
-                          tarea.fecha_limite
+                          tarea.fecha_limite,
                         ).toLocaleString()}`
                       : "Sin fecha límite"}
                   </p>
@@ -4955,8 +7788,8 @@ const AulaVirtualPage = () => {
                   isCalificada
                     ? "bg-green-100 text-green-800"
                     : isEntregada
-                    ? "bg-blue-100 text-blue-800"
-                    : "bg-yellow-100 text-yellow-800"
+                      ? "bg-blue-100 text-blue-800"
+                      : "bg-yellow-100 text-yellow-800"
                 }`}
               >
                 {isCalificada ? (
@@ -5136,7 +7969,7 @@ const AulaVirtualPage = () => {
               <button
                 onClick={() =>
                   navigate(
-                    `/docente/grupo/${grupoId}/asignatura/${asignaturaId}`
+                    `/docente/grupo/${grupoId}/asignatura/${asignaturaId}`,
                   )
                 }
                 className="flex items-center px-4 py-2 text-sm font-semibold text-white bg-orange-500 rounded-md hover:bg-orange-600"
@@ -5333,7 +8166,7 @@ const AulaVirtualPage = () => {
                                 const fecha = new Date(
                                   parseInt(parts[0]),
                                   parseInt(parts[1]) - 1,
-                                  parseInt(parts[2])
+                                  parseInt(parts[2]),
                                 );
                                 return fecha.toLocaleDateString(); // Formatear localmente
                               })()}
@@ -5344,8 +8177,8 @@ const AulaVirtualPage = () => {
                                   reg.mi_estatus === "presente"
                                     ? "text-green-600"
                                     : reg.mi_estatus === "justificado"
-                                    ? "text-yellow-600"
-                                    : "text-red-600"
+                                      ? "text-yellow-600"
+                                      : "text-red-600"
                                 }`}
                               >
                                 {reg.mi_estatus}
@@ -5481,7 +8314,7 @@ const CrearTareaModal = ({
           titulo,
           descripcion,
           fecha_limite: fechaLimite || null,
-        }
+        },
       );
       onTareaCreada(); // Llama a la función para recargar tareas
       onClose(); // Cierra el modal
@@ -5624,7 +8457,7 @@ const EntregarTareaModal = ({ show, onClose, tarea, onEntregaExitosa }) => {
           headers: {
             "Content-Type": "multipart/form-data",
           },
-        }
+        },
       );
       onEntregaExitosa(); // Recarga la lista de tareas
       onClose(); // Cierra el modal
@@ -5745,8 +8578,8 @@ const EntregarTareaModal = ({ show, onClose, tarea, onEntregaExitosa }) => {
                 {isUploading
                   ? "Subiendo..."
                   : isEntregada
-                  ? "Actualizar Entrega"
-                  : "Entregar Tarea"}
+                    ? "Actualizar Entrega"
+                    : "Entregar Tarea"}
               </button>
             </div>
           </form>
@@ -5782,7 +8615,7 @@ const CalificarEntregaModal = ({
       setCalificacion(
         entrega.calificacion !== null && entrega.calificacion !== undefined
           ? String(entrega.calificacion) // Convertimos 80 a "80" y 0 a "0"
-          : "" // Convertimos null/undefined a ""
+          : "", // Convertimos null/undefined a ""
       );
       setComentarioDocente(entrega.comentario_docente || "");
       setError("");
@@ -5804,14 +8637,15 @@ const CalificarEntregaModal = ({
         {
           calificacion: calificacion,
           comentario_docente: comentarioDocente,
-        }
+        },
       );
       onCalificacionExitosa(); // Recarga la lista de entregas
       onClose(); // Cierra el modal
     } catch (error) {
       console.error("Error al guardar calificación", error);
       setError(
-        error.response?.data?.message || "Error al guardar. Inténtalo de nuevo."
+        error.response?.data?.message ||
+          "Error al guardar. Inténtalo de nuevo.",
       );
     } finally {
       setIsSaving(false);
@@ -5979,7 +8813,7 @@ const AgregarRecursoModal = ({
       if (tipo === "enlace") {
         await api.post(
           `/docente/aula-virtual/${grupoId}/${asignaturaId}/recurso-enlace`,
-          { titulo, url } // Envía título y url
+          { titulo, url }, // Envía título y url
         );
       }
       // Si es un archivo
@@ -5990,7 +8824,7 @@ const AgregarRecursoModal = ({
         await api.post(
           `/docente/aula-virtual/${grupoId}/${asignaturaId}/recurso-archivo`,
           formData, // Envía el FormData
-          { headers: { "Content-Type": "multipart/form-data" } } // Header importante
+          { headers: { "Content-Type": "multipart/form-data" } }, // Header importante
         );
       }
 
@@ -6001,7 +8835,8 @@ const AgregarRecursoModal = ({
       // --- Error de API ---
       console.error("Error al agregar recurso", error);
       setError(
-        error.response?.data?.message || "Error al guardar. Inténtalo de nuevo."
+        error.response?.data?.message ||
+          "Error al guardar. Inténtalo de nuevo.",
       );
     } finally {
       // --- Siempre se ejecuta ---
@@ -6308,7 +9143,7 @@ const HiloPage = () => {
     } catch (error) {
       console.error("Error al publicar respuesta", error);
       setErrorRespuesta(
-        error.response?.data?.message || "Error al enviar la respuesta."
+        error.response?.data?.message || "Error al enviar la respuesta.",
       );
     } finally {
       setIsPosting(false);
@@ -6324,8 +9159,8 @@ const HiloPage = () => {
       rol === "docente"
         ? "bg-secundario"
         : rol === "admin"
-        ? "bg-red-500"
-        : "bg-principal";
+          ? "bg-red-500"
+          : "bg-principal";
     return (
       <div
         className={`flex-shrink-0 w-10 h-10 rounded-full ${bgColor} text-white flex items-center justify-center font-bold text-sm mr-3`}
@@ -6468,7 +9303,7 @@ const DetalleTareaDocentePage = () => {
   const fetchDetallesTarea = useCallback(async () => {
     try {
       const { data } = await api.get(
-        `/docente/aula-virtual/tarea/${tareaId}/entregas`
+        `/docente/aula-virtual/tarea/${tareaId}/entregas`,
       );
       setTarea(data.tarea);
       setEntregas(data.entregas);
@@ -6635,7 +9470,7 @@ const AsistenciaPage = () => {
     try {
       setLoading(true);
       const { data } = await api.get(
-        `/docente/aula-virtual/sesion/${sesionId}/asistencia`
+        `/docente/aula-virtual/sesion/${sesionId}/asistencia`,
       );
       setSesion(data.sesion);
       setAlumnos(data.alumnos);
@@ -6705,7 +9540,7 @@ const AsistenciaPage = () => {
           const fecha = new Date(
             parseInt(parts[0]),
             parseInt(parts[1]) - 1,
-            parseInt(parts[2])
+            parseInt(parts[2]),
           );
           return fecha.toLocaleDateString();
         })()}{" "}
@@ -6737,8 +9572,8 @@ const AsistenciaPage = () => {
                       asistenciaChanges[alumno.alumno_id] === "presente"
                         ? "bg-green-50 border-green-300"
                         : asistenciaChanges[alumno.alumno_id] === "justificado"
-                        ? "bg-yellow-50 border-yellow-300"
-                        : "bg-red-50 border-red-300"
+                          ? "bg-yellow-50 border-yellow-300"
+                          : "bg-red-50 border-red-300"
                     }`}
                   >
                     <option value="presente">Presente</option>
@@ -6840,7 +9675,7 @@ const MiPerfilPage = () => {
     } catch (error) {
       console.error("Error al subir foto", error);
       setUploadError(
-        error.response?.data?.message || "Error al subir la imagen."
+        error.response?.data?.message || "Error al subir la imagen.",
       );
     } finally {
       setIsUploading(false);
@@ -6854,9 +9689,9 @@ const MiPerfilPage = () => {
   const fotoUrl = perfil.foto_perfil
     ? `http://localhost:3001/uploads/perfiles/${perfil.foto_perfil}`
     : `https://ui-avatars.com/api/?name=${encodeURIComponent(
-        perfil.nombre
+        perfil.nombre,
       )}+${encodeURIComponent(
-        perfil.apellido_paterno
+        perfil.apellido_paterno,
       )}&background=random&color=fff`; // Placeholder
 
   return (
@@ -6873,9 +9708,9 @@ const MiPerfilPage = () => {
             onError={(e) => {
               e.target.onerror = null;
               e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                perfil.nombre
+                perfil.nombre,
               )}+${encodeURIComponent(
-                perfil.apellido_paterno
+                perfil.apellido_paterno,
               )}&background=random&color=fff`;
             }} // Fallback si la imagen no carga
           />
@@ -6941,7 +9776,7 @@ const MiPerfilPage = () => {
             <InfoItem
               label="Fecha de Nacimiento"
               value={new Date(
-                perfil.fecha_nacimiento.replace(/-/g, "/")
+                perfil.fecha_nacimiento.replace(/-/g, "/"),
               ).toLocaleDateString()}
             />
           )}
@@ -6994,7 +9829,12 @@ function App() {
               />
               <Route path="/grupos" element={<GruposPage />} />
               <Route path="/grupos/:id" element={<DetalleGrupoPage />} />
+              <Route path="/admin/migracion" element={<MigracionPage />} />
               <Route path="/migrar-grupos" element={<MigracionGruposPage />} />
+              <Route
+                path="/admin/grupos/:grupoId/asignatura/:asignaturaId/calificaciones"
+                element={<SubirCalificacionesPage />}
+              />
               <Route
                 path="/admin/grupo/:grupoId/asignatura/:asignaturaId"
                 element={<AdminCalificarPage />}
@@ -7105,6 +9945,12 @@ function App() {
                 element={<DetalleFinancieroAlumnoPage />}
               />
               {/* --- FIN NUEVAS RUTAS FINANZAS (ADMIN) --- */}
+              {/* --- INICIO NUEVA RUTA SOLICITUDES (ADMIN) --- */}
+              <Route
+                path="/admin/solicitudes"
+                element={<GestionSolicitudesPage />}
+              />
+              {/* --- FIN NUEVA RUTA SOLICITUDES (ADMIN) --- */}
               <Route path="/mi-perfil" element={<MiPerfilPage />} />
             </Route>
           </Route>
@@ -7167,6 +10013,12 @@ function App() {
               {/* --- INICIO NUEVA RUTA FINANZAS (ALUMNO) --- */}
               <Route path="/alumno/mis-pagos" element={<MisPagosPage />} />
               {/* --- FIN NUEVA RUTA FINANZAS (ALUMNO) --- */}
+              {/* --- INICIO NUEVA RUTA SOLICITUDES (ALUMNO) --- */}
+              <Route
+                path="/alumno/mis-solicitudes"
+                element={<MisSolicitudesPage />}
+              />
+              {/* --- FIN NUEVA RUTA SOLICITUDES (ALUMNO) --- */}
               <Route path="/alumno/mi-perfil" element={<MiPerfilPage />} />
               <Route
                 path="/alumno/grupo/:grupoId/asignatura/:asignaturaId/foro/hilo/:hiloId"

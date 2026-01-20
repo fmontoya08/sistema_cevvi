@@ -55,10 +55,70 @@ const storage = multer.diskStorage({
     const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
     cb(
       null,
-      file.fieldname + "-" + uniqueSuffix + path.extname(file.originalname)
+      file.fieldname + "-" + uniqueSuffix + path.extname(file.originalname),
     );
   },
 });
+
+const nodemailer = require("nodemailer"); // <--- AGREGAR AL INICIO
+
+// --- CONFIGURACIÓN DEL CORREO (NODEMAILER) ---
+// Úsalo con un correo real de Gmail o Outlook para pruebas
+// --- CONFIGURACIÓN DEL CORREO (SMTP PROPIO) ---
+const transporter = nodemailer.createTransport({
+  host: "mail.puntocerodigital.com.mx", // <--- PONE AQUÍ TU SERVIDOR SMTP
+  port: 465, // <--- PUERTO (465 es seguro SSL, 587 es TLS)
+  secure: true, // <--- Pon TRUE si usas puerto 465. Pon FALSE si usas 587.
+  auth: {
+    user: "contacto@puntocerodigital.com.mx", // <--- Tu correo completo
+    pass: "8T&=0Y)4w6C-+Bn&", // <--- La contraseña de ese correo
+  },
+  tls: {
+    rejectUnauthorized: false, // <--- Agrega esto por si tu certificado SSL es compartido
+  },
+});
+
+async function enviarCredenciales(email, nombre, matricula) {
+  const mailOptions = {
+    // El 'from' DEBE ser tu correo configurado arriba
+    from: '"Plataforma Escolar" <contacto@puntocerodigital.com.mx>',
+    to: email,
+    subject: "Bienvenido a la Plataforma - Credenciales de Acceso",
+    html: `
+      <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
+        <div style="background-color: #6d28d9; padding: 20px; text-align: center;">
+          <h2 style="color: white; margin: 0;">¡Bienvenido a la Comunidad!</h2>
+        </div>
+        <div style="padding: 20px;">
+          <p>Hola <strong>${nombre}</strong>,</p>
+          <p>Tu cuenta ha sido creada exitosamente en nuestra plataforma.</p>
+          
+          <div style="background-color: #f3f4f6; padding: 15px; border-radius: 8px; margin: 20px 0;">
+            <p style="margin: 5px 0;"><strong>Usuario:</strong> ${email}</p>
+            <p style="margin: 5px 0;"><strong>Contraseña Temporal:</strong> ${matricula}</p>
+            <p style="margin: 5px 0;"><strong>Matrícula / ID:</strong> ${matricula}</p>
+          </div>
+          
+          <p>Por favor ingresa al sistema y completa tu información.</p>
+          
+          <div style="text-align: center; margin-top: 30px;">
+            <a href="http://localhost:3000" style="background-color: #6d28d9; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;">Ir a la Plataforma</a>
+          </div>
+        </div>
+        <div style="background-color: #f9fafb; padding: 10px; text-align: center; font-size: 12px; color: #6b7280;">
+          Enviado automáticamente por Punto Cero Digital
+        </div>
+      </div>
+    `,
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log(`Correo enviado exitosamente a ${email}`);
+  } catch (error) {
+    console.error("Error enviando correo:", error);
+  }
+}
 
 const upload = multer({ storage: storage });
 
@@ -230,15 +290,25 @@ apiRouter.post("/login", async (req, res) => {
   const { email, password } = req.body;
   try {
     const [results] = await db.query(
-      "SELECT id, email, password, nombre, apellido_paterno, rol, foto_perfil FROM usuarios WHERE email = ?", // <-- Agrega foto_perfil
-      [email]
+      "SELECT id, email, password, nombre, apellido_paterno, rol, foto_perfil, activo FROM usuarios WHERE email = ?",
+      [email],
     );
+
     if (results.length === 0) {
       return res
         .status(401)
         .send({ message: "Email o contraseña incorrectos" });
     }
+
     const user = results[0];
+
+    // 2. AGREGAMOS ESTA VALIDACIÓN DE SEGURIDAD
+    // Si activo es 0 (false), no dejamos pasar
+    if (user.activo === 0) {
+      return res.status(403).send({
+        message: "Tu cuenta ha sido desactivada. Contacta al administrador.",
+      });
+    }
     const isPasswordCorrect = await bcrypt.compare(password, user.password);
     if (!isPasswordCorrect) {
       return res
@@ -263,25 +333,41 @@ apiRouter.post("/login", async (req, res) => {
 
 apiRouter.use(verifyToken);
 
-// GET /api/notificaciones/no-leidas - Obtener notificaciones no leídas y el conteo
-apiRouter.get("/notificaciones/no-leidas", async (req, res) => {
+// --- RUTA CORREGIDA: Obtener No Leídas ---
+// NOTA: Asegúrate de usar la variable de router correcta (ej: apiRouter o app)
+// Si tu código original decía 'apiRouter.get', usa 'apiRouter'. Si decía 'app.get', usa 'app'.
+
+// --- RUTA CORREGIDA: Obtener No Leídas (CON VALIDACIÓN) ---
+apiRouter.get("/notificaciones/no-leidas", verifyToken, async (req, res) => {
+  // 1. VALIDACIÓN DE SEGURIDAD: Evita el crash si no hay usuario
   if (!req.user) {
     return res.status(401).send({ message: "No autenticado" });
   }
+
   const userId = req.user.id;
   try {
     const [notificaciones] = await db.query(
-      "SELECT id, mensaje, url_destino, fecha_creacion FROM notificaciones WHERE user_id = ? AND leida = FALSE ORDER BY fecha_creacion DESC LIMIT 10",
-      [userId]
+      `SELECT 
+         id, 
+         mensaje, 
+         url_destino, 
+         fecha as fecha_creacion
+       FROM notificaciones 
+       WHERE usuario_id = ? AND leido = 0 
+       ORDER BY fecha DESC 
+       LIMIT 10`,
+      [userId],
     );
+
     const [[{ count }]] = await db.query(
-      "SELECT COUNT(*) as count FROM notificaciones WHERE user_id = ? AND leida = FALSE",
-      [userId]
+      "SELECT COUNT(*) as count FROM notificaciones WHERE usuario_id = ? AND leido = 0",
+      [userId],
     );
+
     res.json({ notificaciones, count });
   } catch (error) {
-    console.error("Error al obtener notificaciones:", error);
-    res.status(500).send({ message: "Error en el servidor" });
+    console.error("Error al obtener notificaciones no leídas:", error);
+    res.status(500).send({ message: "Error al cargar notificaciones" });
   }
 });
 
@@ -295,7 +381,7 @@ apiRouter.put("/notificaciones/:id/marcar-leida", async (req, res) => {
   try {
     const [result] = await db.query(
       "UPDATE notificaciones SET leida = TRUE WHERE id = ? AND user_id = ?",
-      [notificationId, userId]
+      [notificationId, userId],
     );
     if (result.affectedRows > 0) {
       res.send({ message: "Notificación marcada como leída" });
@@ -310,26 +396,25 @@ apiRouter.put("/notificaciones/:id/marcar-leida", async (req, res) => {
   }
 });
 
-// PUT /api/notificaciones/marcar-todas-leidas - Marcar todas las notificaciones del usuario como leídas
-apiRouter.put("/notificaciones/marcar-todas-leidas", async (req, res) => {
-  if (!req.user) {
-    return res.status(401).send({ message: "No autenticado" });
-  }
-  const userId = req.user.id;
-  try {
-    await db.query(
-      "UPDATE notificaciones SET leida = TRUE WHERE user_id = ? AND leida = FALSE", // Solo actualiza las no leídas
-      [userId]
-    );
-    res.send({ message: "Todas las notificaciones marcadas como leídas" });
-  } catch (error) {
-    console.error(
-      "Error al marcar todas las notificaciones como leídas:",
-      error
-    );
-    res.status(500).send({ message: "Error en el servidor" });
-  }
-});
+// --- RUTA CORREGIDA: Marcar todas como leídas ---
+apiRouter.put(
+  "/notificaciones/marcar-todas-leidas",
+  verifyToken,
+  async (req, res) => {
+    const userId = req.user.id;
+    try {
+      // Usamos 'leido = 1' y 'usuario_id'
+      await db.query(
+        "UPDATE notificaciones SET leido = 1 WHERE usuario_id = ? AND leido = 0",
+        [userId],
+      );
+      res.json({ message: "Todas marcadas como leídas" });
+    } catch (error) {
+      console.error("Error al marcar notificaciones:", error);
+      res.status(500).send({ message: "Error del servidor" });
+    }
+  },
+);
 
 // --- FIN RUTAS NOTIFICACIONES ---
 
@@ -338,10 +423,29 @@ apiRouter.put("/notificaciones/:id/marcar-leida", async (req, res) => {
   // ... (el resto de esta ruta)
 });
 
-// PUT /api/notificaciones/marcar-todas-leidas
-apiRouter.put("/notificaciones/marcar-todas-leidas", async (req, res) => {
-  // ... (el resto de esta ruta)
-});
+// --- RUTA CORREGIDA: Marcar todas como leídas ---
+apiRouter.put(
+  "/notificaciones/marcar-todas-leidas",
+  verifyToken,
+  async (req, res) => {
+    // 1. VALIDACIÓN DE SEGURIDAD
+    if (!req.user) {
+      return res.status(401).send({ message: "No autenticado" });
+    }
+
+    const userId = req.user.id;
+    try {
+      await db.query(
+        "UPDATE notificaciones SET leido = 1 WHERE usuario_id = ? AND leido = 0",
+        [userId],
+      );
+      res.json({ message: "Todas marcadas como leídas" });
+    } catch (error) {
+      console.error("Error al marcar notificaciones:", error);
+      res.status(500).send({ message: "Error del servidor" });
+    }
+  },
+);
 
 // --- FIN RUTAS NOTIFICACIONES ---
 // --- FIN DEL BLOQUE PEGADO ---
@@ -358,7 +462,7 @@ apiRouter.put("/notificaciones/:id/marcar-leida", async (req, res) => {
   try {
     const [result] = await db.query(
       "UPDATE notificaciones SET leida = TRUE WHERE id = ? AND user_id = ?",
-      [notificationId, userId]
+      [notificationId, userId],
     );
     if (result.affectedRows > 0) {
       res.send({ message: "Notificación marcada como leída" });
@@ -382,13 +486,13 @@ apiRouter.put("/notificaciones/marcar-todas-leidas", async (req, res) => {
   try {
     await db.query(
       "UPDATE notificaciones SET leida = TRUE WHERE user_id = ? AND leida = FALSE", // Solo actualiza las no leídas
-      [userId]
+      [userId],
     );
     res.send({ message: "Todas las notificaciones marcadas como leídas" });
   } catch (error) {
     console.error(
       "Error al marcar todas las notificaciones como leídas:",
-      error
+      error,
     );
     res.status(500).send({ message: "Error en el servidor" });
   }
@@ -411,7 +515,7 @@ apiRouter.post("/register-push-token", async (req, res) => {
     // Usamos INSERT IGNORE para evitar errores si el token ya existe
     await db.query(
       "INSERT IGNORE INTO push_tokens (user_id, token) VALUES (?, ?)",
-      [userId, token]
+      [userId, token],
     );
     res.status(200).send({ message: "Token registrado con éxito." });
   } catch (error) {
@@ -453,7 +557,7 @@ apiRouter.get("/mi-perfil", async (req, res) => {
     // Obtenemos todos los datos (excepto password)
     const [[perfil]] = await db.query(
       "SELECT id, email, nombre, apellido_paterno, apellido_materno, rol, foto_perfil, genero, telefono, curp, matricula, DATE_FORMAT(fecha_nacimiento, '%Y-%m-%d') as fecha_nacimiento FROM usuarios WHERE id = ?",
-      [req.user.id]
+      [req.user.id],
     );
     if (!perfil) {
       return res.status(404).send({ message: "Perfil no encontrado." });
@@ -483,7 +587,7 @@ apiRouter.post(
       // (Opcional) Borrar foto anterior del disco si existe
       const [[usuarioActual]] = await db.query(
         "SELECT foto_perfil FROM usuarios WHERE id = ?",
-        [req.user.id]
+        [req.user.id],
       );
       if (usuarioActual && usuarioActual.foto_perfil) {
         const oldPath = path.join(perfilesDir, usuarioActual.foto_perfil);
@@ -523,7 +627,7 @@ apiRouter.post(
       return res.status(400).send({ message: error.message });
     }
     next();
-  }
+  },
 );
 
 // --- TERMINA NUEVO CÓDIGO (RUTAS MI PERFIL) ---
@@ -565,13 +669,13 @@ apiRouter.post("/calificar-grupo-completo", async (req, res) => {
         // --- CORRECCIÓN AQUÍ ---
         await connection.query(
           "INSERT INTO calificaciones (alumno_id, asignatura_id, grupo_id, calificacion) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE calificacion = ?", // <-- CORREGIDO: Añadido grupo_id en columnas
-          [cal.alumno_id, asignatura_id, grupo_id, null, null]
+          [cal.alumno_id, asignatura_id, grupo_id, null, null],
         );
       } else {
         // --- CORRECCIÓN AQUÍ ---
         await connection.query(
           "INSERT INTO calificaciones (alumno_id, asignatura_id, grupo_id, calificacion) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE calificacion = ?", // <-- CORREGIDO: Añadido grupo_id en columnas
-          [cal.alumno_id, asignatura_id, grupo_id, calNum, calNum]
+          [cal.alumno_id, asignatura_id, grupo_id, calNum, calNum],
         );
         calificacionGuardada = calNum; // Guardamos el número para notificar
       }
@@ -585,14 +689,14 @@ apiRouter.post("/calificar-grupo-completo", async (req, res) => {
           // Insertamos en la nueva tabla 'notificaciones'
           await connection.query(
             "INSERT INTO notificaciones (user_id, mensaje, url_destino) VALUES (?, ?, ?)",
-            [alumnoId, mensaje, urlDestino]
+            [alumnoId, mensaje, urlDestino],
           );
           console.log(`-> Notificación web creada para alumno ${alumnoId}`);
         } catch (notifError) {
           // Si falla crear la notificación web, no detenemos el proceso principal
           console.error(
             `Error al crear notificación web para alumno ${alumnoId}:`,
-            notifError
+            notifError,
           );
         }
       }
@@ -610,7 +714,7 @@ apiRouter.post("/calificar-grupo-completo", async (req, res) => {
           const alumnoId = cal.alumno_id;
           const [tokens] = await db.query(
             "SELECT token FROM push_tokens WHERE user_id = ?",
-            [alumnoId]
+            [alumnoId],
           );
           if (tokens.length > 0) {
             const messages = tokens.map((t) => ({
@@ -651,6 +755,290 @@ apiRouter.post("/calificar-grupo-completo", async (req, res) => {
 // --- RUTAS DE ADMIN ---
 const adminRouter = express.Router();
 adminRouter.use(isAdmin); // ¡Importante! 'isAdmin' se aplica a todas las rutas de 'adminRouter'
+
+// --- INICIO: RUTAS DE GESTIÓN DE SOLICITUDES (ADMIN) ---
+
+// --- NUEVA RUTA: CREAR ASPIRANTE (ESPECIALIZADA) ---
+adminRouter.post("/usuarios/crear-aspirante", async (req, res) => {
+  const {
+    nombre,
+    apellido_paterno,
+    apellido_materno,
+    email,
+    telefono,
+    genero,
+    curp,
+    fecha_nacimiento,
+    carrera_id,
+    sede_id,
+  } = req.body;
+
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // 1. Insertamos usuario con contraseña TEMPORAL (luego la cambiamos por la matrícula)
+    const passTemp = await bcrypt.hash("temp123", 10);
+
+    // NOTA: Asumimos que agregaste columnas 'carrera_interes_id' y 'sede_interes_id' a usuarios
+    // OJO: Si no las tienes, ejecuta: ALTER TABLE usuarios ADD COLUMN carrera_interes_id INT NULL, ADD COLUMN sede_interes_id INT NULL;
+
+    const [result] = await connection.query(
+      `INSERT INTO usuarios 
+      (nombre, apellido_paterno, apellido_materno, email, password, telefono, genero, curp, fecha_nacimiento, rol, carrera_interes_id, sede_interes_id, activo) 
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'aspirante', ?, ?, 1)`,
+      [
+        nombre,
+        apellido_paterno,
+        apellido_materno,
+        email,
+        passTemp,
+        telefono,
+        genero,
+        curp,
+        fecha_nacimiento,
+        carrera_id,
+        sede_id,
+      ],
+    );
+
+    const newId = result.insertId;
+
+    // 2. Generar Matrícula (Año + ID con ceros) -> Ej: 20260045
+    const year = new Date().getFullYear();
+    const matricula = `${year}${String(newId).padStart(4, "0")}`;
+
+    // 3. Hashear la Matrícula para que sea la contraseña
+    const hashedMatricula = await bcrypt.hash(matricula, 10);
+
+    // 4. Actualizar usuario con su Matrícula real y Contraseña (que es la misma matrícula)
+    await connection.query(
+      "UPDATE usuarios SET matricula = ?, password = ? WHERE id = ?",
+      [matricula, hashedMatricula, newId],
+    );
+
+    await connection.commit();
+
+    // 5. Enviar Correo (Fuera de la transacción para no bloquear)
+    enviarCredenciales(email, nombre, matricula);
+
+    res
+      .status(201)
+      .send({ message: "Aspirante registrado y notificado.", matricula });
+  } catch (error) {
+    await connection.rollback();
+    console.error(error);
+    res.status(500).send({
+      message:
+        error.code === "ER_DUP_ENTRY"
+          ? "Correo o CURP ya registrados."
+          : "Error al crear aspirante",
+    });
+  } finally {
+    connection.release();
+  }
+});
+
+// --- NUEVA RUTA: CREAR DOCENTE (ESPECIALIZADA) ---
+adminRouter.post("/usuarios/crear-docente", async (req, res) => {
+  const {
+    nombre,
+    apellido_paterno,
+    apellido_materno,
+    email,
+    telefono,
+    genero,
+    curp,
+    fecha_nacimiento,
+  } = req.body;
+
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // 1. Insertar (Sin carrera/sede, rol docente)
+    const passTemp = await bcrypt.hash("temp123", 10);
+    const [result] = await connection.query(
+      `INSERT INTO usuarios 
+      (nombre, apellido_paterno, apellido_materno, email, password, telefono, genero, curp, fecha_nacimiento, rol, activo) 
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'docente', 1)`,
+      [
+        nombre,
+        apellido_paterno,
+        apellido_materno,
+        email,
+        passTemp,
+        telefono,
+        genero,
+        curp,
+        fecha_nacimiento,
+      ],
+    );
+
+    const newId = result.insertId;
+
+    // 2. Generar Matrícula de Docente (Podrías ponerle un prefijo 'D' si quieres, ej: D2026001)
+    // Por ahora usaremos la misma lógica estándar
+    const year = new Date().getFullYear();
+    const matricula = `D${year}${String(newId).padStart(4, "0")}`; // Le puse una 'D' para diferenciar
+
+    // 3. Hashear Matrícula
+    const hashedMatricula = await bcrypt.hash(matricula, 10);
+
+    // 4. Actualizar
+    await connection.query(
+      "UPDATE usuarios SET matricula = ?, password = ? WHERE id = ?",
+      [matricula, hashedMatricula, newId],
+    );
+
+    await connection.commit();
+
+    // 5. Enviar Correo
+    enviarCredenciales(email, nombre, matricula);
+
+    res
+      .status(201)
+      .send({ message: "Docente registrado y notificado.", matricula });
+  } catch (error) {
+    await connection.rollback();
+    console.error(error);
+    res.status(500).send({ message: "Error al crear docente" });
+  } finally {
+    connection.release();
+  }
+});
+
+// GET /api/admin/solicitudes - Ver todas las solicitudes (o filtrar por estatus)
+adminRouter.get("/solicitudes", async (req, res) => {
+  // Ya estamos protegidos por isAdmin, así que req.user existe
+  const { estatus } = req.query; // Para filtrar ej: /solicitudes?estatus=solicitado
+  let sql = `
+    SELECT s.*, CONCAT(u.nombre, ' ', u.apellido_paterno) as nombre_alumno
+    FROM solicitudes_alumnos s
+    JOIN usuarios u ON s.alumno_id = u.id`;
+  const params = [];
+
+  // Lista de estatus válidos para filtrar
+  const estatusValidos = [
+    "solicitado",
+    "en_revision",
+    "listo_para_entrega",
+    "rechazado",
+    "cancelado",
+  ];
+  if (estatus && estatusValidos.includes(estatus)) {
+    sql += " WHERE s.estatus = ?";
+    params.push(estatus);
+  }
+  sql += " ORDER BY s.fecha_solicitud DESC";
+
+  try {
+    const [solicitudes] = await db.query(sql, params);
+    res.json(solicitudes);
+  } catch (error) {
+    console.error("Error al obtener solicitudes:", error);
+    res.status(500).send({ message: "Error en el servidor" });
+  }
+});
+
+// PUT /api/admin/solicitudes/:id/estatus - Actualizar estatus y comentarios
+adminRouter.put("/solicitudes/:id/estatus", async (req, res) => {
+  const { id: solicitudId } = req.params;
+  const adminId = req.user.id; // ID del admin que está haciendo el cambio
+  const { nuevo_estatus, comentarios_admin } = req.body;
+
+  // Validación del estatus recibido
+  const estatusValidos = [
+    "solicitado",
+    "en_revision",
+    "listo_para_entrega",
+    "rechazado",
+    "cancelado",
+  ];
+  if (!nuevo_estatus || !estatusValidos.includes(nuevo_estatus)) {
+    return res.status(400).send({ message: "Estatus no válido." });
+  }
+
+  try {
+    // 1. Actualizar la solicitud en la base de datos
+    const [result] = await db.query(
+      `UPDATE solicitudes_alumnos
+       SET estatus = ?, comentarios_admin = ?, actualizado_por_usuario_id = ?
+       WHERE id = ?`,
+      [nuevo_estatus, comentarios_admin || null, adminId, solicitudId],
+    );
+
+    // Verificar si se actualizó algo
+    if (result.affectedRows === 0) {
+      return res.status(404).send({ message: "Solicitud no encontrada." });
+    }
+
+    // --- 2. Notificar al Alumno sobre la actualización ---
+    try {
+      // Obtener ID del alumno y tipo de solicitud para el mensaje
+      const [[solicitud]] = await db.query(
+        "SELECT alumno_id, tipo_solicitud FROM solicitudes_alumnos WHERE id = ?",
+        [solicitudId],
+      );
+      const alumno_id = solicitud.alumno_id;
+
+      // Construir el mensaje
+      let mensajeAlumno = `Tu solicitud de '${solicitud.tipo_solicitud}' ha sido actualizada a: ${nuevo_estatus}.`;
+      if (comentarios_admin) {
+        mensajeAlumno += ` Comentario: ${comentarios_admin}`;
+      }
+      const urlDestinoAlumno = "/alumno/mis-solicitudes"; // Link para que el alumno vea sus solicitudes
+
+      // Crear notificación web (campanita)
+      await db.query(
+        "INSERT INTO notificaciones (user_id, mensaje, url_destino) VALUES (?, ?, ?)",
+        [alumno_id, mensajeAlumno, urlDestinoAlumno],
+      );
+
+      // Enviar notificación Push (móvil)
+      const [tokens] = await db.query(
+        "SELECT token FROM push_tokens WHERE user_id = ?",
+        [alumno_id],
+      );
+      if (tokens.length > 0) {
+        const messages = tokens.map((t) => ({
+          to: t.token,
+          sound: "default",
+          title: "Actualización de Solicitud 🔄",
+          body: mensajeAlumno,
+        }));
+        await fetch("https://exp.host/--/api/v2/push/send", {
+          method: "POST",
+          headers: {
+            Accept: "application/json",
+            "Accept-encoding": "gzip, deflate",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(messages),
+        });
+      }
+      console.log(
+        `Notificación de actualización enviada al alumno ${alumno_id}.`,
+      );
+    } catch (notifError) {
+      console.error(
+        "Error al notificar actualización de solicitud:",
+        notifError,
+      );
+      // No detener la respuesta principal
+    }
+    // --- Fin Notificar Alumno ---
+
+    res.send({ message: "Estatus de solicitud actualizado con éxito." });
+  } catch (error) {
+    console.error("Error al actualizar estatus de solicitud:", error);
+    res.status(500).send({ message: "Error en el servidor" });
+  }
+});
+
+// --- FIN: RUTAS DE GESTIÓN DE SOLICITUDES (ADMIN) ---
+
+// ... (Aquí continúan las otras rutas del adminRouter que ya tenías)
 
 // ... (justo después de const adminRouter = express.Router();)
 // ... (y de adminRouter.use(isAdmin);)
@@ -729,14 +1117,14 @@ adminRouter.get("/analiticas/reprobacion-asignaturas", async (req, res) => {
 
 function createCatalogCrudRoutes(router, tableName, fields) {
   router.get(`/${tableName}`, async (req, res) =>
-    res.json((await db.query(`SELECT * FROM ${tableName}`))[0])
+    res.json((await db.query(`SELECT * FROM ${tableName}`))[0]),
   );
   router.post(`/${tableName}`, async (req, res) => {
     const values = fields.map((f) => req.body[f]);
     const placeholders = fields.map(() => "?").join(", ");
     await db.query(
       `INSERT INTO ${tableName} (${fields.join(",")}) VALUES (${placeholders})`,
-      values
+      values,
     );
     res.status(201).send({ message: "Creado con éxito" });
   });
@@ -777,7 +1165,7 @@ adminRouter.post("/planes_estudio", async (req, res) => {
     const { nombre_plan, carrera_id } = req.body;
     await db.query(
       "INSERT INTO planes_estudio (nombre_plan, carrera_id) VALUES (?, ?)",
-      [nombre_plan, carrera_id || null]
+      [nombre_plan, carrera_id || null],
     );
     res.status(201).send({ message: "Plan de estudio creado" });
   } catch (error) {
@@ -791,7 +1179,7 @@ adminRouter.put("/planes_estudio/:id", async (req, res) => {
     const { nombre_plan, carrera_id } = req.body;
     await db.query(
       "UPDATE planes_estudio SET nombre_plan = ?, carrera_id = ? WHERE id = ?",
-      [nombre_plan, carrera_id || null, req.params.id]
+      [nombre_plan, carrera_id || null, req.params.id],
     );
     res.send({ message: "Plan de estudio actualizado" });
   } catch (error) {
@@ -810,6 +1198,143 @@ adminRouter.delete("/planes_estudio/:id", async (req, res) => {
   }
 });
 
+// GET Obtener calificaciones de un grupo y materia (Para llenar la tabla del Admin)
+adminRouter.get("/calificaciones/:grupoId/:asignaturaId", async (req, res) => {
+  const { grupoId, asignaturaId } = req.params;
+  try {
+    const [rows] = await db.query(
+      "SELECT alumno_id, calificacion FROM calificaciones WHERE grupo_id = ? AND asignatura_id = ?",
+      [grupoId, asignaturaId],
+    );
+    res.json(rows);
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({ message: "Error al obtener calificaciones" });
+  }
+});
+
+// --- RUTA ACTUALIZADA: Guardar Calificaciones + Push Android ---
+adminRouter.post("/calificaciones/guardar-lote", async (req, res) => {
+  const { grupo_id, asignatura_id, calificaciones } = req.body;
+
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // 1. Nombre de materia
+    const [materiaRows] = await connection.query(
+      "SELECT nombre_asignatura FROM asignaturas WHERE id = ?",
+      [asignatura_id],
+    );
+    const nombreMateria = materiaRows[0]?.nombre_asignatura || "Materia";
+
+    // 2. Procesar cada alumno
+    for (const item of calificaciones) {
+      // A) Guardar en BD (Calificaciones)
+      await connection.query(
+        `
+        INSERT INTO calificaciones (alumno_id, asignatura_id, grupo_id, calificacion)
+        VALUES (?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE calificacion = VALUES(calificacion)
+      `,
+        [item.alumno_id, asignatura_id, grupo_id, item.calificacion],
+      );
+
+      // B) Guardar en BD (Notificaciones - Campanita)
+      const mensaje = `Tu calificación en ${nombreMateria} ha sido actualizada: ${item.calificacion}`;
+      await connection.query(
+        "INSERT INTO notificaciones (usuario_id, mensaje, leido, fecha, tipo) VALUES (?, ?, 0, NOW(), 'calificacion')",
+        [item.alumno_id, mensaje],
+      );
+
+      // C) --- ENVIAR PUSH (ANDROID/EXPO) ---
+      // 1. Buscamos si el alumno tiene celular registrado
+      const [tokens] = await connection.query(
+        "SELECT token FROM push_tokens WHERE user_id = ?",
+        [item.alumno_id],
+      );
+
+      if (tokens.length > 0) {
+        // Preparamos los mensajes para Expo
+        const expoMessages = tokens.map((t) => ({
+          to: t.token,
+          sound: "default",
+          title: "Nueva Calificación",
+          body: mensaje,
+          data: { url: "/alumno/mis-calificaciones" },
+        }));
+
+        // Enviamos a Expo
+        await fetch("https://exp.host/--/api/v2/push/send", {
+          method: "POST",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(expoMessages),
+        });
+      }
+    }
+
+    await connection.commit();
+    res.send({ message: "Calificaciones guardadas y notificadas." });
+  } catch (error) {
+    await connection.rollback();
+    console.error(error);
+    res.status(500).send({ message: "Error al guardar" });
+  } finally {
+    connection.release();
+  }
+});
+
+// GET Mis Notificaciones (Para la campanita)
+// Asegúrate de que esta ruta esté accesible para el rol 'alumno'
+const commonRouter = express.Router(); // O usa tu router existente
+
+// --- RUTA CORREGIDA: OBTENER NOTIFICACIONES ---
+// (Pégalo reemplazando la ruta vieja que da error, aprox línea 280-300)
+
+// Nota: Asegúrate de usar 'app.get' o 'apiRouter.get' según corresponda en esa parte de tu archivo.
+// Si usas un router específico, cámbialo. Aquí asumo que usas 'app' o el router principal.
+
+// --- REEMPLAZA TU RUTA DE NOTIFICACIONES POR ESTA ---
+app.get("/api/notificaciones", verifyToken, async (req, res) => {
+  const usuario_id = req.user.id;
+
+  try {
+    // AQUÍ ESTABA EL ERROR: Usamos los nombres reales de la tabla
+    const sql = `
+      SELECT 
+        id, 
+        mensaje, 
+        url_destino, 
+        leido,                   -- En la BD se llama 'leido', no 'leida'
+        fecha as fecha_creacion  -- Alias para que el frontend lo entienda como 'fecha_creacion'
+      FROM notificaciones 
+      WHERE usuario_id = ?       -- En la BD se llama 'usuario_id', no 'user_id'
+      ORDER BY fecha DESC        -- Ordenamos por 'fecha'
+      LIMIT 20
+    `;
+
+    const [rows] = await db.query(sql, [usuario_id]);
+    res.json(rows);
+  } catch (error) {
+    console.error("Error al obtener notificaciones:", error); // Esto te ayudará a ver errores futuros
+    res.status(500).send({ message: "Error al cargar notificaciones" });
+  }
+});
+
+app.put("/api/notificaciones/marcar-leidas", verifyToken, async (req, res) => {
+  const usuario_id = req.user.id;
+  try {
+    await db.query("UPDATE notificaciones SET leido = 1 WHERE usuario_id = ?", [
+      usuario_id,
+    ]);
+    res.send({ message: "Leídas" });
+  } catch (error) {
+    res.status(500).send({ message: "Error" });
+  }
+});
 // --- FIN RUTAS PLANES DE ESTUDIO ---
 
 // AHORA SÍ, CONTINÚA CON LA LÍNEA ORIGINAL:
@@ -845,7 +1370,7 @@ adminRouter.get("/alumnos/:id/adeudos", async (req, res) => {
        JOIN conceptos_pago cp ON aa.concepto_id = cp.id
        WHERE aa.alumno_id = ?
        ORDER BY aa.fecha_vencimiento ASC`,
-      [alumnoId]
+      [alumnoId],
     );
     res.json(adeudos);
   } catch (error) {
@@ -862,7 +1387,7 @@ adminRouter.post("/adeudos/generar-manual", async (req, res) => {
     // 1. Insertar el adeudo
     await db.query(
       "INSERT INTO adeudos_alumnos (alumno_id, concepto_id, monto_a_pagar, fecha_vencimiento, estatus_pago) VALUES (?, ?, ?, ?, 'pendiente')",
-      [alumno_id, concepto_id, monto_a_pagar, fecha_vencimiento || null]
+      [alumno_id, concepto_id, monto_a_pagar, fecha_vencimiento || null],
     );
 
     // --- INICIO DE NOTIFICACIÓN ---
@@ -870,7 +1395,7 @@ adminRouter.post("/adeudos/generar-manual", async (req, res) => {
       // 2. Obtener nombre del concepto para el mensaje
       const [[concepto]] = await db.query(
         "SELECT nombre_concepto FROM conceptos_pago WHERE id = ?",
-        [concepto_id]
+        [concepto_id],
       );
       const nombreConcepto = concepto
         ? concepto.nombre_concepto
@@ -882,13 +1407,13 @@ adminRouter.post("/adeudos/generar-manual", async (req, res) => {
       // 3. Crear notificación web (campanita)
       await db.query(
         "INSERT INTO notificaciones (user_id, mensaje, url_destino) VALUES (?, ?, ?)",
-        [alumno_id, mensaje, urlDestino]
+        [alumno_id, mensaje, urlDestino],
       );
 
       // 4. Enviar notificación Push (móvil)
       const [tokens] = await db.query(
         "SELECT token FROM push_tokens WHERE user_id = ?",
-        [alumno_id]
+        [alumno_id],
       );
       if (tokens.length > 0) {
         const messages = tokens.map((t) => ({
@@ -932,7 +1457,7 @@ adminRouter.post("/adeudos/:id/marcar-pagado", async (req, res) => {
        FROM adeudos_alumnos aa
        JOIN conceptos_pago cp ON aa.concepto_id = cp.id
        WHERE aa.id = ?`,
-      [adeudoId]
+      [adeudoId],
     );
 
     if (!adeudo) {
@@ -945,7 +1470,7 @@ adminRouter.post("/adeudos/:id/marcar-pagado", async (req, res) => {
     // 2. Actualizar el adeudo
     const [result] = await db.query(
       "UPDATE adeudos_alumnos SET estatus_pago = 'pagado', fecha_pago = CURRENT_TIMESTAMP, registrado_por_usuario_id = ? WHERE id = ?",
-      [adminId, adeudoId]
+      [adminId, adeudoId],
     );
 
     if (result.affectedRows === 0) {
@@ -966,13 +1491,13 @@ adminRouter.post("/adeudos/:id/marcar-pagado", async (req, res) => {
       // 3. Crear notificación web (campanita)
       await db.query(
         "INSERT INTO notificaciones (user_id, mensaje, url_destino) VALUES (?, ?, ?)",
-        [alumno_id, mensaje, urlDestino]
+        [alumno_id, mensaje, urlDestino],
       );
 
       // 4. Enviar notificación Push (móvil)
       const [tokens] = await db.query(
         "SELECT token FROM push_tokens WHERE user_id = ?",
-        [alumno_id]
+        [alumno_id],
       );
       if (tokens.length > 0) {
         const messages = tokens.map((t) => ({
@@ -1007,15 +1532,65 @@ adminRouter.post("/adeudos/:id/marcar-pagado", async (req, res) => {
 
 // ... (Ahora sí, la ruta adminRouter.get("/usuarios", ...)
 
-adminRouter.get("/usuarios", async (req, res) =>
-  res.json(
-    (
-      await db.query(
-        "SELECT id, nombre, apellido_paterno, apellido_materno, email, rol, telefono, curp, matricula, genero, matricula, DATE_FORMAT(fecha_nacimiento, '%Y-%m-%d') as fecha_nacimiento FROM usuarios"
-      )
-    )[0]
-  )
-);
+// --- ACTUALIZA ESTA RUTA EN index.js (Línea aprox 1200) ---
+adminRouter.get("/usuarios", async (req, res) => {
+  try {
+    const sql = `
+      SELECT u.*, c.nombre_carrera, s.nombre_sede, 
+      DATE_FORMAT(u.fecha_nacimiento, '%Y-%m-%d') as fecha_nacimiento
+      FROM usuarios u
+      LEFT JOIN carreras c ON u.carrera_interes_id = c.id
+      LEFT JOIN sedes s ON u.sede_interes_id = s.id
+      WHERE u.activo = 1
+      ORDER BY u.id DESC
+    `;
+    const [rows] = await db.query(sql);
+    res.json(rows);
+  } catch (error) {
+    res.status(500).send({ message: "Error al obtener usuarios" });
+  }
+});
+
+// --- ACTUALIZA TAMBIÉN LA RUTA DE ELIMINADOS ---
+adminRouter.get("/usuarios/eliminados", async (req, res) => {
+  try {
+    const sql = `
+      SELECT u.*, c.nombre_carrera, s.nombre_sede,
+      DATE_FORMAT(u.fecha_nacimiento, '%Y-%m-%d') as fecha_nacimiento
+      FROM usuarios u
+      LEFT JOIN carreras c ON u.carrera_interes_id = c.id
+      LEFT JOIN sedes s ON u.sede_interes_id = s.id
+      WHERE u.activo = 0
+      ORDER BY u.id DESC
+    `;
+    const [rows] = await db.query(sql);
+    res.json(rows);
+  } catch (error) {
+    res.status(500).send({ message: "Error al obtener papelera" });
+  }
+});
+// 1. RUTA PARA VER LA PAPELERA (Usuarios desactivados)
+adminRouter.get("/usuarios/eliminados", async (req, res) => {
+  try {
+    const [users] = await db.query(
+      "SELECT id, nombre, apellido_paterno, apellido_materno, email, rol, telefono, curp, matricula, genero, DATE_FORMAT(fecha_nacimiento, '%Y-%m-%d') as fecha_nacimiento FROM usuarios WHERE activo = 0",
+    );
+    res.json(users);
+  } catch (error) {
+    res.status(500).send({ message: "Error al obtener la papelera" });
+  }
+});
+
+// 2. RUTA PARA REACTIVAR USUARIO (Sacar de la papelera)
+adminRouter.put("/usuarios/:id/reactivar", async (req, res) => {
+  const { id } = req.params;
+  try {
+    await db.query("UPDATE usuarios SET activo = 1 WHERE id = ?", [id]);
+    res.send({ message: "Usuario reactivado correctamente" });
+  } catch (error) {
+    res.status(500).send({ message: "Error al reactivar usuario" });
+  }
+});
 adminRouter.post("/usuarios", async (req, res) => {
   const {
     email,
@@ -1056,7 +1631,7 @@ adminRouter.post("/usuarios", async (req, res) => {
         telefono || null,
         curp || null,
         fecha_nacimiento || null,
-      ]
+      ],
     );
 
     const newUserId = insertResult.insertId; // 3. Obtenemos el ID del nuevo usuario
@@ -1092,10 +1667,10 @@ adminRouter.get("/usuarios/:id", async (req, res) =>
     (
       await db.query(
         "SELECT id, nombre, apellido_paterno, email, rol, apellido_materno, genero, telefono, curp, DATE_FORMAT(fecha_nacimiento, '%Y-%m-%d') as fecha_nacimiento FROM usuarios WHERE id = ?", // <-- Campos agregados, fecha_nacimiento formateada
-        [req.params.id]
+        [req.params.id],
       )
-    )[0][0]
-  )
+    )[0][0],
+  ),
 );
 adminRouter.put("/usuarios/:id", async (req, res) => {
   const {
@@ -1162,44 +1737,93 @@ adminRouter.put("/usuarios/:id", async (req, res) => {
     res.status(500).send({ message: "Error al actualizar usuario" });
   }
 });
+// Ruta para eliminar usuarios con manejo de errores de base de datos
 adminRouter.delete("/usuarios/:id", async (req, res) => {
-  await db.query("DELETE FROM usuarios WHERE id = ?", [req.params.id]);
-  res.send({ message: "Usuario eliminado" });
+  const { id } = req.params;
+
+  try {
+    // 1. CAMBIO PRINCIPAL: En lugar de borrar, actualizamos activo = 0
+    const [result] = await db.query(
+      "UPDATE usuarios SET activo = 0 WHERE id = ?",
+      [id],
+    );
+
+    // 2. Verificamos si se encontró el usuario
+    if (result.affectedRows === 0) {
+      return res.status(404).send({ message: "Usuario no encontrado" });
+    }
+
+    // 3. Éxito
+    res.send({ message: "Usuario desactivado correctamente." });
+  } catch (error) {
+    console.error("Error intentando desactivar usuario:", error.message);
+    res
+      .status(500)
+      .send({ message: "Error interno del servidor al desactivar." });
+
+    // 4. DETECCIÓN DEL ERROR DE LLAVE FORÁNEA (El que te sale en consola)
+    if (error.code === "ER_ROW_IS_REFERENCED_2" || error.errno === 1451) {
+      // Determinamos el mensaje según la tabla que bloquea (opcional, para ser más específico)
+      let mensajeError =
+        "No se puede eliminar: El usuario tiene datos asociados.";
+
+      if (error.sqlMessage.includes("calificaciones")) {
+        mensajeError =
+          "No se puede eliminar: Este alumno tiene CALIFICACIONES registradas. Bórralas primero.";
+      } else if (error.sqlMessage.includes("clases_sesiones")) {
+        mensajeError =
+          "No se puede eliminar: Este docente tiene CLASES O SESIONES asignadas.";
+      } else if (error.sqlMessage.includes("tareas")) {
+        mensajeError =
+          "No se puede eliminar: El usuario tiene TAREAS entregadas.";
+      }
+
+      // Devolvemos status 409 (Conflicto) al frontend
+      return res.status(409).send({ message: mensajeError });
+    }
+
+    // 5. Cualquier otro error inesperado
+    res
+      .status(500)
+      .send({ message: "Error interno del servidor al eliminar." });
+  }
 });
 adminRouter.get("/aspirantes", async (req, res) =>
   res.json(
     (
       await db.query(
-        "SELECT id, nombre, apellido_paterno FROM usuarios WHERE rol = 'aspirante'"
+        "SELECT id, nombre, apellido_paterno FROM usuarios WHERE rol = 'aspirante'",
       )
-    )[0]
-  )
+    )[0],
+  ),
 );
 adminRouter.get("/docentes", async (req, res) =>
   res.json(
     (
       await db.query(
-        "SELECT id, nombre, apellido_paterno FROM usuarios WHERE rol = 'docente'"
+        "SELECT id, nombre, apellido_paterno FROM usuarios WHERE rol = 'docente'",
       )
-    )[0]
-  )
+    )[0],
+  ),
 );
+// GET Alumnos Disponibles (Corrección: Solo muestra alumnos SIN grupo)
 adminRouter.get("/grupos/:id/alumnos-disponibles", async (req, res) => {
   const { id: grupoId } = req.params;
   try {
     /*
-    Buscamos usuarios que puedan ser inscritos:
-    1. Su rol es 'aspirante' O 'alumno'.
-    2. Y NO están ya inscritos en ESTE grupo.
+    LOGICA CORREGIDA:
+    Buscamos usuarios con rol 'aspirante' o 'alumno'
+    que NO estén en la tabla 'grupo_alumnos' (en NINGÚN grupo).
     */
     const [alumnos] = await db.query(
       `SELECT id, nombre, apellido_paterno, rol
        FROM usuarios
        WHERE (rol = 'aspirante' OR rol = 'alumno')
        AND id NOT IN (
-           SELECT alumno_id FROM grupo_alumnos WHERE grupo_id = ?
+           SELECT alumno_id FROM grupo_alumnos
        )`,
-      [grupoId]
+      // Nota: Quitamos el "WHERE grupo_id = ?" de la subconsulta
+      // para que excluya a cualquiera que ya tenga grupo.
     );
     res.json(alumnos);
   } catch (error) {
@@ -1207,14 +1831,95 @@ adminRouter.get("/grupos/:id/alumnos-disponibles", async (req, res) => {
     res.status(500).send({ message: "Error en el servidor" });
   }
 });
+// --- RUTAS DE ASIGNATURAS CORREGIDAS ---
+
+// GET Asignaturas (Solo activas)
 adminRouter.get("/asignaturas", async (req, res) => {
-  const sql = `
-    SELECT a.*, p.nombre_plan, g.nombre_grado
-    FROM asignaturas a
-    LEFT JOIN planes_estudio p ON a.plan_estudio_id = p.id
-    LEFT JOIN grados g ON a.grado_id = g.id
-  `;
-  res.json((await db.query(sql))[0]);
+  try {
+    const sql = `
+      SELECT a.*, p.nombre_plan, t.tipo as nombre_tipo, g.nombre_grado 
+      FROM asignaturas a
+      LEFT JOIN planes_estudio p ON a.plan_estudio_id = p.id
+      LEFT JOIN tipos_asignatura t ON a.tipo_asignatura_id = t.id
+      LEFT JOIN grados g ON a.grado_id = g.id
+      WHERE a.activo = 1
+      ORDER BY a.nombre_asignatura ASC
+    `;
+    const [rows] = await db.query(sql);
+    res.json(rows);
+  } catch (error) {
+    console.error(error); // Agregué esto para que veas el error en la consola negra si vuelve a fallar
+    res.status(500).send({ message: "Error al obtener asignaturas" });
+  }
+});
+
+// --- RUTAS DE CATÁLOGOS (FALTANTES) ---
+
+// Para el select de "Grados"
+adminRouter.get("/grados", async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      "SELECT * FROM grados ORDER BY nombre_grado ASC",
+    );
+    res.json(rows);
+  } catch (error) {
+    res.status(500).send({ message: "Error al cargar grados" });
+  }
+});
+
+// Para el select de "Tipos de Asignatura"
+adminRouter.get("/tipos_asignatura", async (req, res) => {
+  try {
+    // IMPORTANTE: Aliamos 'tipo' como 'nombre_tipo' para que el frontend lo entienda
+    const [rows] = await db.query(
+      "SELECT id, tipo as nombre_tipo FROM tipos_asignatura ORDER BY tipo ASC",
+    );
+    res.json(rows);
+  } catch (error) {
+    res.status(500).send({ message: "Error al cargar tipos" });
+  }
+});
+
+// DELETE Asignatura (Soft Delete)
+adminRouter.delete("/asignaturas/:id", async (req, res) => {
+  try {
+    await db.query("UPDATE asignaturas SET activo = 0 WHERE id = ?", [
+      req.params.id,
+    ]);
+    res.send({ message: "Asignatura enviada a la papelera" });
+  } catch (error) {
+    res.status(500).send({ message: "Error al eliminar asignatura" });
+  }
+});
+
+// GET Eliminadas (Papelera)
+adminRouter.get("/asignaturas/eliminadas", async (req, res) => {
+  try {
+    const sql = `
+      SELECT a.*, p.nombre_plan, t.tipo as nombre_tipo, g.nombre_grado 
+      FROM asignaturas a
+      LEFT JOIN planes_estudio p ON a.plan_estudio_id = p.id
+      LEFT JOIN tipos_asignatura t ON a.tipo_asignatura_id = t.id
+      LEFT JOIN grados g ON a.grado_id = g.id
+      WHERE a.activo = 0
+    `;
+    const [rows] = await db.query(sql);
+    res.json(rows);
+  } catch (error) {
+    res.status(500).send({ message: "Error al obtener papelera" });
+  }
+});
+
+// PUT Reactivar
+adminRouter.put("/asignaturas/:id/reactivar", async (req, res) => {
+  try {
+    await db.query("UPDATE asignaturas SET activo = 1 WHERE id = ?", [
+      req.params.id,
+    ]);
+    res.send({ message: "Asignatura recuperada correctamente" });
+  } catch (error) {
+    res.status(500).send({ message: "Error al reactivar asignatura" });
+  }
 });
 adminRouter.post("/asignaturas", async (req, res) => {
   const {
@@ -1234,7 +1939,7 @@ adminRouter.post("/asignaturas", async (req, res) => {
       plan_estudio_id,
       tipo_asignatura_id || 1, // Default si no se envía
       grado_id,
-    ]
+    ],
   );
   res.status(201).send({ message: "Asignatura creada" });
 });
@@ -1257,65 +1962,265 @@ adminRouter.put("/asignaturas/:id", async (req, res) => {
       tipo_asignatura_id || 1,
       grado_id,
       req.params.id,
-    ]
+    ],
   );
   res.send({ message: "Asignatura actualizada" });
 });
+// DELETE Asignatura (Soft Delete)
 adminRouter.delete("/asignaturas/:id", async (req, res) => {
-  await db.query("DELETE FROM asignaturas WHERE id = ?", [req.params.id]);
-  res.send({ message: "Asignatura eliminada" });
+  try {
+    await db.query("UPDATE asignaturas SET activo = 0 WHERE id = ?", [
+      req.params.id,
+    ]);
+    res.send({ message: "Asignatura enviada a la papelera" });
+  } catch (error) {
+    res.status(500).send({ message: "Error al eliminar asignatura" });
+  }
 });
-adminRouter.get("/grupos", async (req, res) => {
-  const sql = `
-        SELECT g.*, g.estatus, g.modalidad, c.nombre_ciclo, s.nombre_sede, p.nombre_plan, gr.nombre_grado
-        FROM grupos g
-        JOIN ciclos c ON g.ciclo_id = c.id
-        JOIN sedes s ON g.sede_id = s.id
-        JOIN planes_estudio p ON g.plan_estudio_id = p.id
-        JOIN grados gr ON g.grado_id = gr.id
-    `;
-  res.json((await db.query(sql))[0]);
-});
-adminRouter.get("/grupos/:id", async (req, res) => {
-  const grupoId = req.params.id;
-  const [[grupoRes]] = await db.query(
-    `SELECT g.*, p.nombre_plan, gr.nombre_grado
-     FROM grupos g
-     LEFT JOIN planes_estudio p ON g.plan_estudio_id = p.id
-     LEFT JOIN grados gr ON g.grado_id = gr.id
-     WHERE g.id = ?`,
-    [grupoId]
-  );
-  if (!grupoRes)
-    return res.status(404).send({ message: "Grupo no encontrado" });
+// --- RUTAS PAPELERA ASIGNATURAS ---
 
-  const asignaturasSql = `
-        SELECT
-          a.id, a.nombre_asignatura, a.clave_asignatura,
-          u.id as docente_id, u.nombre as docente_nombre, u.apellido_paterno as docente_apellido,
-          (SELECT COUNT(c.calificacion) FROM calificaciones c WHERE c.asignatura_id = a.id AND c.grupo_id = ?) as total_calificaciones, -- CORREGIDO: Filtrar por grupo_id
-          (SELECT COUNT(*) FROM grupo_alumnos ga WHERE ga.grupo_id = ?) as total_alumnos_grupo
+// GET Eliminadas
+adminRouter.get("/asignaturas/eliminadas", async (req, res) => {
+  try {
+    const sql = `
+      SELECT a.*, p.nombre_plan, t.nombre_tipo, g.nombre_grado 
       FROM asignaturas a
-      LEFT JOIN grupo_asignaturas_docentes gad ON a.id = gad.asignatura_id AND gad.grupo_id = ?
+      LEFT JOIN planes_estudio p ON a.plan_estudio_id = p.id
+      LEFT JOIN tipos_asignatura t ON a.tipo_asignatura_id = t.id
+      LEFT JOIN grados g ON a.grado_id = g.id
+      WHERE a.activo = 0
+    `;
+    const [rows] = await db.query(sql);
+    res.json(rows);
+  } catch (error) {
+    res.status(500).send({ message: "Error al obtener papelera" });
+  }
+});
+
+// PUT Reactivar
+adminRouter.put("/asignaturas/:id/reactivar", async (req, res) => {
+  try {
+    await db.query("UPDATE asignaturas SET activo = 1 WHERE id = ?", [
+      req.params.id,
+    ]);
+    res.send({ message: "Asignatura recuperada correctamente" });
+  } catch (error) {
+    res.status(500).send({ message: "Error al reactivar asignatura" });
+  }
+});
+// GET Listado de Grupos (ACTIVOS Y FINALIZADOS)
+adminRouter.get("/grupos", async (req, res) => {
+  try {
+    const sql = `
+      SELECT g.*, p.nombre_plan, gr.nombre_grado 
+      FROM grupos g
+      LEFT JOIN planes_estudio p ON g.plan_estudio_id = p.id
+      LEFT JOIN grados gr ON g.grado_id = gr.id
+      -- Solo excluimos si tuvieras una columna 'eliminado', si no, quitamos el WHERE o filtramos basura
+      -- Si usas soft delete: WHERE g.activo = 1 
+      ORDER BY g.estatus ASC, g.nombre_grupo ASC
+    `;
+    const [rows] = await db.query(sql);
+    res.json(rows);
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({ message: "Error al obtener grupos" });
+  }
+});
+
+// A) MODIFICAR: GET Detalles del Grupo (AHORA SOLO TRAE MATERIAS MANUALES)
+adminRouter.get("/grupos/:id", async (req, res) => {
+  const { id } = req.params;
+  try {
+    const [grupo] = await db.query("SELECT * FROM grupos WHERE id = ?", [id]);
+    if (grupo.length === 0)
+      return res.status(404).send({ message: "Grupo no encontrado" });
+    const datosGrupo = grupo[0];
+
+    // CAMBIO CLAVE: Usamos INNER JOIN con la tabla de relación.
+    // Si no está en 'grupo_asignaturas_docentes', NO SALE.
+    const sqlAsignaturas = `
+      SELECT 
+        a.id, 
+        a.nombre_asignatura, 
+        a.clave_asignatura, 
+        gad.docente_id,
+        u.nombre as nombre_docente,
+        u.apellido_paterno as apellido_docente
+      FROM grupo_asignaturas_docentes gad
+      JOIN asignaturas a ON gad.asignatura_id = a.id
       LEFT JOIN usuarios u ON gad.docente_id = u.id
-      WHERE a.grado_id = ? AND a.plan_estudio_id = ?`;
+      WHERE gad.grupo_id = ?
+      ORDER BY a.nombre_asignatura ASC
+    `;
 
-  const [asignaturas] = await db.query(asignaturasSql, [
-    grupoId, // Para total_calificaciones
-    grupoId, // Para total_alumnos_grupo
-    grupoId, // Para gad.grupo_id
-    grupoRes.grado_id,
-    grupoRes.plan_estudio_id,
-  ]);
+    const [asignaturas] = await db.query(sqlAsignaturas, [id]);
 
-  const alumnosSql = `
-        SELECT u.id, u.nombre, u.apellido_paterno, u.apellido_materno, u.email
-        FROM usuarios u
-        JOIN grupo_alumnos ga ON u.id = ga.alumno_id
-        WHERE ga.grupo_id = ?`;
-  const [alumnos] = await db.query(alumnosSql, [grupoId]);
+    const sqlAlumnos = `
+      SELECT u.id, u.nombre, u.apellido_paterno, u.apellido_materno, u.email
+      FROM usuarios u
+      JOIN grupo_alumnos ga ON u.id = ga.alumno_id
+      WHERE ga.grupo_id = ?
+      ORDER BY u.apellido_paterno ASC
+    `;
+    const [alumnos] = await db.query(sqlAlumnos, [id]);
 
-  res.json({ ...grupoRes, asignaturas, alumnos });
+    res.json({ grupo: datosGrupo, asignaturas, alumnos });
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({ message: "Error al cargar grupo" });
+  }
+});
+
+// --- RUTA ACTUALIZADA: Agregar Materia + Push Android ---
+adminRouter.post("/grupos/:id/agregar-materia", async (req, res) => {
+  const { id } = req.params;
+  const { asignatura_id } = req.body;
+
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // 1. Agregar materia
+    await connection.query(
+      "INSERT INTO grupo_asignaturas_docentes (grupo_id, asignatura_id, docente_id) VALUES (?, ?, NULL)",
+      [id, asignatura_id],
+    );
+
+    // 2. Datos para el mensaje
+    const [info] = await connection.query(
+      "SELECT a.nombre_asignatura, g.nombre_grupo FROM asignaturas a, grupos g WHERE a.id = ? AND g.id = ?",
+      [asignatura_id, id],
+    );
+    const mensaje = `Nueva materia agregada: "${info[0].nombre_asignatura}" en tu grupo.`;
+
+    // 3. Obtener alumnos
+    const [alumnos] = await connection.query(
+      "SELECT alumno_id FROM grupo_alumnos WHERE grupo_id = ?",
+      [id],
+    );
+
+    if (alumnos.length > 0) {
+      // Lista de IDs para buscar tokens
+      const idsAlumnos = alumnos.map((a) => a.alumno_id);
+
+      // A) Insertar Campanita (BD)
+      for (const idAlum of idsAlumnos) {
+        await connection.query(
+          "INSERT INTO notificaciones (usuario_id, mensaje, leido, fecha, tipo) VALUES (?, ?, 0, NOW(), 'sistema')",
+          [idAlum, mensaje],
+        );
+      }
+
+      // B) --- ENVIAR PUSH MASIVO (ANDROID) ---
+      // Buscamos tokens de TODOS estos alumnos
+      const [tokens] = await connection.query(
+        "SELECT token FROM push_tokens WHERE user_id IN (?)",
+        [idsAlumnos],
+      );
+
+      if (tokens.length > 0) {
+        const expoMessages = tokens.map((t) => ({
+          to: t.token,
+          sound: "default",
+          title: "Carga Académica Actualizada",
+          body: mensaje,
+        }));
+
+        await fetch("https://exp.host/--/api/v2/push/send", {
+          method: "POST",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(expoMessages),
+        });
+      }
+    }
+
+    await connection.commit();
+    res.send({ message: "Materia agregada." });
+  } catch (error) {
+    await connection.rollback();
+    if (error.code === "ER_DUP_ENTRY")
+      return res.status(400).send({ message: "Materia ya existe." });
+    console.error(error);
+    res.status(500).send({ message: "Error" });
+  } finally {
+    connection.release();
+  }
+});
+
+// C) NUEVA: Eliminar Materia del Grupo
+adminRouter.delete(
+  "/grupos/:id/quitar-materia/:asignaturaId",
+  async (req, res) => {
+    const { id, asignaturaId } = req.params;
+    try {
+      await db.query(
+        "DELETE FROM grupo_asignaturas_docentes WHERE grupo_id = ? AND asignatura_id = ?",
+        [id, asignaturaId],
+      );
+      res.send({ message: "Materia quitada del grupo" });
+    } catch (error) {
+      res.status(500).send({ message: "Error al quitar materia" });
+    }
+  },
+);
+
+// D) NUEVA: Listar Materias Disponibles (Para el Select)
+// Trae todas las materias que NO están ya en este grupo
+adminRouter.get("/grupos/:id/materias-disponibles", async (req, res) => {
+  const { id } = req.params;
+  try {
+    const sql = `
+      SELECT * FROM asignaturas 
+      WHERE activo = 1 
+      AND id NOT IN (SELECT asignatura_id FROM grupo_asignaturas_docentes WHERE grupo_id = ?)
+      ORDER BY nombre_asignatura ASC
+    `;
+    const [rows] = await db.query(sql, [id]);
+    res.json(rows);
+  } catch (error) {
+    res.status(500).send({ message: "Error al cargar materias disponibles" });
+  }
+});
+
+// 2. PUT CERRAR GRUPO (VALIDANDO CALIFICACIONES)
+adminRouter.put("/grupos/:id/finalizar", async (req, res) => {
+  const { id } = req.params;
+  try {
+    // Buscamos si falta alguna calificación
+    // (Alumno del grupo + Materia del plan) QUE NO TENGA registro en 'calificaciones'
+    const sqlFaltantes = `
+      SELECT u.nombre, u.apellido_paterno, a.nombre_asignatura
+      FROM grupo_alumnos ga
+      JOIN grupos g ON ga.grupo_id = g.id
+      JOIN asignaturas a ON a.plan_estudio_id = g.plan_estudio_id AND a.grado_id = g.grado_id AND a.activo = 1
+      JOIN usuarios u ON ga.alumno_id = u.id
+      LEFT JOIN calificaciones c ON c.alumno_id = ga.alumno_id AND c.asignatura_id = a.id AND c.grupo_id = ga.grupo_id
+      WHERE ga.grupo_id = ? AND c.id IS NULL
+    `;
+
+    const [faltantes] = await db.query(sqlFaltantes, [id]);
+
+    if (faltantes.length > 0) {
+      const total = faltantes.length;
+      const ejemplo = `${faltantes[0].nombre} en ${faltantes[0].nombre_asignatura}`;
+      return res.status(400).send({
+        message: `No se puede cerrar: Faltan ${total} calificaciones. (Ej: ${ejemplo})`,
+      });
+    }
+
+    // Si todo ok, cerramos
+    await db.query("UPDATE grupos SET estatus = 'finalizado' WHERE id = ?", [
+      id,
+    ]);
+    res.send({ message: "Grupo cerrado exitosamente." });
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({ message: "Error al cerrar grupo" });
+  }
 });
 adminRouter.post("/grupos", async (req, res) => {
   const {
@@ -1339,7 +2244,7 @@ adminRouter.post("/grupos", async (req, res) => {
       grado_id,
       estatus || "activo",
       modalidad || "presencial",
-    ]
+    ],
   );
   res.status(201).send({ message: "Grupo creado" });
 });
@@ -1366,24 +2271,132 @@ adminRouter.put("/grupos/:id", async (req, res) => {
       estatus,
       modalidad, // <-- Valor añadido
       req.params.id,
-    ]
+    ],
   );
   res.send({ message: "Grupo actualizado" });
 });
 adminRouter.delete("/grupos/:id", async (req, res) => {
-  await db.query("DELETE FROM grupos WHERE id = ?", [req.params.id]);
-  res.send({ message: "Grupo eliminado" });
+  try {
+    // En lugar de DELETE, hacemos UPDATE al estatus
+    await db.query("UPDATE grupos SET estatus = 'inactivo' WHERE id = ?", [
+      req.params.id,
+    ]);
+    res.send({ message: "Grupo enviado a la papelera (inactivo)" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({ message: "Error al desactivar el grupo" });
+  }
 });
+// --- NUEVAS RUTAS PARA PAPELERA DE GRUPOS ---
+
+// GET /grupos/eliminados (Ver inactivos)
+adminRouter.get("/grupos/eliminados", async (req, res) => {
+  const sql = `
+        SELECT g.*, c.nombre_ciclo, s.nombre_sede, p.nombre_plan, gr.nombre_grado
+        FROM grupos g
+        JOIN ciclos c ON g.ciclo_id = c.id
+        JOIN sedes s ON g.sede_id = s.id
+        JOIN planes_estudio p ON g.plan_estudio_id = p.id
+        JOIN grados gr ON g.grado_id = gr.id
+        WHERE g.estatus = 'inactivo'
+        ORDER BY g.nombre_grupo ASC
+    `;
+  try {
+    res.json((await db.query(sql))[0]);
+  } catch (error) {
+    res.status(500).send({ message: "Error al obtener papelera de grupos" });
+  }
+});
+
+// PUT Reactivar Grupo
+adminRouter.put("/grupos/:id/reactivar", async (req, res) => {
+  try {
+    await db.query("UPDATE grupos SET estatus = 'activo' WHERE id = ?", [
+      req.params.id,
+    ]);
+    res.send({ message: "Grupo reactivado correctamente" });
+  } catch (error) {
+    res.status(500).send({ message: "Error al reactivar grupo" });
+  }
+});
+// PUT Cerrar Grupo (Con validación estricta de calificaciones)
+adminRouter.put("/grupos/:id/finalizar", async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    // 1. Obtener datos del grupo para saber plan y grado
+    const [grupo] = await db.query("SELECT * FROM grupos WHERE id = ?", [id]);
+    if (grupo.length === 0)
+      return res.status(404).send({ message: "Grupo no encontrado" });
+
+    const { plan_estudio_id, grado_id } = grupo[0];
+
+    // 2. LA CONSULTA MAESTRA: Buscar qué falta
+    // Busca: Alumnos del grupo + Materias del plan/grado - Calificaciones existentes
+    const sqlFaltantes = `
+      SELECT 
+        u.nombre, u.apellido_paterno, 
+        a.nombre_asignatura
+      FROM grupo_alumnos ga
+      -- Cruzamos con las materias que DEBERÍAN tener
+      JOIN asignaturas a 
+        ON a.plan_estudio_id = ? AND a.grado_id = ? AND a.activo = 1
+      JOIN usuarios u 
+        ON ga.alumno_id = u.id
+      -- Buscamos si existe la calificación
+      LEFT JOIN calificaciones c 
+        ON c.alumno_id = ga.alumno_id 
+        AND c.asignatura_id = a.id
+      -- FILTRO: Donde NO hay calificación (IS NULL) y el alumno pertenece al grupo
+      WHERE ga.grupo_id = ? 
+        AND c.id IS NULL
+    `;
+
+    const [faltantes] = await db.query(sqlFaltantes, [
+      plan_estudio_id,
+      grado_id,
+      id,
+    ]);
+
+    // 3. Si hay faltantes, NO dejamos cerrar
+    if (faltantes.length > 0) {
+      // Preparamos un mensaje bonito con los primeros 3 ejemplos
+      const ejemplos = faltantes
+        .slice(0, 3)
+        .map((f) => `${f.nombre} en ${f.nombre_asignatura}`)
+        .join(", ");
+      const total = faltantes.length;
+      return res.status(400).send({
+        message: `No se puede cerrar. Faltan ${total} calificaciones. Ej: ${ejemplos}...`,
+      });
+    }
+
+    // 4. Si todo está perfecto, cerramos el grupo
+    await db.query("UPDATE grupos SET estatus = 'finalizado' WHERE id = ?", [
+      id,
+    ]);
+
+    res.send({
+      message:
+        "Ciclo cerrado correctamente. El grupo ahora está finalizado y listo para migrar.",
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({ message: "Error al intentar cerrar el grupo" });
+  }
+});
+// --- FIN RUTAS NUEVAS ---
 adminRouter.post("/grupos/:id/asignar-docente", async (req, res) => {
   const { asignatura_id, docente_id } = req.body;
   const grupo_id = req.params.id;
   await db.query(
     "INSERT INTO grupo_asignaturas_docentes (grupo_id, asignatura_id, docente_id) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE docente_id = ?",
-    [grupo_id, asignatura_id, docente_id || null, docente_id || null] // Permite desasignar con null
+    [grupo_id, asignatura_id, docente_id || null, docente_id || null], // Permite desasignar con null
   );
   res.send({ message: "Docente asignado/actualizado" });
 });
 
+// POST Inscribir Alumno (Con validación de Grupo Único)
 adminRouter.post("/grupos/:id/inscribir-alumno", async (req, res) => {
   const grupo_id = req.params.id;
   const { alumno_id } = req.body;
@@ -1392,57 +2405,64 @@ adminRouter.post("/grupos/:id/inscribir-alumno", async (req, res) => {
   try {
     await connection.beginTransaction();
 
-    // 1. Inscribir al alumno al grupo
+    // 1. VALIDACIÓN DE SEGURIDAD: Verificar si ya tiene grupo
+    const [existingGroup] = await connection.query(
+      `SELECT g.nombre_grupo 
+       FROM grupo_alumnos ga
+       JOIN grupos g ON ga.grupo_id = g.id
+       WHERE ga.alumno_id = ?`,
+      [alumno_id],
+    );
+
+    if (existingGroup.length > 0) {
+      await connection.rollback();
+      return res.status(400).send({
+        message: `Este alumno ya pertenece al grupo "${existingGroup[0].nombre_grupo}". Usa la opción de Transferir.`,
+      });
+    }
+
+    // 2. Inscribir al alumno al grupo
     await connection.query(
       "INSERT INTO grupo_alumnos (grupo_id, alumno_id) VALUES (?, ?)",
-      [grupo_id, alumno_id]
+      [grupo_id, alumno_id],
     );
 
-    // 2. Cambiar rol de 'aspirante' a 'alumno'
+    // 3. Cambiar rol de 'aspirante' a 'alumno'
     await connection.query(
       "UPDATE usuarios SET rol = 'alumno' WHERE id = ? AND rol = 'aspirante'",
-      [alumno_id]
+      [alumno_id],
     );
 
-    // --- INICIO: NUEVA LÓGICA FINANCIERA ---
-
-    // 3. Buscar el/los concepto(s) de inscripción
+    // 4. Lógica Financiera (Generar Adeudos)
     const [conceptosInscripcion] = await connection.query(
-      "SELECT id, monto_default FROM conceptos_pago WHERE es_concepto_inscripcion = TRUE"
+      "SELECT id, monto_default FROM conceptos_pago WHERE es_concepto_inscripcion = TRUE",
     );
 
-    // 4. Generar los adeudos de inscripción para este alumno
     if (conceptosInscripcion.length > 0) {
       const adeudos = conceptosInscripcion.map((concepto) => [
         alumno_id,
         concepto.id,
         concepto.monto_default,
-        "pendiente", // estatus_pago
-        new Date(), // fecha_vencimiento (hoy)
+        "pendiente",
+        new Date(),
       ]);
 
       await connection.query(
         "INSERT INTO adeudos_alumnos (alumno_id, concepto_id, monto_a_pagar, estatus_pago, fecha_vencimiento) VALUES ?",
-        [adeudos]
+        [adeudos],
       );
     }
-    // --- FIN: NUEVA LÓGICA FINANCIERA ---
 
     await connection.commit();
     res.status(201).send({ message: "Alumno inscrito y adeudos generados" });
   } catch (error) {
     await connection.rollback();
-    if (error.code === "ER_DUP_ENTRY")
-      return res
-        .status(409)
-        .send({ message: "El alumno ya está inscrito en este grupo." });
     console.error("Error al inscribir alumno:", error);
     res.status(500).send({ message: "Error al inscribir alumno" });
   } finally {
     connection.release();
   }
 });
-
 // --- REEMPLAZA LA RUTA "DAR-BAJA" CON ESTO ---
 adminRouter.delete("/grupos/:id/dar-baja/:alumnoId", async (req, res) => {
   const { id: grupo_id, alumnoId } = req.params;
@@ -1451,7 +2471,7 @@ adminRouter.delete("/grupos/:id/dar-baja/:alumnoId", async (req, res) => {
     // 1. Simplemente damos de baja al alumno de ESTE grupo
     await db.query(
       "DELETE FROM grupo_alumnos WHERE grupo_id = ? AND alumno_id = ?",
-      [grupo_id, alumnoId]
+      [grupo_id, alumnoId],
     );
 
     // 2. YA NO CAMBIAMOS EL ROL. El alumno sigue siendo alumno.
@@ -1485,7 +2505,7 @@ adminRouter.post("/migrar-grupo", async (req, res) => {
     // 1. Obtener todos los alumnos del grupo de origen
     const [alumnos] = await connection.query(
       "SELECT alumno_id FROM grupo_alumnos WHERE grupo_id = ?",
-      [sourceGroupId]
+      [sourceGroupId],
     );
 
     if (alumnos.length === 0) {
@@ -1504,13 +2524,13 @@ adminRouter.post("/migrar-grupo", async (req, res) => {
     // 3. Insertar todos los alumnos en el grupo de destino
     const [result] = await connection.query(
       "INSERT IGNORE INTO grupo_alumnos (grupo_id, alumno_id) VALUES ?",
-      [values]
+      [values],
     );
 
     // 4. (Opcional pero recomendado) Cambiar el estado del grupo origen a 'inactivo' si no lo está ya
     await connection.query(
       "UPDATE grupos SET estatus = 'inactivo' WHERE id = ?",
-      [sourceGroupId]
+      [sourceGroupId],
     );
 
     await connection.commit();
@@ -1527,45 +2547,80 @@ adminRouter.post("/migrar-grupo", async (req, res) => {
     connection.release();
   }
 });
-// --- NUEVA RUTA PARA TRANSFERIR ALUMNO ---
+
+// --- RUTA ACTUALIZADA: Transferencia Inteligente (Mueve Alumno + Calificaciones) ---
 adminRouter.post("/grupos/transferir-alumno", async (req, res) => {
   const { alumnoId, sourceGroupId, destinationGroupId } = req.body;
-
-  if (!alumnoId || !sourceGroupId || !destinationGroupId) {
-    return res
-      .status(400)
-      .send({ message: "Faltan datos para la transferencia." });
-  }
 
   const connection = await db.getConnection();
   try {
     await connection.beginTransaction();
 
-    // 1. Eliminar al alumno del grupo de origen
+    // 1. Verificar que el alumno esté en el grupo origen
+    const [check] = await connection.query(
+      "SELECT * FROM grupo_alumnos WHERE grupo_id = ? AND alumno_id = ?",
+      [sourceGroupId, alumnoId],
+    );
+    if (check.length === 0) {
+      await connection.rollback();
+      return res
+        .status(404)
+        .send({ message: "El alumno no pertenece al grupo origen." });
+    }
+
+    // 2. Mover al alumno (Cambiar de Grupo)
     await connection.query(
-      "DELETE FROM grupo_alumnos WHERE grupo_id = ? AND alumno_id = ?",
-      [sourceGroupId, alumnoId]
+      "UPDATE grupo_alumnos SET grupo_id = ? WHERE grupo_id = ? AND alumno_id = ?",
+      [destinationGroupId, sourceGroupId, alumnoId],
     );
 
-    // 2. Inscribir al alumno en el grupo de destino
-    // Usamos INSERT IGNORE por si acaso el alumno ya estaba (evita que falle)
-    await connection.query(
-      "INSERT IGNORE INTO grupo_alumnos (grupo_id, alumno_id) VALUES (?, ?)",
-      [destinationGroupId, alumnoId]
+    // 3. --- MUDANZA DE CALIFICACIONES (LA MAGIA) ---
+    // Buscamos calificaciones del alumno en el grupo VIEJO
+    const [calificacionesViejas] = await connection.query(
+      "SELECT id, asignatura_id FROM calificaciones WHERE alumno_id = ? AND grupo_id = ?",
+      [alumnoId, sourceGroupId],
     );
 
-    // Opcional: Asegurarse que el rol sigue siendo 'alumno' (si no lo era ya)
+    let notasMovidas = 0;
+
+    // Para cada calificación vieja...
+    for (const calif of calificacionesViejas) {
+      // Verificamos si la materia existe en el grupo NUEVO (o si es compatible)
+      // Como las materias son independientes del grupo (están en la tabla asignaturas),
+      // simplemente verificamos si queremos mover la nota.
+
+      // Validamos si esa asignatura "existe" en el nuevo grupo (está asignada)
+      // Esto es opcional, pero recomendado para no mover basura.
+      const [materiaEnNuevoGrupo] = await connection.query(
+        "SELECT * FROM grupo_asignaturas_docentes WHERE grupo_id = ? AND asignatura_id = ?",
+        [destinationGroupId, calif.asignatura_id],
+      );
+
+      // Si la materia existe en el nuevo grupo (o si decides moverlas siempre), actualizamos
+      if (materiaEnNuevoGrupo.length > 0) {
+        await connection.query(
+          "UPDATE calificaciones SET grupo_id = ? WHERE id = ?",
+          [destinationGroupId, calif.id],
+        );
+        notasMovidas++;
+      }
+    }
+
+    // 4. Registrar en historial (Opcional pero útil)
+    const mensaje = `Transferido del grupo ${sourceGroupId} al ${destinationGroupId}. Se migraron ${notasMovidas} calificaciones.`;
     await connection.query(
-      "UPDATE usuarios SET rol = 'alumno' WHERE id = ? AND rol = 'aspirante'",
-      [alumnoId]
+      "INSERT INTO notificaciones (usuario_id, mensaje, leido, fecha, tipo) VALUES (?, ?, 0, NOW(), 'sistema')",
+      [alumnoId, mensaje],
     );
 
     await connection.commit();
-    res.send({ message: "Alumno transferido con éxito." });
+    res.send({
+      message: `Alumno transferido exitosamente. Se migraron ${notasMovidas} calificaciones.`,
+    });
   } catch (error) {
     await connection.rollback();
-    console.error("Error al transferir alumno:", error);
-    res.status(500).send({ message: "Error en el servidor." });
+    console.error(error);
+    res.status(500).send({ message: "Error al transferir alumno" });
   } finally {
     connection.release();
   }
@@ -1591,13 +2646,13 @@ adminRouter.get(
       grupoId,
     ]); // <-- CORREGIDO: Añadido grupoId al final
     res.json({ cursoInfo, alumnos });
-  }
+  },
 );
 adminRouter.get("/aspirantes/:id/expediente", async (req, res) => {
   const { id } = req.params;
   const [docs] = await db.query(
     "SELECT * FROM expediente_aspirantes WHERE aspirante_id = ?",
-    [id]
+    [id],
   );
   res.json(docs);
 });
@@ -1626,13 +2681,13 @@ adminRouter.post(
     res
       .status(201)
       .send({ message: "Documento subido con éxito", filePath: filename });
-  }
+  },
 );
 adminRouter.delete("/expedientes/:id", async (req, res) => {
   const { id } = req.params;
   const [[doc]] = await db.query(
     "SELECT * FROM expediente_aspirantes WHERE id = ?",
-    [id]
+    [id],
   );
   if (doc) {
     fs.unlink(path.join(uploadsDir, doc.ruta_archivo), (err) => {
@@ -1644,6 +2699,84 @@ adminRouter.delete("/expedientes/:id", async (req, res) => {
     res.status(404).send({ message: "Documento no encontrado" });
   }
 });
+
+// --- MÓDULO MIGRACIÓN ---
+
+// 1. Ejecutar Migración de Grupo (CORREGIDO: Incluye 'cupo' y 'sede_id')
+adminRouter.post("/migracion/ejecutar", async (req, res) => {
+  const { grupoOrigenId, nombreNuevo, cicloNuevoId, gradoNuevoId, modalidad } =
+    req.body;
+
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // A) Obtener datos del grupo viejo
+    const [origen] = await connection.query(
+      "SELECT * FROM grupos WHERE id = ?",
+      [grupoOrigenId],
+    );
+    if (origen.length === 0) throw new Error("Grupo origen no encontrado");
+    const infoOrigen = origen[0];
+
+    // B) Cerrar el grupo viejo
+    await connection.query(
+      "UPDATE grupos SET estatus = 'finalizado' WHERE id = ?",
+      [grupoOrigenId],
+    );
+
+    // C) Crear el NUEVO Grupo (AGREGAMOS 'sede_id')
+    const [resGrupo] = await connection.query(
+      `INSERT INTO grupos (
+          nombre_grupo, 
+          plan_estudio_id, 
+          grado_id, 
+          ciclo_id, 
+          modalidad, 
+          estatus, 
+          cupo, 
+          sede_id  -- <--- CAMPO NUEVO
+       )
+       VALUES (?, ?, ?, ?, ?, 'activo', ?, ?)`, // <--- AGREGAMOS UN ? AL FINAL
+      [
+        nombreNuevo,
+        infoOrigen.plan_estudio_id,
+        gradoNuevoId,
+        cicloNuevoId,
+        modalidad || infoOrigen.modalidad,
+        infoOrigen.cupo || 35,
+        infoOrigen.sede_id, // <--- COPIAMOS LA SEDE DEL GRUPO ANTERIOR
+      ],
+    );
+    const nuevoGrupoId = resGrupo.insertId;
+
+    // D) Mover a los alumnos
+    const [alumnos] = await connection.query(
+      "SELECT alumno_id FROM grupo_alumnos WHERE grupo_id = ?",
+      [grupoOrigenId],
+    );
+
+    if (alumnos.length > 0) {
+      const values = alumnos.map((a) => [nuevoGrupoId, a.alumno_id]);
+      await connection.query(
+        "INSERT INTO grupo_alumnos (grupo_id, alumno_id) VALUES ?",
+        [values],
+      );
+    }
+
+    await connection.commit();
+    res.send({
+      message: `Migración exitosa. Se creó el grupo "${nombreNuevo}" con ${alumnos.length} alumnos.`,
+    });
+  } catch (error) {
+    await connection.rollback();
+    console.error(error);
+    res.status(500).send({ message: "Error al migrar grupo" });
+  } finally {
+    connection.release();
+  }
+});
+
 apiRouter.use("/admin", adminRouter); // Registra el router de admin en /api/admin
 
 // --- AGREGA ESTA FUNCIÓN HELPER ---
@@ -1652,28 +2785,28 @@ async function checkUserCourseMembership(
   userId,
   userRol,
   grupoId,
-  asignaturaId
+  asignaturaId,
 ) {
   if (userRol === "docente") {
     const [[curso]] = await db.query(
       "SELECT * FROM grupo_asignaturas_docentes WHERE grupo_id = ? AND asignatura_id = ? AND docente_id = ?",
-      [grupoId, asignaturaId, userId]
+      [grupoId, asignaturaId, userId],
     );
     return !!curso; // Devuelve true si el docente da esta clase
   } else if (userRol === "alumno") {
     const [[inscripcion]] = await db.query(
       "SELECT * FROM grupo_alumnos WHERE grupo_id = ? AND alumno_id = ?",
-      [grupoId, userId]
+      [grupoId, userId],
     );
     // Adicionalmente, verificamos que la asignatura pertenezca al plan/grado del grupo
     const [[grupoPlanGrado]] = await db.query(
       "SELECT plan_estudio_id, grado_id FROM grupos WHERE id = ?",
-      [grupoId]
+      [grupoId],
     );
     if (!grupoPlanGrado) return false;
     const [[asignaturaValida]] = await db.query(
       "SELECT id FROM asignaturas WHERE id = ? AND plan_estudio_id = ? AND grado_id = ?",
-      [asignaturaId, grupoPlanGrado.plan_estudio_id, grupoPlanGrado.grado_id]
+      [asignaturaId, grupoPlanGrado.plan_estudio_id, grupoPlanGrado.grado_id],
     );
     return !!inscripcion && !!asignaturaValida; // Devuelve true si está inscrito y la materia es del grupo
   } else if (userRol === "admin") {
@@ -1718,7 +2851,7 @@ docenteRouter.get(
       grupoId,
     ]); // <-- CORREGIDO: Añadido grupoId al final
     res.json({ cursoInfo, alumnos });
-  }
+  },
 );
 // --- RUTA BORRADA --- Ya no es necesaria, la movimos a /admin
 // docenteRouter.post("/calificar", ... );
@@ -1729,7 +2862,7 @@ async function getOrCreateAulaConfig(grupoId, asignaturaId) {
   // Primero, intenta insertarlo. Si ya existe, 'IGNORE' no hará nada.
   await db.query(
     "INSERT IGNORE INTO aula_virtual_config (grupo_id, asignatura_id) VALUES (?, ?)",
-    [grupoId, asignaturaId]
+    [grupoId, asignaturaId],
   );
   // Luego, selecciónalo. Ahora estamos seguros de que existe.
   const [[config]] = await db.query(
@@ -1737,7 +2870,7 @@ async function getOrCreateAulaConfig(grupoId, asignaturaId) {
      FROM aula_virtual_config avc
      JOIN grupos g ON avc.grupo_id = g.id 
      WHERE avc.grupo_id = ? AND avc.asignatura_id = ?`,
-    [grupoId, asignaturaId]
+    [grupoId, asignaturaId],
   );
   return config;
 }
@@ -1751,7 +2884,7 @@ docenteRouter.get(
       // Validar que el docente realmente da esta clase
       const [[curso]] = await db.query(
         "SELECT * FROM grupo_asignaturas_docentes WHERE grupo_id = ? AND asignatura_id = ? AND docente_id = ?",
-        [grupoId, asignaturaId, req.user.id]
+        [grupoId, asignaturaId, req.user.id],
       );
       if (!curso) {
         return res
@@ -1764,7 +2897,7 @@ docenteRouter.get(
       console.error("Error al obtener config de aula (docente):", error);
       res.status(500).send({ message: "Error en el servidor." });
     }
-  }
+  },
 );
 
 // PUT (Docente): Actualizar la config del aula virtual
@@ -1787,7 +2920,7 @@ docenteRouter.put(
       // Validar que el docente da esta clase (igual que antes)
       const [[curso]] = await db.query(
         "SELECT * FROM grupo_asignaturas_docentes WHERE grupo_id = ? AND asignatura_id = ? AND docente_id = ?",
-        [grupoId, asignaturaId, req.user.id]
+        [grupoId, asignaturaId, req.user.id],
       );
       if (!curso) {
         return res
@@ -1835,7 +2968,7 @@ docenteRouter.put(
         // 1. Obtener alumnos del grupo
         const [alumnos] = await db.query(
           "SELECT alumno_id FROM grupo_alumnos WHERE grupo_id = ?",
-          [grupoId]
+          [grupoId],
         );
 
         if (alumnos.length > 0) {
@@ -1849,7 +2982,7 @@ docenteRouter.put(
           // 3. Insertar
           await db.query(
             "INSERT INTO notificaciones (user_id, mensaje, url_destino) VALUES ?",
-            [notificacionesParaInsertar]
+            [notificacionesParaInsertar],
           );
         }
       } catch (notifError) {
@@ -1861,7 +2994,7 @@ docenteRouter.put(
     } catch (error) {
       res.status(500).send({ message: "Error en el servidor." });
     }
-  }
+  },
 );
 // --- INICIA NUEVO CÓDIGO (AGREGAR) ---
 
@@ -1874,7 +3007,7 @@ docenteRouter.get(
       // Validamos que el docente da esta clase
       const [[curso]] = await db.query(
         "SELECT * FROM grupo_asignaturas_docentes WHERE grupo_id = ? AND asignatura_id = ? AND docente_id = ?",
-        [grupoId, asignaturaId, req.user.id]
+        [grupoId, asignaturaId, req.user.id],
       );
       if (!curso) {
         return res.status(403).send({ message: "No tienes permiso." });
@@ -1888,14 +3021,14 @@ docenteRouter.get(
          WHERE t.grupo_id = ? AND t.asignatura_id = ? AND t.docente_id = ?
          GROUP BY t.id
          ORDER BY t.fecha_creacion DESC`,
-        [grupoId, asignaturaId, req.user.id]
+        [grupoId, asignaturaId, req.user.id],
       );
       res.json(tareas);
     } catch (error) {
       console.error("Error al obtener tareas (docente):", error);
       res.status(500).send({ message: "Error en el servidor." });
     }
-  }
+  },
 );
 
 // POST (Docente): Crear una nueva tarea
@@ -1910,7 +3043,7 @@ docenteRouter.post(
       // Validamos que el docente da esta clase
       const [[curso]] = await db.query(
         "SELECT * FROM grupo_asignaturas_docentes WHERE grupo_id = ? AND asignatura_id = ? AND docente_id = ?",
-        [grupoId, asignaturaId, docente_id]
+        [grupoId, asignaturaId, docente_id],
       );
       if (!curso) {
         return res.status(403).send({ message: "No tienes permiso." });
@@ -1925,7 +3058,7 @@ docenteRouter.post(
           titulo,
           descripcion || null,
           fecha_limite || null,
-        ]
+        ],
       );
 
       const newTaskId = result.insertId;
@@ -1935,7 +3068,7 @@ docenteRouter.post(
         // 1. Obtener el nombre de la asignatura
         const [[asignatura]] = await db.query(
           "SELECT nombre_asignatura FROM asignaturas WHERE id = ?",
-          [asignaturaId]
+          [asignaturaId],
         );
         const nombreAsignatura = asignatura
           ? asignatura.nombre_asignatura
@@ -1948,7 +3081,7 @@ docenteRouter.post(
         // 3. Obtener todos los alumnos del grupo
         const [alumnos] = await db.query(
           "SELECT alumno_id FROM grupo_alumnos WHERE grupo_id = ?",
-          [grupoId]
+          [grupoId],
         );
         const alumnoIds = alumnos.map((a) => a.alumno_id);
 
@@ -1961,13 +3094,13 @@ docenteRouter.post(
           ]);
           await db.query(
             "INSERT INTO notificaciones (user_id, mensaje, url_destino) VALUES ?",
-            [notifData]
+            [notifData],
           );
 
           // 5. Enviar Notificaciones Push (móvil)
           const [tokens] = await db.query(
             "SELECT token FROM push_tokens WHERE user_id IN (?)",
-            [alumnoIds]
+            [alumnoIds],
           );
           if (tokens.length > 0) {
             const messages = tokens.map((t) => ({
@@ -1999,7 +3132,7 @@ docenteRouter.post(
       console.error("Error al crear tarea:", error);
       res.status(500).send({ message: "Error en el servidor." });
     }
-  }
+  },
 );
 // --- INICIA NUEVO CÓDIGO (AGREGAR) ---
 
@@ -2030,7 +3163,7 @@ docenteRouter.post(
          FROM tareas_entregas te
          JOIN tareas t ON te.tarea_id = t.id
          WHERE te.id = ?`,
-        [entregaId]
+        [entregaId],
       );
 
       if (!entrega) {
@@ -2045,7 +3178,7 @@ docenteRouter.post(
       // 2. Actualizamos la calificación en la BD
       await db.query(
         "UPDATE tareas_entregas SET calificacion = ?, comentario_docente = ? WHERE id = ?",
-        [calNum, comentario_docente || null, entregaId]
+        [calNum, comentario_docente || null, entregaId],
       );
 
       // --- 3. Notificar al Alumno ---
@@ -2056,13 +3189,13 @@ docenteRouter.post(
         // Notificación de campanita (web)
         await db.query(
           "INSERT INTO notificaciones (user_id, mensaje, url_destino) VALUES (?, ?, ?)",
-          [entrega.alumno_id, mensaje, urlDestino]
+          [entrega.alumno_id, mensaje, urlDestino],
         );
 
         // Notificación Push (móvil)
         const [tokens] = await db.query(
           "SELECT token FROM push_tokens WHERE user_id = ?",
-          [entrega.alumno_id]
+          [entrega.alumno_id],
         );
         if (tokens.length > 0) {
           const messages = tokens.map((t) => ({
@@ -2082,12 +3215,12 @@ docenteRouter.post(
           });
         }
         console.log(
-          `Notificación de calificación enviada al alumno ${entrega.alumno_id}`
+          `Notificación de calificación enviada al alumno ${entrega.alumno_id}`,
         );
       } catch (notifError) {
         console.error(
           "Error al notificar al alumno sobre calificación:",
-          notifError
+          notifError,
         );
       }
       // --- Fin de Notificación ---
@@ -2097,7 +3230,7 @@ docenteRouter.post(
       console.error("Error al calificar entrega:", error);
       res.status(500).send({ message: "Error en el servidor." });
     }
-  }
+  },
 );
 // --- INICIA NUEVO CÓDIGO (AGREGAR) ---
 
@@ -2110,7 +3243,7 @@ docenteRouter.get("/aula-virtual/tarea/:tareaId/entregas", async (req, res) => {
     // 1. Obtener detalles de la tarea y verificar permiso
     const [[tarea]] = await db.query(
       "SELECT * FROM tareas WHERE id = ? AND docente_id = ?",
-      [tareaId, docente_id]
+      [tareaId, docente_id],
     );
     if (!tarea) {
       return res
@@ -2137,7 +3270,7 @@ docenteRouter.get("/aula-virtual/tarea/:tareaId/entregas", async (req, res) => {
          JOIN usuarios u ON ga.alumno_id = u.id
          LEFT JOIN tareas_entregas te ON te.tarea_id = ? AND te.alumno_id = u.id
          WHERE ga.grupo_id = ?`,
-      [tareaId, tarea.grupo_id]
+      [tareaId, tarea.grupo_id],
     );
 
     res.json({ tarea, entregas: alumnosConEntregas });
@@ -2176,7 +3309,7 @@ docenteRouter.post(
           titulo,
           rutaRelativa,
           req.file.originalname,
-        ]
+        ],
       );
 
       // --- INICIA EL NUEVO CÓDIGO DE NOTIFICACIÓN ---
@@ -2188,7 +3321,7 @@ docenteRouter.post(
         // 1. Obtener alumnos del grupo
         const [alumnos] = await db.query(
           "SELECT alumno_id FROM grupo_alumnos WHERE grupo_id = ?",
-          [grupoId]
+          [grupoId],
         );
 
         if (alumnos.length > 0) {
@@ -2202,13 +3335,13 @@ docenteRouter.post(
           // 3. Insertar
           await db.query(
             "INSERT INTO notificaciones (user_id, mensaje, url_destino) VALUES ?",
-            [notificacionesParaInsertar]
+            [notificacionesParaInsertar],
           );
         }
       } catch (notifError) {
         console.error(
           "Error al crear notificaciones de recurso (archivo):",
-          notifError
+          notifError,
         );
       }
       // --- TERMINA EL NUEVO CÓDIGO DE NOTIFICACIÓN ---
@@ -2218,7 +3351,7 @@ docenteRouter.post(
       console.error("Error al subir recurso archivo:", error);
       res.status(500).send({ message: "Error en el servidor." });
     }
-  }
+  },
 );
 
 // POST (Docente): Agregar un RECURSO de tipo ENLACE
@@ -2238,7 +3371,7 @@ docenteRouter.post(
 
       await db.query(
         "INSERT INTO recursos_clase (grupo_id, asignatura_id, docente_id, titulo, tipo_recurso, ruta_o_url) VALUES (?, ?, ?, ?, 'enlace', ?)",
-        [grupoId, asignaturaId, docente_id, titulo, url]
+        [grupoId, asignaturaId, docente_id, titulo, url],
       );
 
       // --- INICIA EL NUEVO CÓDIGO DE NOTIFICACIÓN ---
@@ -2250,7 +3383,7 @@ docenteRouter.post(
         // 1. Obtener alumnos del grupo
         const [alumnos] = await db.query(
           "SELECT alumno_id FROM grupo_alumnos WHERE grupo_id = ?",
-          [grupoId]
+          [grupoId],
         );
 
         if (alumnos.length > 0) {
@@ -2264,13 +3397,13 @@ docenteRouter.post(
           // 3. Insertar
           await db.query(
             "INSERT INTO notificaciones (user_id, mensaje, url_destino) VALUES ?",
-            [notificacionesParaInsertar]
+            [notificacionesParaInsertar],
           );
         }
       } catch (notifError) {
         console.error(
           "Error al crear notificaciones de recurso (enlace):",
-          notifError
+          notifError,
         );
       }
       // --- TERMINA EL NUEVO CÓDIGO DE NOTIFICACIÓN ---
@@ -2280,7 +3413,7 @@ docenteRouter.post(
       console.error("Error al guardar recurso enlace:", error);
       res.status(500).send({ message: "Error en el servidor." });
     }
-  }
+  },
 );
 
 // DELETE (Docente): Borrar un recurso
@@ -2292,7 +3425,7 @@ docenteRouter.delete("/aula-virtual/recurso/:recursoId", async (req, res) => {
     // 1. Validar que el recurso existe y pertenece al docente
     const [[recurso]] = await db.query(
       "SELECT * FROM recursos_clase WHERE id = ? AND docente_id = ?",
-      [recursoId, docente_id]
+      [recursoId, docente_id],
     );
 
     if (!recurso) {
@@ -2325,7 +3458,7 @@ const getRecursosClase = async (req, res) => {
     // (Validación de permiso ya se hizo en la ruta principal)
     const [recursos] = await db.query(
       "SELECT * FROM recursos_clase WHERE grupo_id = ? AND asignatura_id = ? ORDER BY fecha_subida DESC",
-      [grupoId, asignaturaId]
+      [grupoId, asignaturaId],
     );
     res.json(recursos);
   } catch (error) {
@@ -2337,7 +3470,7 @@ const getRecursosClase = async (req, res) => {
 // Asignamos la ruta a ambos routers
 docenteRouter.get(
   "/aula-virtual/:grupoId/:asignaturaId/recursos",
-  getRecursosClase
+  getRecursosClase,
 );
 
 // --- INICIA NUEVO CÓDIGO (AGREGAR) ---
@@ -2355,7 +3488,7 @@ docenteRouter.post(
       // Validar permiso
       const [[curso]] = await db.query(
         "SELECT * FROM grupo_asignaturas_docentes WHERE grupo_id = ? AND asignatura_id = ? AND docente_id = ?",
-        [grupoId, asignaturaId, docente_id]
+        [grupoId, asignaturaId, docente_id],
       );
       if (!curso) {
         return res.status(403).send({ message: "No tienes permiso." });
@@ -2364,13 +3497,13 @@ docenteRouter.post(
       // Intentar insertar la sesión. Si ya existe para hoy, simplemente la obtendremos.
       await db.query(
         "INSERT IGNORE INTO clases_sesiones (grupo_id, asignatura_id, docente_id, fecha_sesion, tema_sesion) VALUES (?, ?, ?, ?, ?)",
-        [grupoId, asignaturaId, docente_id, fecha_sesion, tema_sesion || null]
+        [grupoId, asignaturaId, docente_id, fecha_sesion, tema_sesion || null],
       );
 
       // Obtener el ID de la sesión (ya sea la recién creada o la existente)
       const [[sesion]] = await db.query(
         "SELECT id FROM clases_sesiones WHERE grupo_id = ? AND asignatura_id = ? AND fecha_sesion = ?",
-        [grupoId, asignaturaId, fecha_sesion]
+        [grupoId, asignaturaId, fecha_sesion],
       );
 
       res.status(200).json({ sesionId: sesion.id }); // Devolver el ID para redirigir
@@ -2378,7 +3511,7 @@ docenteRouter.post(
       console.error("Error al iniciar sesión de clase:", error);
       res.status(500).send({ message: "Error en el servidor." });
     }
-  }
+  },
 );
 
 // GET (Docente): Obtener la lista de alumnos y su asistencia para UNA sesión
@@ -2392,7 +3525,7 @@ docenteRouter.get(
       // 1. Validar que la sesión pertenece al docente
       const [[sesion]] = await db.query(
         "SELECT * FROM clases_sesiones WHERE id = ? AND docente_id = ?",
-        [sesionId, docente_id]
+        [sesionId, docente_id],
       );
       if (!sesion) {
         return res
@@ -2413,7 +3546,7 @@ docenteRouter.get(
        JOIN usuarios u ON ga.alumno_id = u.id
        LEFT JOIN asistencia a ON a.alumno_id = u.id AND a.sesion_id = ?
        WHERE ga.grupo_id = ?`, // Usamos el grupo_id de la sesión
-        [sesionId, sesion.grupo_id]
+        [sesionId, sesion.grupo_id],
       );
 
       res.json({ sesion, alumnos: alumnosAsistencia });
@@ -2421,7 +3554,7 @@ docenteRouter.get(
       console.error("Error al obtener lista de asistencia:", error);
       res.status(500).send({ message: "Error en el servidor." });
     }
-  }
+  },
 );
 
 // POST (Docente): Guardar/Actualizar la asistencia para UNA sesión
@@ -2443,7 +3576,7 @@ docenteRouter.post(
       // 1. Validar que la sesión pertenece al docente
       const [[sesion]] = await db.query(
         "SELECT id FROM clases_sesiones WHERE id = ? AND docente_id = ?",
-        [sesionId, docente_id]
+        [sesionId, docente_id],
       );
       if (!sesion) {
         return res
@@ -2461,7 +3594,7 @@ docenteRouter.post(
           // Validar estatus
           if (!["presente", "ausente", "justificado"].includes(estatus)) {
             throw new Error(
-              `Estatus inválido '${estatus}' para alumno ${alumnoId}`
+              `Estatus inválido '${estatus}' para alumno ${alumnoId}`,
             );
           }
           // Crear la query con ON DUPLICATE KEY UPDATE
@@ -2484,7 +3617,7 @@ docenteRouter.post(
       console.error("Error al guardar asistencia:", error);
       res.status(500).send({ message: "Error en el servidor." });
     }
-  }
+  },
 );
 
 // Middleware para proteger rutas del foro
@@ -2505,7 +3638,7 @@ const canAccessForo = async (req, res, next) => {
     // Si estamos operando sobre un hilo, buscamos sus IDs
     const [[hiloInfo]] = await db.query(
       "SELECT grupo_id, asignatura_id FROM foros_hilos WHERE id = ?",
-      [req.params.hiloId]
+      [req.params.hiloId],
     );
     if (!hiloInfo)
       return res.status(404).send({ message: "Hilo no encontrado." });
@@ -2521,7 +3654,7 @@ const canAccessForo = async (req, res, next) => {
     req.user.id,
     req.user.rol,
     grupoId,
-    asignaturaId
+    asignaturaId,
   );
   if (!hasAccess) {
     return res
@@ -2551,14 +3684,14 @@ foroRouter.get(
        JOIN usuarios u ON fh.creado_por_usuario_id = u.id
        WHERE fh.grupo_id = ? AND fh.asignatura_id = ?
        ORDER BY ultima_respuesta_fecha DESC, fh.fecha_creacion DESC`, // Ordenar por actividad reciente
-        [req.params.grupoId, req.params.asignaturaId]
+        [req.params.grupoId, req.params.asignaturaId],
       );
       res.json(hilos);
     } catch (error) {
       console.error("Error al obtener hilos del foro:", error);
       res.status(500).send({ message: "Error en el servidor." });
     }
-  }
+  },
 );
 
 // POST /api/foro/:grupoId/:asignaturaId/hilos - Crear un nuevo hilo
@@ -2581,7 +3714,7 @@ foroRouter.post(
           titulo,
           mensaje_original,
           req.user.id,
-        ]
+        ],
       );
 
       // --- INICIA EL NUEVO CÓDIGO DE NOTIFICACIÓN ---
@@ -2595,13 +3728,13 @@ foroRouter.post(
         // 1. Obtener docente del curso
         const [[docente]] = await db.query(
           "SELECT docente_id FROM grupo_asignaturas_docentes WHERE grupo_id = ? AND asignatura_id = ?",
-          [req.params.grupoId, req.params.asignaturaId]
+          [req.params.grupoId, req.params.asignaturaId],
         );
 
         // 2. Obtener alumnos del grupo
         const [alumnos] = await db.query(
           "SELECT alumno_id FROM grupo_alumnos WHERE grupo_id = ?",
-          [req.params.grupoId]
+          [req.params.grupoId],
         );
 
         const notificacionesParaInsertar = [];
@@ -2630,7 +3763,7 @@ foroRouter.post(
         if (notificacionesParaInsertar.length > 0) {
           await db.query(
             "INSERT INTO notificaciones (user_id, mensaje, url_destino) VALUES ?",
-            [notificacionesParaInsertar]
+            [notificacionesParaInsertar],
           );
         }
         console.log(`Notificaciones creadas para nuevo hilo ${newHiloId}`);
@@ -2647,7 +3780,7 @@ foroRouter.post(
       console.error("Error al crear hilo:", error);
       res.status(500).send({ message: "Error en el servidor." });
     }
-  }
+  },
 );
 
 // GET /api/foro/hilo/:hiloId - Obtener detalles de un hilo y sus respuestas
@@ -2660,7 +3793,7 @@ foroRouter.get("/hilo/:hiloId", canAccessForo, async (req, res) => {
           FROM foros_hilos fh
           JOIN usuarios u ON fh.creado_por_usuario_id = u.id
           WHERE fh.id = ?`,
-      [hiloId]
+      [hiloId],
     );
     if (!hilo) return res.status(404).send({ message: "Hilo no encontrado." });
 
@@ -2671,7 +3804,7 @@ foroRouter.get("/hilo/:hiloId", canAccessForo, async (req, res) => {
            JOIN usuarios u ON fr.creado_por_usuario_id = u.id
            WHERE fr.hilo_id = ?
            ORDER BY fr.fecha_creacion ASC`, // Mostrar respuestas en orden cronológico
-      [hiloId]
+      [hiloId],
     );
 
     res.json({ hilo, respuestas });
@@ -2690,7 +3823,7 @@ foroRouter.post("/hilo/:hiloId/respuestas", canAccessForo, async (req, res) => {
     }
     await db.query(
       "INSERT INTO foros_respuestas (hilo_id, mensaje, creado_por_usuario_id) VALUES (?, ?, ?)",
-      [req.params.hiloId, mensaje, req.user.id]
+      [req.params.hiloId, mensaje, req.user.id],
     );
 
     // --- INICIA EL NUEVO CÓDIGO DE NOTIFICACIÓN ---
@@ -2702,7 +3835,7 @@ foroRouter.post("/hilo/:hiloId/respuestas", canAccessForo, async (req, res) => {
       // 1. Obtener info del hilo (grupo, asignatura, título)
       const [[hilo]] = await db.query(
         "SELECT grupo_id, asignatura_id, titulo FROM foros_hilos WHERE id = ?",
-        [hiloId]
+        [hiloId],
       );
 
       if (!hilo) throw new Error("Hilo no encontrado para notificar");
@@ -2716,7 +3849,7 @@ foroRouter.post("/hilo/:hiloId/respuestas", canAccessForo, async (req, res) => {
         `(SELECT docente_id as user_id, 'docente' as rol FROM grupo_asignaturas_docentes WHERE grupo_id = ? AND asignatura_id = ?)
          UNION
          (SELECT alumno_id as user_id, 'alumno' as rol FROM grupo_alumnos WHERE grupo_id = ?)`,
-        [grupo_id, asignatura_id, grupo_id]
+        [grupo_id, asignatura_id, grupo_id],
       );
 
       const notificacionesParaInsertar = [];
@@ -2737,7 +3870,7 @@ foroRouter.post("/hilo/:hiloId/respuestas", canAccessForo, async (req, res) => {
       if (notificacionesParaInsertar.length > 0) {
         await db.query(
           "INSERT INTO notificaciones (user_id, mensaje, url_destino) VALUES ?",
-          [notificacionesParaInsertar]
+          [notificacionesParaInsertar],
         );
       }
       console.log(`Notificaciones creadas para respuesta en hilo ${hiloId}`);
@@ -2769,60 +3902,200 @@ apiRouter.use("/docente", docenteRouter); // Registra el router de docente en /a
 
 // --- RUTAS DE ALUMNO ---
 const alumnoRouter = express.Router();
+
+// --- INICIO: RUTAS DE SOLICITUDES (ALUMNO) ---
+
+// GET /api/alumno/mis-solicitudes - Ver el historial de mis solicitudes
+alumnoRouter.get("/mis-solicitudes", async (req, res) => {
+  // Ya estamos protegidos por isAlumno, así que req.user existe
+  const alumno_id = req.user.id;
+  try {
+    const [solicitudes] = await db.query(
+      `SELECT id, tipo_solicitud, estatus, fecha_solicitud, fecha_ultima_actualizacion, comentarios_admin
+       FROM solicitudes_alumnos
+       WHERE alumno_id = ?
+       ORDER BY fecha_solicitud DESC`,
+      [alumno_id],
+    );
+    res.json(solicitudes);
+  } catch (error) {
+    console.error("Error al obtener mis solicitudes:", error);
+    res.status(500).send({ message: "Error en el servidor" });
+  }
+});
+
+// POST /api/alumno/solicitudes - Crear una nueva solicitud
+alumnoRouter.post("/solicitudes", async (req, res) => {
+  const alumno_id = req.user.id;
+  const { tipo_solicitud, motivo } = req.body;
+
+  if (!tipo_solicitud) {
+    return res
+      .status(400)
+      .send({ message: "El tipo de solicitud es requerido." });
+  }
+
+  try {
+    // 1. Insertar la solicitud en la base de datos
+    await db.query(
+      "INSERT INTO solicitudes_alumnos (alumno_id, tipo_solicitud, motivo, estatus) VALUES (?, ?, ?, 'solicitado')",
+      [alumno_id, tipo_solicitud, motivo || null],
+    );
+
+    // --- 2. Notificar a los Administradores ---
+    try {
+      const alumnoNombre = `${req.user.nombre} ${req.user.apellido_paterno}`;
+      const mensajeAdmin = `Nueva solicitud de '${tipo_solicitud}' recibida de: ${alumnoNombre}.`;
+      const urlDestinoAdmin = "/admin/solicitudes"; // Link para que el admin vea la lista
+
+      // Obtener IDs de todos los admins
+      const [admins] = await db.query(
+        "SELECT id FROM usuarios WHERE rol = 'admin'",
+      );
+      const adminIds = admins.map((a) => a.id);
+
+      if (adminIds.length > 0) {
+        // Crear notificaciones web (campanita) para cada admin
+        const notifDataWeb = adminIds.map((adminId) => [
+          adminId,
+          mensajeAdmin,
+          urlDestinoAdmin,
+        ]);
+        await db.query(
+          "INSERT INTO notificaciones (user_id, mensaje, url_destino) VALUES ?",
+          [notifDataWeb],
+        );
+
+        // Enviar notificaciones Push (móvil) a los admins
+        const [tokens] = await db.query(
+          "SELECT token FROM push_tokens WHERE user_id IN (?)",
+          [adminIds],
+        );
+        if (tokens.length > 0) {
+          const messages = tokens.map((t) => ({
+            to: t.token,
+            sound: "default",
+            title: "Nueva Solicitud Recibida 📬",
+            body: mensajeAdmin,
+          }));
+          // Asegúrate de tener: const fetch = require('node-fetch'); al inicio del archivo
+          await fetch("https://exp.host/--/api/v2/push/send", {
+            method: "POST",
+            headers: {
+              Accept: "application/json",
+              "Accept-encoding": "gzip, deflate",
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(messages),
+          });
+        }
+        console.log("Notificaciones de nueva solicitud enviadas a admins.");
+      }
+    } catch (notifError) {
+      console.error(
+        "Error al notificar a admins sobre nueva solicitud:",
+        notifError,
+      );
+      // No detener la respuesta principal si falla la notificación
+    }
+    // --- Fin Notificar Admins ---
+
+    res.status(201).send({ message: "Solicitud enviada con éxito." });
+  } catch (error) {
+    console.error("Error al crear solicitud:", error);
+    res.status(500).send({ message: "Error en el servidor" });
+  }
+});
+
+// --- FIN: RUTAS DE SOLICITUDES (ALUMNO) ---
+
+// ... (Aquí continúan las otras rutas del alumnoRouter que ya tenías)
+
 alumnoRouter.use(isAlumno); // Se asegura que solo alumnos entren
-// --- REEMPLAZA LA RUTA /mi-grupo CON ESTO ---
+
+// GET Mi Grupo (CORREGIDO PARA EVITAR ERROR 'UNDEFINED')
 alumnoRouter.get("/mi-grupo", async (req, res) => {
   const alumno_id = req.user.id;
 
-  // 1. Obtenemos TODOS los grupos donde está el alumno
-  const [misGrupos] = await db.query(
-    "SELECT * FROM grupo_alumnos WHERE alumno_id = ?",
-    [alumno_id]
-  );
-
-  if (!misGrupos || misGrupos.length === 0) {
-    // Esto es correcto, el alumno puede no estar en grupos
-    return res.json([]); // Devolvemos un array vacío
-  }
-
-  let responseData = [];
-
-  // 2. Iteramos sobre cada grupo encontrado
-  for (const miGrupo of misGrupos) {
-    const grupoId = miGrupo.grupo_id;
-
-    // Obtenemos los detalles de ESE grupo
-    const [[grupo]] = await db.query(
-      `SELECT g.*, c.nombre_ciclo FROM grupos g JOIN ciclos c ON g.ciclo_id = c.id WHERE g.id = ?`,
-      [grupoId]
+  try {
+    // 1. Grupos del alumno
+    const [misGrupos] = await db.query(
+      "SELECT * FROM grupo_alumnos WHERE alumno_id = ?",
+      [alumno_id],
     );
 
-    // Si el grupo no existe (caso raro), lo saltamos
-    if (!grupo) continue;
+    if (!misGrupos || misGrupos.length === 0) return res.json([]);
 
-    // Obtenemos las asignaturas de ESE grupo y la calificación del alumno
-    const asignaturasSql = `
-    SELECT a.id as asignatura_id, a.nombre_asignatura, a.clave_asignatura, u.nombre as docente_nombre, u.apellido_paterno as docente_apellido, cal.calificacion
-    FROM asignaturas a
-    LEFT JOIN grupo_asignaturas_docentes gad ON a.id = gad.asignatura_id AND gad.grupo_id = ?
-    LEFT JOIN usuarios u ON gad.docente_id = u.id
-    LEFT JOIN calificaciones cal ON cal.asignatura_id = a.id AND cal.alumno_id = ? AND cal.grupo_id = ?
-    WHERE a.grado_id = ? AND a.plan_estudio_id = ?`; // <-- CORREGIDO: Añadido AND cal.grupo_id = ?
+    let responseData = [];
 
-    const [asignaturas] = await db.query(asignaturasSql, [
-      grupoId, // Para el JOIN gad
-      alumno_id, // Para el JOIN cal
-      grupoId, // <-- CORREGIDO: Para el JOIN cal (filtrar por grupo)
-      grupo.grado_id, // Para el WHERE
-      grupo.plan_estudio_id, // Para el WHERE
-    ]);
+    // 2. Iteramos grupos
+    for (const miGrupo of misGrupos) {
+      const grupoId = miGrupo.grupo_id;
 
-    // 3. Agregamos este grupo y sus asignaturas al array de respuesta
-    responseData.push({ grupo, asignaturas });
+      // Info del grupo
+      const [[grupo]] = await db.query(
+        `SELECT g.*, c.nombre_ciclo 
+         FROM grupos g 
+         LEFT JOIN ciclos c ON g.ciclo_id = c.id 
+         WHERE g.id = ?`,
+        [grupoId],
+      );
+      if (!grupo) continue;
+
+      // 3. Materias (Manuales)
+      const asignaturasSql = `
+        SELECT 
+          a.id as asignatura_id, 
+          a.nombre_asignatura, 
+          a.clave_asignatura, 
+          u.nombre as docente_nombre, 
+          u.apellido_paterno as docente_apellido, 
+          cal.calificacion
+        FROM grupo_asignaturas_docentes gad
+        JOIN asignaturas a ON gad.asignatura_id = a.id
+        LEFT JOIN usuarios u ON gad.docente_id = u.id
+        LEFT JOIN calificaciones cal 
+          ON cal.asignatura_id = a.id 
+          AND cal.alumno_id = ? 
+          AND cal.grupo_id = ?
+        WHERE gad.grupo_id = ?
+        ORDER BY a.nombre_asignatura ASC
+      `;
+
+      const [asignaturas] = await db.query(asignaturasSql, [
+        alumno_id,
+        grupoId,
+        grupoId,
+      ]);
+
+      // Calculamos promedio
+      const totalMaterias = asignaturas.length;
+      const materiasConCalif = asignaturas.filter(
+        (a) => a.calificacion !== null && a.calificacion !== "",
+      );
+      const sumaCalif = materiasConCalif.reduce(
+        (acc, curr) => acc + parseFloat(curr.calificacion),
+        0,
+      );
+      const promedio =
+        totalMaterias > 0 && materiasConCalif.length > 0
+          ? (sumaCalif / materiasConCalif.length).toFixed(1)
+          : 0;
+
+      // --- AQUÍ ESTABA EL ERROR, CORREGIDO: ---
+      // Envolvemos 'grupo' para que el frontend lo encuentre como infoGrupo.grupo.nombre_grupo
+      responseData.push({
+        grupo: grupo, // <--- CAMBIO IMPORTANTE: Lo envolvemos en un objeto 'grupo'
+        asignaturas,
+        promedio,
+      });
+    }
+
+    res.json(responseData);
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({ message: "Error al cargar mi grupo" });
   }
-
-  // 4. Devolvemos el array con todos los grupos
-  res.json(responseData);
 });
 
 // ... (después de /alumno/mi-grupo)
@@ -2839,7 +4112,7 @@ alumnoRouter.get("/mis-adeudos", async (req, res) => {
        JOIN conceptos_pago cp ON aa.concepto_id = cp.id
        WHERE aa.alumno_id = ?
        ORDER BY aa.estatus_pago ASC, aa.fecha_vencimiento ASC`,
-      [alumno_id]
+      [alumno_id],
     );
     res.json(adeudos);
   } catch (error) {
@@ -2848,8 +4121,111 @@ alumnoRouter.get("/mis-adeudos", async (req, res) => {
   }
 });
 
-// --- FIN: RUTA DE FINANZAS ALUMNO ---
-// ... (resto de rutas de alumnoRouter)
+// ... (dentro de alumnoRouter, después de /mis-adeudos)
+
+// --- INICIO: RUTAS DE SOLICITUDES (ALUMNO) ---
+
+// GET /api/alumno/mis-solicitudes - Ver el historial de mis solicitudes
+alumnoRouter.get("/mis-solicitudes", async (req, res) => {
+  const alumno_id = req.user.id;
+  try {
+    const [solicitudes] = await db.query(
+      `SELECT id, tipo_solicitud, estatus, fecha_solicitud, fecha_ultima_actualizacion, comentarios_admin 
+       FROM solicitudes_alumnos 
+       WHERE alumno_id = ? 
+       ORDER BY fecha_solicitud DESC`,
+      [alumno_id],
+    );
+    res.json(solicitudes);
+  } catch (error) {
+    console.error("Error al obtener mis solicitudes:", error);
+    res.status(500).send({ message: "Error en el servidor" });
+  }
+});
+
+// POST /api/alumno/solicitudes - Crear una nueva solicitud
+alumnoRouter.post("/solicitudes", async (req, res) => {
+  const alumno_id = req.user.id;
+  const { tipo_solicitud, motivo } = req.body;
+
+  // Validación simple
+  if (!tipo_solicitud) {
+    return res
+      .status(400)
+      .send({ message: "El tipo de solicitud es requerido." });
+  }
+
+  try {
+    // Insertar la solicitud
+    await db.query(
+      "INSERT INTO solicitudes_alumnos (alumno_id, tipo_solicitud, motivo, estatus) VALUES (?, ?, ?, 'solicitado')",
+      [alumno_id, tipo_solicitud, motivo || null],
+    );
+
+    // --- INICIO: NOTIFICAR A LOS ADMINS ---
+    try {
+      const alumnoNombre = `${req.user.nombre} ${req.user.apellido_paterno}`;
+      const mensaje = `Nueva solicitud de '${tipo_solicitud}' recibida de: ${alumnoNombre}.`;
+      const urlDestino = "/admin/solicitudes"; // Lleva a la lista de solicitudes del admin
+
+      // 1. Obtener los IDs de todos los administradores
+      const [admins] = await db.query(
+        "SELECT id FROM usuarios WHERE rol = 'admin'",
+      );
+      const adminIds = admins.map((a) => a.id);
+
+      if (adminIds.length > 0) {
+        // 2. Crear notificaciones web (campanita) para cada admin
+        const notifDataWeb = adminIds.map((adminId) => [
+          adminId,
+          mensaje,
+          urlDestino,
+        ]);
+        await db.query(
+          "INSERT INTO notificaciones (user_id, mensaje, url_destino) VALUES ?",
+          [notifDataWeb],
+        );
+
+        // 3. Enviar notificaciones Push (móvil) a los admins
+        const [tokens] = await db.query(
+          "SELECT token FROM push_tokens WHERE user_id IN (?)",
+          [adminIds],
+        );
+        if (tokens.length > 0) {
+          const messages = tokens.map((t) => ({
+            to: t.token,
+            sound: "default",
+            title: "Nueva Solicitud Recibida 📬",
+            body: mensaje,
+          }));
+          // Usamos fetch (asegúrate de tener node-fetch instalado y requerido al inicio del archivo)
+          await fetch("https://exp.host/--/api/v2/push/send", {
+            method: "POST",
+            headers: {
+              Accept: "application/json",
+              "Accept-encoding": "gzip, deflate",
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(messages),
+          });
+        }
+        console.log("Notificaciones de nueva solicitud enviadas a admins.");
+      }
+    } catch (notifError) {
+      console.error(
+        "Error al notificar a admins sobre nueva solicitud:",
+        notifError,
+      );
+      // No detenemos la respuesta principal si falla la notificación
+    }
+    // --- FIN: NOTIFICAR A LOS ADMINS ---
+
+    res.status(201).send({ message: "Solicitud enviada con éxito." });
+  } catch (error) {
+    console.error("Error al crear solicitud:", error);
+    res.status(500).send({ message: "Error en el servidor" });
+  }
+});
 
 // GET (Alumno): Obtener la config del aula virtual
 alumnoRouter.get(
@@ -2860,7 +4236,7 @@ alumnoRouter.get(
       // Validar que el alumno está inscrito en este grupo
       const [[inscripcion]] = await db.query(
         "SELECT * FROM grupo_alumnos WHERE grupo_id = ? AND alumno_id = ?",
-        [grupoId, req.user.id]
+        [grupoId, req.user.id],
       );
       if (!inscripcion) {
         return res
@@ -2875,7 +4251,7 @@ alumnoRouter.get(
       console.error("Error al obtener config de aula (alumno):", error);
       res.status(500).send({ message: "Error en el servidor." });
     }
-  }
+  },
 );
 // --- INICIA NUEVO CÓDIGO (AGREGAR) ---
 
@@ -2889,7 +4265,7 @@ alumnoRouter.get(
       // Validamos que el alumno está inscrito
       const [[inscripcion]] = await db.query(
         "SELECT * FROM grupo_alumnos WHERE grupo_id = ? AND alumno_id = ?",
-        [grupoId, alumno_id]
+        [grupoId, alumno_id],
       );
       if (!inscripcion) {
         return res.status(403).send({ message: "No estás inscrito." });
@@ -2903,14 +4279,14 @@ alumnoRouter.get(
          LEFT JOIN tareas_entregas te ON t.id = te.tarea_id AND te.alumno_id = ?
          WHERE t.grupo_id = ? AND t.asignatura_id = ?
          ORDER BY t.fecha_creacion DESC`,
-        [alumno_id, grupoId, asignaturaId]
+        [alumno_id, grupoId, asignaturaId],
       );
       res.json(tareas);
     } catch (error) {
       console.error("Error al obtener tareas (alumno):", error);
       res.status(500).send({ message: "Error en el servidor." });
     }
-  }
+  },
 );
 // --- INICIA NUEVO CÓDIGO (AGREGAR) ---
 
@@ -2956,7 +4332,7 @@ alumnoRouter.post(
         // 1. Obtener datos de la tarea (título, docente, ids)
         const [[tarea]] = await db.query(
           "SELECT titulo, docente_id, grupo_id, asignatura_id FROM tareas WHERE id = ?",
-          [tareaId]
+          [tareaId],
         );
 
         if (tarea && tarea.docente_id) {
@@ -2969,13 +4345,13 @@ alumnoRouter.post(
           // 3. Crear notificación de campanita (web)
           await db.query(
             "INSERT INTO notificaciones (user_id, mensaje, url_destino) VALUES (?, ?, ?)",
-            [tarea.docente_id, mensaje, urlDestino]
+            [tarea.docente_id, mensaje, urlDestino],
           );
 
           // 4. Enviar Notificación Push (móvil)
           const [tokens] = await db.query(
             "SELECT token FROM push_tokens WHERE user_id = ?",
-            [tarea.docente_id]
+            [tarea.docente_id],
           );
           if (tokens.length > 0) {
             const messages = tokens.map((t) => ({
@@ -2995,14 +4371,14 @@ alumnoRouter.post(
             });
           }
           console.log(
-            `Notificación de entrega enviada al docente ${tarea.docente_id}`
+            `Notificación de entrega enviada al docente ${tarea.docente_id}`,
           );
         }
       } catch (notifError) {
         // Si falla la notificación, no detenemos la entrega
         console.error(
           "Error al notificar al docente sobre la entrega:",
-          notifError
+          notifError,
         );
       }
       // --- TERMINA CÓDIGO DE NOTIFICACIÓN ---
@@ -3012,13 +4388,13 @@ alumnoRouter.post(
       console.error("Error al entregar tarea:", error);
       res.status(500).send({ message: "Error en el servidor." });
     }
-  }
+  },
 );
 // --- INICIA NUEVO CÓDIGO (AGREGAR) ---
 // GET (Alumno): Obtener todos los recursos
 alumnoRouter.get(
   "/aula-virtual/:grupoId/:asignaturaId/recursos",
-  getRecursosClase // <-- Reutilizamos la misma función
+  getRecursosClase, // <-- Reutilizamos la misma función
 );
 
 // --- INICIA NUEVO CÓDIGO (AGREGAR) ---
@@ -3033,7 +4409,7 @@ alumnoRouter.get(
       // Validar inscripción
       const [[inscripcion]] = await db.query(
         "SELECT * FROM grupo_alumnos WHERE grupo_id = ? AND alumno_id = ?",
-        [grupoId, alumno_id]
+        [grupoId, alumno_id],
       );
       if (!inscripcion) {
         return res.status(403).send({ message: "No estás inscrito." });
@@ -3050,14 +4426,14 @@ alumnoRouter.get(
          LEFT JOIN asistencia a ON cs.id = a.sesion_id AND a.alumno_id = ?
          WHERE cs.grupo_id = ? AND cs.asignatura_id = ?
          ORDER BY cs.fecha_sesion DESC`,
-        [alumno_id, grupoId, asignaturaId]
+        [alumno_id, grupoId, asignaturaId],
       );
       res.json(historial);
     } catch (error) {
       console.error("Error al obtener historial de asistencia:", error);
       res.status(500).send({ message: "Error en el servidor." });
     }
-  }
+  },
 );
 // --- TERMINA NUEVO CÓDIGO ---
 
@@ -3073,7 +4449,7 @@ aspiranteRouter.get("/mi-expediente", async (req, res) => {
   const aspirante_id = req.user.id; // Obtenemos el ID del token
   const [docs] = await db.query(
     "SELECT * FROM expediente_aspirantes WHERE aspirante_id = ?",
-    [aspirante_id]
+    [aspirante_id],
   );
   res.json(docs);
 });
@@ -3104,7 +4480,7 @@ aspiranteRouter.post(
     res
       .status(201)
       .send({ message: "Documento subido con éxito", filePath: filename });
-  }
+  },
 );
 
 // 3. RUTA PARA BORRAR MI PROPIO DOCUMENTO
@@ -3114,7 +4490,7 @@ aspiranteRouter.delete("/expedientes/:id", async (req, res) => {
 
   const [[doc]] = await db.query(
     "SELECT * FROM expediente_aspirantes WHERE id = ?",
-    [docId]
+    [docId],
   );
   if (doc) {
     // --- VERIFICACIÓN DE PROPIEDAD ---
