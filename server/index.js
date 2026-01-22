@@ -337,6 +337,81 @@ apiRouter.use(verifyToken);
 // NOTA: Asegúrate de usar la variable de router correcta (ej: apiRouter o app)
 // Si tu código original decía 'apiRouter.get', usa 'apiRouter'. Si decía 'app.get', usa 'app'.
 
+// --- RUTAS DE PERFIL Y SEGURIDAD (PARA TODOS LOS USUARIOS) ---
+
+// 2. PUT /api/auth/perfil (Actualizar datos de contacto Y personales)
+apiRouter.put("/auth/perfil", async (req, res) => {
+  if (!req.user) return res.status(401).send({ message: "No autenticado" });
+
+  const userId = req.user.id;
+  // Recibimos los nuevos campos del frontend
+  const { email, telefono, fecha_nacimiento, genero } = req.body;
+
+  try {
+    await db.query(
+      "UPDATE usuarios SET email = ?, telefono = ?, fecha_nacimiento = ?, genero = ? WHERE id = ?",
+      [
+        email,
+        telefono,
+        fecha_nacimiento || null, // IMPORTANTE: Si viene vacío, guarda NULL para no causar error de fecha
+        genero || null, // Igual para género
+        userId,
+      ],
+    );
+    res.send({ message: "Perfil actualizado correctamente" });
+  } catch (error) {
+    if (error.code === "ER_DUP_ENTRY") {
+      return res
+        .status(400)
+        .send({ message: "El correo ya está en uso por otro usuario." });
+    }
+    console.error("Error al actualizar perfil:", error);
+    res.status(500).send({ message: "Error en el servidor al actualizar." });
+  }
+});
+
+// 2. CAMBIAR CONTRASEÑA
+apiRouter.put("/auth/cambiar-password", async (req, res) => {
+  if (!req.user) return res.status(401).send({ message: "No autenticado" });
+
+  const userId = req.user.id;
+  const { currentPassword, newPassword } = req.body;
+
+  if (!currentPassword || !newPassword) {
+    return res.status(400).send({ message: "Faltan datos." });
+  }
+
+  try {
+    // A) Obtener la contraseña actual de la BD
+    const [[user]] = await db.query(
+      "SELECT password FROM usuarios WHERE id = ?",
+      [userId],
+    );
+
+    // B) Verificar que la contraseña actual sea correcta
+    const match = await bcrypt.compare(currentPassword, user.password);
+    if (!match) {
+      return res
+        .status(401)
+        .send({ message: "La contraseña actual es incorrecta." });
+    }
+
+    // C) Encriptar la nueva contraseña
+    const hashedNewPassword = await bcrypt.hash(newPassword, 10);
+
+    // D) Guardar
+    await db.query("UPDATE usuarios SET password = ? WHERE id = ?", [
+      hashedNewPassword,
+      userId,
+    ]);
+
+    res.send({ message: "Contraseña actualizada con éxito." });
+  } catch (error) {
+    console.error("Error al cambiar contraseña:", error);
+    res.status(500).send({ message: "Error en el servidor" });
+  }
+});
+
 // --- RUTA CORREGIDA: Obtener No Leídas (CON VALIDACIÓN) ---
 apiRouter.get("/notificaciones/no-leidas", verifyToken, async (req, res) => {
   // 1. VALIDACIÓN DE SEGURIDAD: Evita el crash si no hay usuario
@@ -548,24 +623,81 @@ apiRouter.delete("/unregister-push-token", async (req, res) => {
 
 // --- INICIA NUEVO CÓDIGO (RUTAS MI PERFIL) ---
 
-// GET /api/mi-perfil - Obtener datos completos del perfil del usuario logueado
+// --- RUTAS DE PERFIL (SOLO INFORMACIÓN, SIN RECUPERACIÓN) ---
+
+// 1. GET /api/mi-perfil (Trae TODOS los datos con nombres reales)
 apiRouter.get("/mi-perfil", async (req, res) => {
-  if (!req.user) {
-    return res.status(401).send({ message: "No autenticado." });
-  }
+  if (!req.user) return res.status(401).send({ message: "No autenticado." });
   try {
-    // Obtenemos todos los datos (excepto password)
-    const [[perfil]] = await db.query(
-      "SELECT id, email, nombre, apellido_paterno, apellido_materno, rol, foto_perfil, genero, telefono, curp, matricula, DATE_FORMAT(fecha_nacimiento, '%Y-%m-%d') as fecha_nacimiento FROM usuarios WHERE id = ?",
-      [req.user.id],
-    );
-    if (!perfil) {
+    const sql = `
+      SELECT u.id, u.email, u.nombre, u.apellido_paterno, u.apellido_materno, u.rol, 
+             u.foto_perfil, u.genero, u.telefono, u.curp, u.matricula, 
+             DATE_FORMAT(u.fecha_nacimiento, '%Y-%m-%d') as fecha_nacimiento,
+             c.nombre_carrera, s.nombre_sede, g.nombre_grupo
+      FROM usuarios u
+      LEFT JOIN carreras c ON u.carrera_id = c.id
+      LEFT JOIN sedes s ON u.sede_id = s.id
+      LEFT JOIN grupos g ON u.grupo_id = g.id
+      WHERE u.id = ?
+    `;
+    const [[perfil]] = await db.query(sql, [req.user.id]);
+
+    if (!perfil)
       return res.status(404).send({ message: "Perfil no encontrado." });
-    }
     res.json(perfil);
   } catch (error) {
-    console.error("Error al obtener mi perfil:", error);
+    console.error("Error al obtener perfil:", error);
     res.status(500).send({ message: "Error en el servidor." });
+  }
+});
+
+// 2. PUT /api/auth/perfil (Actualizar datos de contacto)
+apiRouter.put("/auth/perfil", async (req, res) => {
+  if (!req.user) return res.status(401).send({ message: "No autenticado" });
+  const userId = req.user.id;
+  const { email, telefono, fecha_nacimiento, genero } = req.body;
+
+  try {
+    await db.query(
+      "UPDATE usuarios SET email = ?, telefono = ?, fecha_nacimiento = ?, genero = ? WHERE id = ?",
+      [email, telefono, fecha_nacimiento, genero, userId],
+    );
+    res.send({ message: "Información actualizada correctamente" });
+  } catch (error) {
+    if (error.code === "ER_DUP_ENTRY")
+      return res.status(400).send({ message: "El correo ya está en uso." });
+    res.status(500).send({ message: "Error al actualizar." });
+  }
+});
+
+// 3. PUT /api/auth/cambiar-password (Solo si conoce la actual)
+apiRouter.put("/auth/cambiar-password", async (req, res) => {
+  if (!req.user) return res.status(401).send({ message: "No autenticado" });
+  const userId = req.user.id;
+  const { currentPassword, newPassword } = req.body;
+
+  if (!currentPassword || !newPassword)
+    return res.status(400).send({ message: "Faltan datos." });
+
+  try {
+    const [[user]] = await db.query(
+      "SELECT password FROM usuarios WHERE id = ?",
+      [userId],
+    );
+    const match = await bcrypt.compare(currentPassword, user.password);
+    if (!match)
+      return res
+        .status(401)
+        .send({ message: "La contraseña actual es incorrecta." });
+
+    const hashed = await bcrypt.hash(newPassword, 10);
+    await db.query("UPDATE usuarios SET password = ? WHERE id = ?", [
+      hashed,
+      userId,
+    ]);
+    res.send({ message: "Contraseña actualizada con éxito." });
+  } catch (error) {
+    res.status(500).send({ message: "Error al cambiar contraseña." });
   }
 });
 
@@ -757,6 +889,34 @@ const adminRouter = express.Router();
 adminRouter.use(isAdmin); // ¡Importante! 'isAdmin' se aplica a todas las rutas de 'adminRouter'
 
 // --- INICIO: RUTAS DE GESTIÓN DE SOLICITUDES (ADMIN) ---
+
+// --- RUTA DASHBOARD CORREGIDA ---
+adminRouter.get("/dashboard-stats", async (req, res) => {
+  try {
+    const [counts] = await db.query(`
+      SELECT 
+        (SELECT COUNT(*) FROM usuarios WHERE rol = 'alumno' AND activo = 1) as total_alumnos,
+        (SELECT COUNT(*) FROM usuarios WHERE rol = 'docente' AND activo = 1) as total_docentes,
+        (SELECT COUNT(*) FROM usuarios WHERE rol = 'aspirante' AND activo = 1) as total_aspirantes,
+        (SELECT COUNT(*) FROM grupos WHERE estatus = 'activo') as total_grupos_activos
+    `);
+
+    // CORRECCIÓN AQUÍ: Usamos 'fecha_creacion' en vez de 'created_at'
+    const [ultimosAspirantes] = await db.query(`
+        SELECT nombre, apellido_paterno, email, fecha_creacion 
+        FROM usuarios WHERE rol = 'aspirante' AND activo = 1
+        ORDER BY id DESC LIMIT 5
+    `);
+
+    res.json({
+      stats: counts[0],
+      recientes: ultimosAspirantes,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({ message: "Error al obtener estadísticas" });
+  }
+});
 
 // --- NUEVA RUTA: CREAR ASPIRANTE (ESPECIALIZADA) ---
 adminRouter.post("/usuarios/crear-aspirante", async (req, res) => {
@@ -1357,7 +1517,43 @@ createCatalogCrudRoutes(adminRouter, "conceptos_pago", [
   "es_concepto_inscripcion",
 ]);
 // --- FIN: CRUD PARA CONCEPTOS DE PAGO ---
+// --- GESTIÓN DE CICLO ACTUAL ---
 
+// 1. PUT: Fijar un ciclo como ACTUAL
+adminRouter.put("/ciclos/:id/fijar-actual", async (req, res) => {
+  const { id } = req.params;
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+    // Primero: Desactivar TODOS los ciclos
+    await connection.query("UPDATE ciclos SET actual = 0");
+    // Segundo: Activar SOLO el seleccionado
+    await connection.query("UPDATE ciclos SET actual = 1 WHERE id = ?", [id]);
+
+    await connection.commit();
+    res.send({ message: "Ciclo establecido como actual." });
+  } catch (error) {
+    await connection.rollback();
+    console.error(error);
+    res.status(500).send({ message: "Error al actualizar ciclo." });
+  } finally {
+    connection.release();
+  }
+});
+
+// 2. GET: Obtener el nombre del ciclo actual (Para el Header)
+// Nota: Usamos apiRouter para que sea accesible por admin, docente y alumno
+apiRouter.get("/ciclo-actual", async (req, res) => {
+  try {
+    const [[ciclo]] = await db.query(
+      "SELECT nombre_ciclo FROM ciclos WHERE actual = 1",
+    );
+    // Si no hay ninguno marcado, devolvemos null o un texto genérico
+    res.json({ nombre: ciclo ? ciclo.nombre_ciclo : "Sin Ciclo Activo" });
+  } catch (error) {
+    res.status(500).send({ message: "Error" });
+  }
+});
 // --- INICIO: RUTAS DE GESTIÓN FINANCIERA ---
 
 // GET /admin/alumnos/:id/adeudos - Ver el estado de cuenta de un alumno

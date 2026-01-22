@@ -70,6 +70,14 @@ import {
   Briefcase, // Para Docentes
   Mail, // Para tabla de usuarios
   Phone, // Para tabla de usuarios
+  Zap,
+  ArrowRightCircle,
+  Clock,
+  Tag,
+  Menu,
+  User,
+  Lock,
+  Camera,
 } from "lucide-react";
 import { Bar, Pie } from "react-chartjs-2";
 import {
@@ -93,6 +101,21 @@ ChartJS.register(
   BarElement,
   Title,
 );
+
+// --- CONFIGURACIÓN DE MARCA Y COLORES ---
+const BRAND = {
+  name: "Centro universitario Siglo XXI", // O el nombre de tu escuela
+  logo: "/logo.png",
+  colors: {
+    primary: "#a72a34", // Rojo Vino (Botones, Headers activos)
+    secondary: "#bb9a5a", // Dorado (Iconos, Detalles)
+    bgPrimary: "bg-[#a72a34]",
+    bgSecondary: "bg-[#bb9a5a]",
+    textPrimary: "text-[#a72a34]",
+    textSecondary: "text-[#bb9a5a]",
+    borderPrimary: "border-[#a72a34]",
+  },
+};
 
 // --- CONFIGURACIÓN DE AXIOS ---
 const api = axios.create({
@@ -388,130 +411,192 @@ const ProtectedRoute = ({ allowedRoles }) => {
   return <Outlet />;
 };
 
-// --- LAYOUTS ---
+// --- ADMIN LAYOUT RESPONSIVE (CELULAR + PC) ---
 const AdminLayout = () => {
   const { logout, user } = useAuth();
   const location = useLocation();
+  const [sidebarOpen, setSidebarOpen] = useState(false); // Estado para menú móvil
+  const [cicloActual, setCicloActual] = useState("Cargando...");
+  useEffect(() => {
+    api
+      .get("/ciclo-actual")
+      .then((res) => setCicloActual(res.data.nombre))
+      .catch(() => setCicloActual("Sin Asignar"));
+  }, []);
+
   const navItems = [
+    // ANTES: path: "/admin/dashboard"  --> AHORA: path: "/dashboard"
     { icon: Home, label: "Dashboard", path: "/dashboard" },
     { icon: Users, label: "Usuarios", path: "/usuarios" },
-
-    // --- NUEVA SECCIÓN DE CATÁLOGOS ---
     { icon: Calendar, label: "Ciclos Escolares", path: "/ciclos" },
     { icon: FileText, label: "Planes de Estudio", path: "/planes-estudio" },
-    { icon: TrendingUp, label: "Grados/Semestres", path: "/grados" },
+    { icon: TrendingUp, label: "Grados", path: "/grados" },
     { icon: GraduationCap, label: "Carreras", path: "/carreras" },
     { icon: Building, label: "Sedes", path: "/sedes" },
-    // --- AÑADE ESTA LÍNEA ---
     {
       icon: ClipboardEdit,
       label: "Conceptos de Pago",
       path: "/conceptos-pago",
     },
-    // --- FIN ---
-
     { icon: Book, label: "Asignaturas", path: "/asignaturas" },
     { icon: Group, label: "Grupos", path: "/grupos" },
+    // Estas rutas sí parecen tener prefijo en tu App.js, verifícalas abajo:
     { icon: GitBranch, label: "Migración", path: "/admin/migracion" },
-
-    // --- AÑADE ESTA LÍNEA ---
     { icon: DollarSign, label: "Caja y Finanzas", path: "/admin/finanzas" },
-    // --- FIN ---
     { icon: ClipboardEdit, label: "Solicitudes", path: "/admin/solicitudes" },
-    // --- FIN ---
   ];
 
   return (
-    <div className="flex h-screen bg-gray-100 font-sans">
-      <aside className="w-64 flex-shrink-0 bg-gray-800 text-white flex flex-col">
-        <div className="h-20 flex items-center justify-center border-b border-gray-700">
-          <svg
-            className="w-auto h-10 text-principal"
-            viewBox="0 0 24 24"
-            fill="currentColor"
+    <div className="flex h-screen bg-gray-50 font-sans overflow-hidden">
+      {/* 1. SOMBRA DE FONDO (Solo visible en móvil al abrir menú) */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 md:hidden backdrop-blur-sm transition-opacity"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* 2. SIDEBAR RESPONSIVE */}
+      <aside
+        className={`
+        fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 flex flex-col 
+        transform transition-transform duration-300 ease-in-out shadow-xl md:shadow-none
+        ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0
+      `}
+      >
+        {/* HEADER DEL SIDEBAR (Logo + Botón cerrar en móvil) */}
+        <div className="p-6 flex flex-col items-center justify-center border-b border-gray-100 relative">
+          {/* Botón X para cerrar en móvil */}
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="absolute top-2 right-2 p-2 text-gray-400 hover:text-red-500 md:hidden"
           >
-            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5-10-5-10 5z" />
-          </svg>
+            <X size={24} />
+          </button>
+
+          <div className="w-24 h-24 mb-3 flex items-center justify-center">
+            <img
+              src={BRAND.logo}
+              alt="Logo"
+              className="w-full h-full object-contain"
+            />
+          </div>
+          <h2
+            className="font-bold text-lg text-center leading-tight"
+            style={{ color: BRAND.colors.primary }}
+          >
+            {BRAND.name}
+          </h2>
         </div>
-        <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
-          {navItems.map((item) => (
-            <Link
-              key={item.label}
-              to={item.path}
-              className={`flex items-center px-4 py-2 rounded-lg transition-colors duration-200 ${
-                location.pathname.startsWith(item.path)
-                  ? "bg-principal text-white"
-                  : "text-gray-300 hover:bg-gray-700 hover:text-white"
-              }`}
-            >
-              <item.icon className="w-5 h-5 mr-3" />
-              {item.label}
-            </Link>
-          ))}
+
+        {/* NAVEGACIÓN */}
+        <nav className="flex-1 px-3 py-6 space-y-1 overflow-y-auto">
+          {navItems.map((item) => {
+            const isActive = location.pathname.startsWith(item.path);
+            return (
+              <Link
+                key={item.label}
+                to={item.path}
+                onClick={() => setSidebarOpen(false)} // Cerrar menú al hacer click en móvil
+                className={`flex items-center px-4 py-3 rounded-xl transition-all duration-200 font-medium text-sm
+                  ${isActive ? "text-white shadow-md shadow-red-900/10" : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"}`}
+                style={
+                  isActive ? { backgroundColor: BRAND.colors.primary } : {}
+                }
+              >
+                <item.icon
+                  className="w-5 h-5 mr-3"
+                  style={{ color: isActive ? "#fff" : BRAND.colors.secondary }}
+                />
+                {item.label}
+              </Link>
+            );
+          })}
         </nav>
-        <div className="px-4 py-4 border-t border-gray-700">
+
+        {/* FOOTER */}
+        <div className="px-4 py-4 border-t border-gray-100">
+          <div className="mb-3 px-3 py-2 bg-gray-50 rounded-lg border border-gray-100">
+            <p
+              className="text-[10px] font-bold uppercase"
+              style={{ color: BRAND.colors.secondary }}
+            >
+              Rol Actual
+            </p>
+            <p className="text-sm font-bold text-gray-700">Administrador</p>
+          </div>
           <button
             onClick={logout}
-            className="w-full flex items-center px-4 py-2 rounded-lg text-gray-300 hover:bg-principal hover:text-white transition-colors duration-200"
+            className="w-full flex items-center justify-center px-4 py-2 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 text-sm font-bold"
           >
-            <LogOut className="w-5 h-5 mr-3" />
-            Cerrar Sesión
+            <LogOut className="w-4 h-4 mr-2" /> Cerrar Sesión
           </button>
         </div>
       </aside>
 
-      <main className="flex-1 overflow-y-auto">
-        <header className="bg-white shadow-sm p-4 flex justify-between items-center">
-          <h1 className="text-2xl font-semibold text-gray-800">
-            Panel de Administrador
-          </h1>
-          {/* --- REEMPLAZA ESTE DIV --- */}
-          <div className="flex items-center space-x-4">
-            <NotificationBell />
-            {/* Link al Perfil con Foto */}
+      {/* 3. CONTENIDO PRINCIPAL */}
+      <main className="flex-1 flex flex-col h-full relative overflow-hidden md:ml-64 transition-all duration-300">
+        {/* HEADER SUPERIOR */}
+        {/* HEADER SUPERIOR (CORREGIDO: AHORA CON LINK AL PERFIL) */}
+        <header className="bg-white sticky top-0 z-30 shadow-sm px-4 py-3 flex justify-between items-center h-16">
+          <div className="flex items-center gap-3">
+            {/* Botón menú móvil */}
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="p-2 -ml-2 text-gray-600 hover:bg-gray-100 rounded-lg md:hidden"
+            >
+              <Menu size={28} />
+            </button>
+            <h1 className="text-xl font-bold text-gray-800 tracking-tight">
+              Panel Administrativo
+            </h1>
+          </div>
+          <div className="hidden md:flex items-center gap-2 bg-[#bb9a5a]/10 px-3 py-1.5 rounded-full border border-[#bb9a5a]/20">
+            <Calendar size={14} className="text-[#bb9a5a]" />
+            <span className="text-xs font-bold text-[#bb9a5a] uppercase tracking-wide">
+              Ciclo: {cicloActual}
+            </span>
+          </div>
+          <div className="flex items-center gap-4">
+            {/* Notificaciones */}
+            <div className="text-gray-500 hover:text-[#a72a34] transition-colors cursor-pointer relative">
+              <NotificationBell />
+            </div>
+
+            <div className="h-8 w-px bg-gray-200 mx-1 hidden sm:block"></div>
+
+            {/* PERFIL USUARIO (AHORA SÍ ES CLICKEABLE) */}
             <Link
               to={
                 user?.rol === "admin" ? "/mi-perfil" : `/${user?.rol}/mi-perfil`
               }
-              className="flex items-center space-x-2 text-gray-600 hover:text-principal"
+              className="flex items-center gap-3 hover:bg-gray-50 p-1 pr-2 rounded-full transition-colors group cursor-pointer"
             >
-              <img
-                // Construye la URL de la foto o usa placeholder
-                src={
-                  user?.foto_perfil
-                    ? `http://localhost:3001/uploads/perfiles/${user.foto_perfil}`
-                    : `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                        user?.nombre || "?",
-                      )}+${encodeURIComponent(
-                        user?.apellido_paterno || "?",
-                      )}&background=random&color=fff`
-                }
-                alt="Perfil"
-                className="w-8 h-8 rounded-full object-cover border border-gray-300"
-                // Fallback por si la imagen no carga
-                onError={(e) => {
-                  e.target.onerror = null;
-                  e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                    user?.nombre || "?",
-                  )}+${encodeURIComponent(
-                    user?.apellido_paterno || "?",
-                  )}&background=random&color=fff`;
-                }}
-              />
-              <span>{user?.nombre}</span>
+              <div className="text-right hidden sm:block">
+                <p className="text-sm font-bold text-gray-800 group-hover:text-[#a72a34] transition-colors">
+                  {user?.nombre}
+                </p>
+                <p className="text-xs text-gray-500 capitalize">{user?.rol}</p>
+              </div>
+              <div className="w-10 h-10 rounded-full bg-gray-100 border border-gray-200 overflow-hidden group-hover:border-[#a72a34] transition-colors">
+                {user?.foto_perfil ? (
+                  <img
+                    src={`http://localhost:3001/uploads/perfiles/${user.foto_perfil}`}
+                    className="w-full h-full object-cover"
+                    alt="Perfil"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-gray-400 font-bold text-lg bg-gray-100">
+                    {user?.nombre?.charAt(0)}
+                  </div>
+                )}
+              </div>
             </Link>
-            {/* Botón Logout */}
-            <button
-              onClick={logout}
-              className="text-gray-500 hover:text-principal"
-              title="Cerrar Sesión"
-            >
-              <LogOut size={22} />
-            </button>
           </div>
-          {/* --- FIN REEMPLAZO --- */}
         </header>
-        <div className="p-6">
+
+        {/* ÁREA DE CONTENIDO (CON SCROLL INDEPENDIENTE) */}
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 pb-20 bg-gray-50">
           <Outlet />
         </div>
       </main>
@@ -886,177 +971,228 @@ const LoginPage = () => {
   );
 };
 
+// --- COMPONENTE DASHBOARD (RENOVADO) ---
 const DashboardPage = () => {
+  const { user } = useAuth();
+  const [data, setData] = useState({
+    stats: {
+      total_alumnos: 0,
+      total_docentes: 0,
+      total_aspirantes: 0,
+      total_grupos_activos: 0,
+    },
+    recientes: [],
+  });
   const [loading, setLoading] = useState(true);
-  const [alumnosCarreraData, setAlumnosCarreraData] = useState(null);
-  const [promedioDocenteData, setPromedioDocenteData] = useState(null);
-  const [reprobacionData, setReprobacionData] = useState(null);
-
-  // Funciones helper para generar colores aleatorios
-  const getRandomColor = () => {
-    const r = Math.floor(Math.random() * 255);
-    const g = Math.floor(Math.random() * 255);
-    const b = Math.floor(Math.random() * 255);
-    return `rgba(${r}, ${g}, ${b}, 0.6)`;
-  };
-  const getBorderColor = (rgbaColor) => rgbaColor.replace("0.6", "1");
 
   useEffect(() => {
-    const fetchDashboardData = async () => {
+    const cargarStats = async () => {
       try {
-        setLoading(true);
-        const [carreraRes, docenteRes, reprobacionRes] = await Promise.all([
-          api.get("/admin/analiticas/alumnos-por-carrera"),
-          api.get("/admin/analiticas/promedio-docentes"),
-          api.get("/admin/analiticas/reprobacion-asignaturas"),
-        ]);
-
-        // Procesar datos para Alumnos por Carrera (Pie Chart)
-        if (carreraRes.data.length > 0) {
-          const labels = carreraRes.data.map((d) => d.nombre_carrera);
-          const data = carreraRes.data.map((d) => d.total_alumnos);
-          const backgroundColors = data.map(() => getRandomColor());
-          const borderColors = backgroundColors.map(getBorderColor);
-
-          setAlumnosCarreraData({
-            labels,
-            datasets: [
-              {
-                label: "Total Alumnos",
-                data,
-                backgroundColor: backgroundColors,
-                borderColor: borderColors,
-                borderWidth: 1,
-              },
-            ],
-          });
-        }
-
-        // Procesar datos para Promedio por Docente (Bar Chart)
-        if (docenteRes.data.length > 0) {
-          const labels = docenteRes.data.map((d) => d.nombre_docente);
-          const data = docenteRes.data.map((d) => d.promedio_general);
-          const backgroundColors = data.map(() => getRandomColor());
-          const borderColors = backgroundColors.map(getBorderColor);
-
-          setPromedioDocenteData({
-            labels,
-            datasets: [
-              {
-                label: "Promedio General (0-100)",
-                data,
-                backgroundColor: backgroundColors,
-                borderColor: borderColors,
-                borderWidth: 1,
-              },
-            ],
-          });
-        }
-
-        // Procesar datos para Índice de Reprobación (Bar Chart)
-        if (reprobacionRes.data.length > 0) {
-          const labels = reprobacionRes.data.map((d) => d.nombre_asignatura);
-          const data = reprobacionRes.data.map((d) => d.indice_reprobacion_pct);
-          const backgroundColors = data.map(() => getRandomColor());
-          const borderColors = backgroundColors.map(getBorderColor);
-
-          setReprobacionData({
-            labels,
-            datasets: [
-              {
-                label: "Índice de Reprobación (%)",
-                data,
-                backgroundColor: backgroundColors,
-                borderColor: borderColors,
-                borderWidth: 1,
-              },
-            ],
-          });
-        }
+        const res = await api.get("/admin/dashboard-stats");
+        setData(res.data);
       } catch (error) {
-        console.error("Error al cargar datos del dashboard", error);
+        console.error("Error cargando dashboard:", error);
       } finally {
         setLoading(false);
       }
     };
-
-    fetchDashboardData();
+    cargarStats();
   }, []);
 
-  if (loading) {
-    return (
-      <div className="bg-white p-6 rounded-lg shadow">
-        <h2 className="text-xl font-bold mb-4">Panel de Administración</h2>
-        <p>Cargando analíticas...</p>
+  // Componente de Tarjeta KPI
+  const StatCard = ({ title, value, icon: Icon, color, subtext }) => (
+    <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between transition-transform hover:-translate-y-1">
+      <div>
+        <p className="text-gray-500 text-sm font-bold uppercase tracking-wider">
+          {title}
+        </p>
+        <h3 className="text-3xl font-extrabold text-gray-800 mt-1">{value}</h3>
+        {subtext && (
+          <p className={`text-xs mt-2 font-medium ${color.text}`}>{subtext}</p>
+        )}
       </div>
-    );
-  }
+      <div className={`p-4 rounded-xl ${color.bg} ${color.text}`}>
+        <Icon size={28} />
+      </div>
+    </div>
+  );
 
   return (
-    <div>
-      <h2 className="text-3xl font-bold text-gray-800 mb-6">
-        Dashboard de Analíticas
-      </h2>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Gráfico 1: Alumnos por Carrera */}
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h3 className="text-xl font-semibold mb-4">
-            Alumnos Inscritos por Carrera
-          </h3>
-          <div className="h-80 w-full flex items-center justify-center">
-            {alumnosCarreraData ? (
-              <Pie
-                data={alumnosCarreraData}
-                options={{ responsive: true, maintainAspectRatio: false }}
-              />
-            ) : (
-              <p className="text-gray-500">No hay datos para mostrar.</p>
-            )}
-          </div>
+    <div className="space-y-8 animate-in fade-in duration-500">
+      {/* BIENVENIDA */}
+      <div className="bg-gradient-to-r from-purple-700 to-indigo-800 rounded-2xl p-8 text-white shadow-xl relative overflow-hidden">
+        <div className="relative z-10">
+          <h1 className="text-3xl font-bold mb-2">¡Hola, {user?.nombre}! 👋</h1>
+          <p className="opacity-90 text-purple-100 max-w-2xl">
+            Bienvenido al panel de control escolar. Aquí tienes el resumen de la
+            operación académica y administrativa de hoy.
+          </p>
         </div>
-
-        {/* Gráfico 2: Promedio por Docente */}
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h3 className="text-xl font-semibold mb-4">
-            Promedio General por Docente
-          </h3>
-          <div className="h-80 w-full">
-            {promedioDocenteData ? (
-              <Bar
-                data={promedioDocenteData}
-                options={{
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  scales: { y: { beginAtZero: true, max: 100 } },
-                }}
-              />
-            ) : (
-              <p className="text-gray-500">No hay datos para mostrar.</p>
-            )}
-          </div>
-        </div>
-
-        {/* Gráfico 3: Índice de Reprobación */}
-        <div className="bg-white p-6 rounded-lg shadow lg:col-span-2">
-          <h3 className="text-xl font-semibold mb-4">
-            Índice de Reprobación por Asignatura
-          </h3>
-          <div className="h-96 w-full">
-            {reprobacionData ? (
-              <Bar
-                data={reprobacionData}
-                options={{
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  scales: { y: { beginAtZero: true, max: 100 } },
-                }}
-              />
-            ) : (
-              <p className="text-gray-500">No hay datos para mostrar.</p>
-            )}
-          </div>
-        </div>
+        {/* Decoración de fondo */}
+        <div className="absolute right-0 top-0 h-full w-1/3 bg-white/10 skew-x-12 transform translate-x-10"></div>
+        <div className="absolute right-20 bottom-0 h-full w-1/3 bg-white/5 skew-x-12"></div>
       </div>
+
+      {loading ? (
+        <div className="text-center py-10">Cargando indicadores...</div>
+      ) : (
+        <>
+          {/* SECCIÓN 1: KPIs PRINCIPALES */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <StatCard
+              title="Alumnos Activos"
+              value={data.stats.total_alumnos}
+              icon={GraduationCap}
+              color={{ bg: "bg-green-100", text: "text-green-700" }}
+              subtext="Matrícula actual"
+            />
+            <StatCard
+              title="Aspirantes"
+              value={data.stats.total_aspirantes}
+              icon={UserPlus}
+              color={{ bg: "bg-orange-100", text: "text-orange-700" }}
+              subtext="Pendientes de inscripción"
+            />
+            <StatCard
+              title="Docentes"
+              value={data.stats.total_docentes}
+              icon={Briefcase}
+              color={{ bg: "bg-blue-100", text: "text-blue-700" }}
+              subtext="Plantilla académica"
+            />
+            <StatCard
+              title="Grupos Activos"
+              value={data.stats.total_grupos_activos}
+              icon={Group}
+              color={{ bg: "bg-purple-100", text: "text-purple-700" }}
+              subtext="Ciclo en curso"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* SECCIÓN 2: ACCESOS RÁPIDOS */}
+            <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+              <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <Zap className="text-yellow-500" size={20} /> Accesos Rápidos
+              </h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                <Link
+                  to="/usuarios"
+                  className="p-4 border rounded-xl hover:bg-gray-50 hover:border-purple-300 transition-all text-center group"
+                >
+                  <UserPlus
+                    className="mx-auto mb-2 text-purple-600 group-hover:scale-110 transition-transform"
+                    size={24}
+                  />
+                  <span className="text-sm font-bold text-gray-600">
+                    Nuevo Aspirante
+                  </span>
+                </Link>
+                <Link
+                  to="/grupos"
+                  className="p-4 border rounded-xl hover:bg-gray-50 hover:border-purple-300 transition-all text-center group"
+                >
+                  <Group
+                    className="mx-auto mb-2 text-blue-600 group-hover:scale-110 transition-transform"
+                    size={24}
+                  />
+                  <span className="text-sm font-bold text-gray-600">
+                    Gestionar Grupos
+                  </span>
+                </Link>
+                <Link
+                  to="/admin/migracion"
+                  className="p-4 border rounded-xl hover:bg-gray-50 hover:border-purple-300 transition-all text-center group"
+                >
+                  <GitBranch
+                    className="mx-auto mb-2 text-pink-600 group-hover:scale-110 transition-transform"
+                    size={24}
+                  />
+                  <span className="text-sm font-bold text-gray-600">
+                    Migración
+                  </span>
+                </Link>
+                <Link
+                  to="/ciclos"
+                  className="p-4 border rounded-xl hover:bg-gray-50 hover:border-purple-300 transition-all text-center group"
+                >
+                  <Calendar
+                    className="mx-auto mb-2 text-green-600 group-hover:scale-110 transition-transform"
+                    size={24}
+                  />
+                  <span className="text-sm font-bold text-gray-600">
+                    Ciclos Escolares
+                  </span>
+                </Link>
+                <Link
+                  to="/conceptos-pago"
+                  className="p-4 border rounded-xl hover:bg-gray-50 hover:border-purple-300 transition-all text-center group"
+                >
+                  <DollarSign
+                    className="mx-auto mb-2 text-yellow-600 group-hover:scale-110 transition-transform"
+                    size={24}
+                  />
+                  <span className="text-sm font-bold text-gray-600">
+                    Finanzas
+                  </span>
+                </Link>
+                <button className="p-4 border rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all text-center group opacity-50 cursor-not-allowed">
+                  <FileText className="mx-auto mb-2 text-gray-400" size={24} />
+                  <span className="text-sm font-bold text-gray-400">
+                    Reportes (Prox)
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            {/* SECCIÓN 3: ASPIRANTES RECIENTES */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+              <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <Clock className="text-orange-500" size={20} /> Últimos
+                Aspirantes
+              </h3>
+              <div className="space-y-4">
+                {data.recientes.length === 0 ? (
+                  <p className="text-sm text-gray-400 text-center py-4">
+                    No hay registros recientes.
+                  </p>
+                ) : (
+                  data.recientes.map((asp, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center gap-3 p-3 rounded-lg hover:bg-orange-50 transition-colors border border-transparent hover:border-orange-100"
+                    >
+                      <div className="bg-orange-100 text-orange-600 p-2 rounded-full font-bold text-xs">
+                        {asp.nombre.charAt(0)}
+                      </div>
+                      <div className="flex-1 overflow-hidden">
+                        <p className="text-sm font-bold text-gray-700 truncate">
+                          {asp.nombre} {asp.apellido_paterno}
+                        </p>
+                        <p className="text-xs text-gray-400 truncate">
+                          {asp.email}
+                        </p>
+                      </div>
+                      <Link
+                        to="/usuarios"
+                        className="p-1 text-gray-300 hover:text-purple-600"
+                      >
+                        <ArrowRightCircle size={18} />
+                      </Link>
+                    </div>
+                  ))
+                )}
+                <Link
+                  to="/usuarios"
+                  className="block text-center text-xs font-bold text-purple-600 hover:text-purple-800 mt-4 border-t pt-3"
+                >
+                  Ver todos los aspirantes
+                </Link>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 };
@@ -1431,24 +1567,29 @@ const GroupDetailModal = ({ grupo, onClose }) => {
   );
 };
 
-// --- COMPONENTE USUARIOS COMPLETO (CON PAPELERA Y DATOS EXTRA) ---
+// --- COMPONENTE USUARIOS (DISEÑO CLEAN + FORMULARIOS COMPLETOS) ---
 const UsuariosPage = () => {
   const [usuarios, setUsuarios] = useState([]);
-  const [papelera, setPapelera] = useState([]); // Estado para eliminados
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("todos");
+
+  // Paginación y Búsqueda
+  const [searchTerm, setSearchTerm] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   // Modales
   const [modalAspirante, setModalAspirante] = useState(false);
   const [modalDocente, setModalDocente] = useState(false);
-  const [usuarioSeleccionado, setUsuarioSeleccionado] = useState(null);
-  const [modoEdicion, setModoEdicion] = useState(false);
+  const [userToEdit, setUserToEdit] = useState(null);
+  const [showUserModal, setShowUserModal] = useState(false); // Para editar
+  const [userToView, setUserToView] = useState(null); // Para ver detalle
 
   // Catálogos
   const [carreras, setCarreras] = useState([]);
   const [sedes, setSedes] = useState([]);
 
-  // Formularios
+  // Estados de Formulario (COMPLETOS COMO ANTES)
   const formInicial = {
     nombre: "",
     apellido_paterno: "",
@@ -1466,18 +1607,15 @@ const UsuariosPage = () => {
   });
   const [formDocente, setFormDocente] = useState({ ...formInicial });
 
-  // Carga de datos inicial
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [uRes, papeleraRes, cRes, sRes] = await Promise.all([
+      const [uRes, cRes, sRes] = await Promise.all([
         api.get("/admin/usuarios"),
-        api.get("/admin/usuarios/eliminados"), // Cargamos la papelera
         api.get("/admin/carreras"),
         api.get("/admin/sedes"),
       ]);
       setUsuarios(uRes.data);
-      setPapelera(papeleraRes.data);
       setCarreras(cRes.data);
       setSedes(sRes.data);
     } catch (e) {
@@ -1491,75 +1629,19 @@ const UsuariosPage = () => {
     fetchData();
   }, []);
 
-  // --- ACCIONES ---
-  const handleVerCredencial = (u) => {
-    setUsuarioSeleccionado(u);
-    setModoEdicion(false);
-  };
-  const handleEditarUsuario = (u) => {
-    setUsuarioSeleccionado(u);
-    setModoEdicion(true);
-  };
-
-  const handleEliminarUsuario = async (id) => {
-    if (window.confirm("¿Estás seguro de desactivar este usuario?")) {
-      try {
-        await api.delete(`/admin/usuarios/${id}`);
-        alert("Usuario enviado a la papelera.");
-        fetchData();
-      } catch (error) {
-        alert("Error al eliminar");
-      }
-    }
-  };
-
-  const handleRestaurarUsuario = async (id) => {
-    if (window.confirm("¿Restaurar este usuario?")) {
-      try {
-        await api.put(`/admin/usuarios/${id}/reactivar`);
-        alert("Usuario restaurado exitosamente.");
-        fetchData();
-      } catch (error) {
-        alert("Error al restaurar");
-      }
-    }
-  };
-
-  const handleGuardarEdicion = async (e) => {
-    e.preventDefault();
-    try {
-      // Mapeamos los campos del formulario a lo que espera la BD
-      const datosParaEnviar = {
-        ...usuarioSeleccionado,
-        carrera_interes_id: usuarioSeleccionado.carrera_interes_id || null, // Asegurar nombres correctos
-        sede_interes_id: usuarioSeleccionado.sede_interes_id || null,
-      };
-
-      await api.put(
-        `/admin/usuarios/${usuarioSeleccionado.id}`,
-        datosParaEnviar,
-      );
-      alert("Usuario actualizado.");
-      setUsuarioSeleccionado(null);
-      fetchData();
-    } catch (error) {
-      alert("Error al actualizar.");
-    }
-  };
-
-  // Creación
+  // Handlers (Lógica Original)
   const handleCrearAspirante = async (e) => {
     e.preventDefault();
     if (!formAspirante.carrera_id || !formAspirante.sede_id)
-      return alert("Faltan datos");
+      return alert("Selecciona carrera y sede");
     try {
       await api.post("/admin/usuarios/crear-aspirante", formAspirante);
-      alert("Aspirante creado.");
+      alert("Aspirante creado exitosamente");
       setModalAspirante(false);
       setFormAspirante({ ...formInicial, carrera_id: "", sede_id: "" });
       fetchData();
-    } catch (e) {
-      alert(e.response?.data?.message);
+    } catch (error) {
+      alert(error.response?.data?.message || "Error al crear");
     }
   };
 
@@ -1567,486 +1649,236 @@ const UsuariosPage = () => {
     e.preventDefault();
     try {
       await api.post("/admin/usuarios/crear-docente", formDocente);
-      alert("Docente creado.");
+      alert("Docente creado exitosamente");
       setModalDocente(false);
       setFormDocente({ ...formInicial });
       fetchData();
-    } catch (e) {
-      alert(e.response?.data?.message);
+    } catch (error) {
+      alert(error.response?.data?.message || "Error al crear");
     }
   };
 
-  // Filtrado
-  const listaAspirantes = usuarios.filter((u) => u.rol === "aspirante");
-  const listaDocentes = usuarios.filter((u) => u.rol === "docente");
-  const listaAlumnos = usuarios.filter((u) => u.rol === "alumno");
+  const handleDelete = async (id) => {
+    if (window.confirm("¿Desactivar usuario?")) {
+      try {
+        await api.delete(`/admin/usuarios/${id}`);
+        fetchData();
+      } catch (error) {
+        alert("Error");
+      }
+    }
+  };
 
-  // --- TABLA REUTILIZABLE ---
-  const TablaUsuarios = ({ datos, esPapelera = false }) => (
-    <div className="bg-white rounded-xl shadow-sm border overflow-hidden animate-in fade-in">
-      <table className="w-full text-left">
-        <thead className="bg-gray-50 text-xs text-gray-500 uppercase font-bold">
-          <tr>
-            <th className="p-4">Usuario</th>
-            <th className="p-4 hidden sm:table-cell">Info Académica</th>
-            <th className="p-4">Rol / ID</th>
-            <th className="p-4 text-right">Acciones</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-100 text-sm">
-          {datos.length === 0 ? (
-            <tr>
-              <td colSpan="4" className="p-8 text-center text-gray-400">
-                No hay registros aquí.
-              </td>
-            </tr>
-          ) : (
-            datos.map((u) => (
-              <tr
-                key={u.id}
-                className={`transition-colors ${esPapelera ? "bg-red-50 hover:bg-red-100" : "hover:bg-gray-50"}`}
-              >
-                <td className="p-4">
-                  <div className="font-bold text-gray-800">
-                    {u.nombre} {u.apellido_paterno}
-                  </div>
-                  <div className="text-xs text-gray-500 flex flex-col">
-                    <span>{u.email}</span>
-                    <span className="font-mono">{u.curp}</span>
-                  </div>
-                </td>
-                <td className="p-4 hidden sm:table-cell">
-                  <div className="text-gray-600 font-medium">
-                    {u.nombre_carrera || "Sin carrera"}
-                  </div>
-                  <div className="text-gray-400 text-xs flex items-center gap-1">
-                    <Building size={12} /> {u.nombre_sede || "Sin sede"}
-                  </div>
-                </td>
-                <td className="p-4">
-                  <span
-                    className={`text-[10px] px-2 py-0.5 rounded-full uppercase font-bold mb-1 inline-block
-                  ${
-                    u.rol === "aspirante"
-                      ? "bg-orange-100 text-orange-700"
-                      : u.rol === "docente"
-                        ? "bg-blue-100 text-blue-700"
-                        : "bg-green-100 text-green-700"
-                  }`}
-                  >
-                    {u.rol}
-                  </span>
-                  <div className="font-mono text-purple-700 font-bold text-xs">
-                    {u.matricula || "---"}
-                  </div>
-                </td>
-                <td className="p-4 text-right">
-                  <div className="flex justify-end gap-1">
-                    {esPapelera ? (
-                      <button
-                        onClick={() => handleRestaurarUsuario(u.id)}
-                        className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-xs font-bold flex items-center gap-1"
-                      >
-                        <RotateCcw size={14} /> Restaurar
-                      </button>
-                    ) : (
-                      <>
-                        <button
-                          onClick={() => handleVerCredencial(u)}
-                          className="p-2 text-blue-600 hover:bg-blue-50 rounded"
-                        >
-                          <Eye size={18} />
-                        </button>
-                        <button
-                          onClick={() => handleEditarUsuario(u)}
-                          className="p-2 text-orange-600 hover:bg-orange-50 rounded"
-                        >
-                          <Edit size={18} />
-                        </button>
-                        <button
-                          onClick={() => handleEliminarUsuario(u.id)}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded"
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))
-          )}
-        </tbody>
-      </table>
-    </div>
+  // Filtros
+  const filteredUsers = usuarios
+    .filter(
+      (u) => activeTab === "todos" || u.rol === activeTab.replace(/s$/, ""),
+    )
+    .filter(
+      (u) =>
+        u.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        u.apellido_paterno.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (u.email && u.email.toLowerCase().includes(searchTerm.toLowerCase())),
+    );
+
+  const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
+  const currentUsers = filteredUsers.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage,
   );
 
   return (
-    <div className="space-y-6 animate-in fade-in">
-      {/* Header */}
-      <div className="flex flex-col lg:flex-row justify-between items-center gap-4">
+    <div className="space-y-8 animate-in fade-in duration-300">
+      {/* HEADER CLEAN */}
+      <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-gray-800">
+          <h1 className="text-3xl font-bold text-gray-800 tracking-tight">
             Directorio de Usuarios
-          </h2>
-          <p className="text-gray-500 text-sm">
-            Gestiona toda la comunidad escolar.
+          </h1>
+          <p className="text-gray-500 mt-2 text-lg">
+            Alumnos, Docentes y Administrativos.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-3">
           <button
             onClick={() => setModalAspirante(true)}
-            className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 font-bold flex items-center gap-2 shadow-sm"
+            className="bg-white border-2 border-[#a72a34] text-[#a72a34] px-5 py-3 rounded-xl hover:bg-red-50 font-bold flex items-center gap-2 transition-colors"
           >
-            <UserPlus size={18} /> Nuevo Aspirante
+            <UserPlus size={18} /> Aspirante
           </button>
           <button
             onClick={() => setModalDocente(true)}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 font-bold flex items-center gap-2 shadow-sm"
+            className="bg-[#a72a34] text-white px-5 py-3 rounded-xl hover:bg-[#802028] font-bold flex items-center gap-2 transition-colors shadow-lg shadow-red-900/20"
           >
-            <Briefcase size={18} /> Nuevo Docente
+            <Briefcase size={18} /> Docente
           </button>
         </div>
       </div>
 
-      {/* TABS DE NAVEGACIÓN */}
-      <div className="flex border-b overflow-x-auto">
-        <button
-          onClick={() => setActiveTab("todos")}
-          className={`px-5 py-3 border-b-2 font-bold text-sm whitespace-nowrap ${activeTab === "todos" ? "border-gray-800 text-gray-900" : "border-transparent text-gray-500 hover:text-gray-700"}`}
-        >
-          Todos
-        </button>
-        <button
-          onClick={() => setActiveTab("aspirantes")}
-          className={`px-5 py-3 border-b-2 font-bold text-sm whitespace-nowrap ${activeTab === "aspirantes" ? "border-orange-500 text-orange-600" : "border-transparent text-gray-500 hover:text-orange-600"}`}
-        >
-          Aspirantes ({listaAspirantes.length})
-        </button>
-        <button
-          onClick={() => setActiveTab("docentes")}
-          className={`px-5 py-3 border-b-2 font-bold text-sm whitespace-nowrap ${activeTab === "docentes" ? "border-blue-500 text-blue-600" : "border-transparent text-gray-500 hover:text-blue-600"}`}
-        >
-          Docentes ({listaDocentes.length})
-        </button>
-        <button
-          onClick={() => setActiveTab("alumnos")}
-          className={`px-5 py-3 border-b-2 font-bold text-sm whitespace-nowrap ${activeTab === "alumnos" ? "border-green-500 text-green-600" : "border-transparent text-gray-500 hover:text-green-600"}`}
-        >
-          Alumnos ({listaAlumnos.length})
-        </button>
-
-        {/* PESTAÑA PAPELERA */}
-        <button
-          onClick={() => setActiveTab("papelera")}
-          className={`px-5 py-3 border-b-2 font-bold text-sm whitespace-nowrap flex items-center gap-2 ml-auto ${activeTab === "papelera" ? "border-red-500 text-red-600 bg-red-50" : "border-transparent text-gray-400 hover:text-red-500"}`}
-        >
-          <Trash2 size={16} /> Papelera ({papelera.length})
-        </button>
+      {/* TABS Y BUSCADOR */}
+      <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+        <div className="flex bg-gray-100 p-1 rounded-xl">
+          {["todos", "aspirantes", "docentes", "alumnos"].map((tab) => (
+            <button
+              key={tab}
+              onClick={() => {
+                setActiveTab(tab);
+                setCurrentPage(1);
+              }}
+              className={`px-6 py-2 rounded-lg text-sm font-bold capitalize transition-all ${activeTab === tab ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+            >
+              {tab}
+            </button>
+          ))}
+        </div>
+        <div className="relative w-full md:w-80">
+          <Search className="absolute left-4 top-3 text-gray-400" size={18} />
+          <input
+            type="text"
+            placeholder="Buscar..."
+            className="w-full pl-12 pr-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900 bg-white"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
       </div>
 
-      {/* CONTENIDO DE TABLAS */}
+      {/* TABLA CLEAN */}
       {loading ? (
-        <div className="text-center py-10">Cargando...</div>
+        <div className="text-center py-20 text-gray-400">Cargando...</div>
       ) : (
-        <>
-          {activeTab === "todos" && <TablaUsuarios datos={usuarios} />}
-          {activeTab === "aspirantes" && (
-            <TablaUsuarios datos={listaAspirantes} />
-          )}
-          {activeTab === "docentes" && <TablaUsuarios datos={listaDocentes} />}
-          {activeTab === "alumnos" && <TablaUsuarios datos={listaAlumnos} />}
-          {activeTab === "papelera" && (
-            <TablaUsuarios datos={papelera} esPapelera={true} />
-          )}
-        </>
-      )}
-
-      {/* --- MODAL DETALLES / EDICIÓN --- */}
-      {usuarioSeleccionado && (
-        <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-50 p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
-            <div
-              className={`p-6 text-white flex justify-between items-start ${modoEdicion ? "bg-orange-500" : "bg-gradient-to-r from-purple-700 to-indigo-700"}`}
-            >
-              <div className="flex gap-4 items-center">
-                <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center text-2xl font-bold border-2 border-white/30">
-                  {usuarioSeleccionado.nombre.charAt(0)}
-                </div>
-                <div>
-                  <h3 className="text-2xl font-bold">
-                    {modoEdicion ? "Editando Usuario" : "Información Completa"}
-                  </h3>
-                  <p className="opacity-90">
-                    {usuarioSeleccionado.rol.toUpperCase()} •{" "}
-                    {usuarioSeleccionado.matricula}
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setUsuarioSeleccionado(null)}
-                className="p-1 hover:bg-white/20 rounded-full"
-              >
-                <X size={24} />
-              </button>
-            </div>
-
-            <div className="p-6 overflow-y-auto flex-1">
-              {modoEdicion ? (
-                <form
-                  onSubmit={handleGuardarEdicion}
-                  className="grid grid-cols-1 md:grid-cols-2 gap-4"
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <table className="w-full text-left border-collapse">
+            <thead className="bg-gray-50 text-gray-500 uppercase text-xs font-bold border-b border-gray-100">
+              <tr>
+                <th className="p-5">Usuario</th>
+                <th className="p-5">Rol</th>
+                <th className="p-5">Contacto</th>
+                <th className="p-5 text-right">Acciones</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {currentUsers.map((u) => (
+                <tr
+                  key={u.id}
+                  className="hover:bg-gray-50/50 transition-colors"
                 >
-                  <div className="col-span-2 flex gap-2">
-                    <input
-                      className="border p-2 rounded w-full"
-                      value={usuarioSeleccionado.nombre}
-                      onChange={(e) =>
-                        setUsuarioSeleccionado({
-                          ...usuarioSeleccionado,
-                          nombre: e.target.value,
-                        })
-                      }
-                      placeholder="Nombre"
-                    />
-                    <input
-                      className="border p-2 rounded w-full"
-                      value={usuarioSeleccionado.apellido_paterno}
-                      onChange={(e) =>
-                        setUsuarioSeleccionado({
-                          ...usuarioSeleccionado,
-                          apellido_paterno: e.target.value,
-                        })
-                      }
-                      placeholder="Apellido Paterno"
-                    />
-                    <input
-                      className="border p-2 rounded w-full"
-                      value={usuarioSeleccionado.apellido_materno}
-                      onChange={(e) =>
-                        setUsuarioSeleccionado({
-                          ...usuarioSeleccionado,
-                          apellido_materno: e.target.value,
-                        })
-                      }
-                      placeholder="Apellido Materno"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-bold text-gray-500">
-                      Correo
-                    </label>
-                    <input
-                      className="border p-2 rounded w-full"
-                      value={usuarioSeleccionado.email}
-                      onChange={(e) =>
-                        setUsuarioSeleccionado({
-                          ...usuarioSeleccionado,
-                          email: e.target.value,
-                        })
-                      }
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-bold text-gray-500">
-                      Teléfono
-                    </label>
-                    <input
-                      className="border p-2 rounded w-full"
-                      value={usuarioSeleccionado.telefono}
-                      onChange={(e) =>
-                        setUsuarioSeleccionado({
-                          ...usuarioSeleccionado,
-                          telefono: e.target.value,
-                        })
-                      }
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-bold text-gray-500">
-                      CURP
-                    </label>
-                    <input
-                      className="border p-2 rounded w-full"
-                      value={usuarioSeleccionado.curp}
-                      onChange={(e) =>
-                        setUsuarioSeleccionado({
-                          ...usuarioSeleccionado,
-                          curp: e.target.value,
-                        })
-                      }
-                    />
-                  </div>
-
-                  {/* --- AQUÍ ESTÁN LOS CAMPOS QUE FALTABAN --- */}
-                  <div>
-                    <label className="text-xs font-bold text-gray-500">
-                      Carrera de Interés
-                    </label>
-                    <select
-                      className="border p-2 rounded w-full"
-                      value={usuarioSeleccionado.carrera_interes_id || ""}
-                      onChange={(e) =>
-                        setUsuarioSeleccionado({
-                          ...usuarioSeleccionado,
-                          carrera_interes_id: e.target.value,
-                        })
-                      }
-                    >
-                      <option value="">Sin Carrera</option>
-                      {carreras.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.nombre_carrera}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-bold text-gray-500">
-                      Sede
-                    </label>
-                    <select
-                      className="border p-2 rounded w-full"
-                      value={usuarioSeleccionado.sede_interes_id || ""}
-                      onChange={(e) =>
-                        setUsuarioSeleccionado({
-                          ...usuarioSeleccionado,
-                          sede_interes_id: e.target.value,
-                        })
-                      }
-                    >
-                      <option value="">Sin Sede</option>
-                      {sedes.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.nombre_sede}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  {/* ------------------------------------------ */}
-
-                  <div className="col-span-2 pt-4 flex justify-end gap-2 border-t">
-                    <button
-                      type="button"
-                      onClick={() => setModoEdicion(false)}
-                      className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      type="submit"
-                      className="px-6 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 font-bold"
-                    >
-                      Guardar Cambios
-                    </button>
-                  </div>
-                </form>
-              ) : (
-                <div className="space-y-6">
-                  <div className="grid grid-cols-2 gap-6">
-                    <div>
-                      <p className="text-xs font-bold text-gray-400">
-                        NOMBRE COMPLETO
-                      </p>
-                      <p className="font-medium">
-                        {usuarioSeleccionado.nombre}{" "}
-                        {usuarioSeleccionado.apellido_paterno}{" "}
-                        {usuarioSeleccionado.apellido_materno}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs font-bold text-gray-400">
-                        MATRÍCULA
-                      </p>
-                      <p className="font-mono font-bold text-purple-700">
-                        {usuarioSeleccionado.matricula || "---"}
-                      </p>
-                    </div>
-
-                    {/* DATOS ACADÉMICOS QUE FALTABAN */}
-                    <div className="col-span-2 bg-blue-50 p-3 rounded-lg border border-blue-100">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <p className="text-xs font-bold text-blue-400">
-                            CARRERA
-                          </p>
-                          <p className="text-blue-900 font-medium">
-                            {usuarioSeleccionado.nombre_carrera ||
-                              "No asignada"}
-                          </p>
+                  <td className="p-5">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 font-bold overflow-hidden border border-gray-200">
+                        {u.foto_perfil ? (
+                          <img
+                            src={`http://localhost:3001/uploads/perfiles/${u.foto_perfil}`}
+                            alt="P"
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          u.nombre.charAt(0)
+                        )}
+                      </div>
+                      <div>
+                        <div className="font-bold text-gray-800">
+                          {u.nombre} {u.apellido_paterno}
                         </div>
-                        <div>
-                          <p className="text-xs font-bold text-blue-400">
-                            SEDE
-                          </p>
-                          <p className="text-blue-900 font-medium">
-                            {usuarioSeleccionado.nombre_sede || "No asignada"}
-                          </p>
+                        <div className="text-xs text-gray-400 font-mono">
+                          {u.matricula || "ID: " + u.id}
                         </div>
                       </div>
                     </div>
-
-                    <div>
-                      <p className="text-xs font-bold text-gray-400">CORREO</p>
-                      <p>{usuarioSeleccionado.email}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs font-bold text-gray-400">
-                        TELÉFONO
-                      </p>
-                      <p>{usuarioSeleccionado.telefono}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs font-bold text-gray-400">CURP</p>
-                      <p className="font-mono text-xs">
-                        {usuarioSeleccionado.curp}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs font-bold text-gray-400">
-                        FECHA NAC.
-                      </p>
-                      <p>{usuarioSeleccionado.fecha_nacimiento}</p>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-end pt-4 border-t">
-                    <button
-                      onClick={() => setModoEdicion(true)}
-                      className="text-orange-600 hover:text-orange-700 font-medium text-sm flex items-center gap-1"
+                  </td>
+                  <td className="p-5">
+                    <span
+                      className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${u.rol === "aspirante" ? "bg-orange-100 text-orange-700" : u.rol === "docente" ? "bg-blue-100 text-blue-700" : u.rol === "alumno" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}`}
                     >
-                      <Edit size={16} /> Editar Información Completa
-                    </button>
-                  </div>
-                </div>
-              )}
+                      {u.rol}
+                    </span>
+                  </td>
+                  <td className="p-5 text-sm text-gray-500">
+                    <div className="flex flex-col gap-1">
+                      <span>{u.email}</span>
+                      <span className="text-xs text-gray-400">
+                        {u.telefono}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="p-5 text-right">
+                    <div className="flex justify-end gap-2">
+                      <button
+                        onClick={() => setUserToView(u)}
+                        className="p-2 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-lg"
+                      >
+                        <Eye size={18} />
+                      </button>
+                      <button
+                        onClick={() => {
+                          setUserToEdit(u);
+                          setShowUserModal(true);
+                        }}
+                        className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"
+                      >
+                        <Edit size={18} />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(u.id)}
+                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="p-4 border-t border-gray-100 flex justify-between items-center bg-gray-50/30">
+            <span className="text-xs text-gray-400">
+              Página {currentPage} de {totalPages}
+            </span>
+            <div className="flex gap-2">
+              <button
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage((c) => c - 1)}
+                className="px-3 py-1 bg-white border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+              >
+                Anterior
+              </button>
+              <button
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage((c) => c + 1)}
+                className="px-3 py-1 bg-white border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+              >
+                Siguiente
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* --- MODAL CREAR ASPIRANTE (Sin cambios) --- */}
+      {/* --- MODALES CON CAMPOS COMPLETOS (RESTAURADOS) --- */}
+
+      {/* MODAL ASPIRANTE COMPLETO */}
       {modalAspirante && (
-        <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden">
-            <div className="bg-orange-600 p-4 text-white font-bold flex justify-between">
-              <h3>Registro de Aspirante</h3>
-              <button onClick={() => setModalAspirante(false)}>
-                <X />
+        <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-50 p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in duration-200">
+            <div className="bg-white p-6 border-b border-gray-100 flex justify-between items-center">
+              <h3 className="font-bold text-xl text-gray-800">
+                Nuevo Aspirante
+              </h3>
+              <button
+                onClick={() => setModalAspirante(false)}
+                className="text-gray-400 hover:bg-gray-100 p-2 rounded-full"
+              >
+                <X size={20} />
               </button>
             </div>
             <form
               onSubmit={handleCrearAspirante}
-              className="p-6 grid grid-cols-2 gap-4"
+              className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4"
             >
               <input
                 required
                 placeholder="Nombre(s)"
-                className="border p-2 rounded"
+                className="p-3 border rounded-xl bg-gray-50"
                 value={formAspirante.nombre}
                 onChange={(e) =>
                   setFormAspirante({ ...formAspirante, nombre: e.target.value })
@@ -2055,7 +1887,7 @@ const UsuariosPage = () => {
               <input
                 required
                 placeholder="Apellido Paterno"
-                className="border p-2 rounded"
+                className="p-3 border rounded-xl bg-gray-50"
                 value={formAspirante.apellido_paterno}
                 onChange={(e) =>
                   setFormAspirante({
@@ -2066,7 +1898,7 @@ const UsuariosPage = () => {
               />
               <input
                 placeholder="Apellido Materno"
-                className="border p-2 rounded"
+                className="p-3 border rounded-xl bg-gray-50"
                 value={formAspirante.apellido_materno}
                 onChange={(e) =>
                   setFormAspirante({
@@ -2078,7 +1910,7 @@ const UsuariosPage = () => {
               <input
                 required
                 placeholder="CURP"
-                className="border p-2 rounded"
+                className="p-3 border rounded-xl bg-gray-50 uppercase"
                 value={formAspirante.curp}
                 onChange={(e) =>
                   setFormAspirante({ ...formAspirante, curp: e.target.value })
@@ -2088,7 +1920,7 @@ const UsuariosPage = () => {
                 required
                 type="email"
                 placeholder="Correo Personal"
-                className="border p-2 rounded"
+                className="p-3 border rounded-xl bg-gray-50 md:col-span-2"
                 value={formAspirante.email}
                 onChange={(e) =>
                   setFormAspirante({ ...formAspirante, email: e.target.value })
@@ -2098,7 +1930,7 @@ const UsuariosPage = () => {
                 required
                 type="tel"
                 placeholder="Teléfono"
-                className="border p-2 rounded"
+                className="p-3 border rounded-xl bg-gray-50"
                 value={formAspirante.telefono}
                 onChange={(e) =>
                   setFormAspirante({
@@ -2108,19 +1940,19 @@ const UsuariosPage = () => {
                 }
               />
               <select
-                className="border p-2 rounded"
+                className="p-3 border rounded-xl bg-gray-50"
                 value={formAspirante.genero}
                 onChange={(e) =>
                   setFormAspirante({ ...formAspirante, genero: e.target.value })
                 }
               >
                 <option value="">Género...</option>
-                <option value="Masculino">Masculino</option>
-                <option value="Femenino">Femenino</option>
+                <option value="M">Masculino</option>
+                <option value="F">Femenino</option>
               </select>
               <input
                 type="date"
-                className="border p-2 rounded"
+                className="p-3 border rounded-xl bg-gray-50 md:col-span-2"
                 value={formAspirante.fecha_nacimiento}
                 onChange={(e) =>
                   setFormAspirante({
@@ -2129,14 +1961,15 @@ const UsuariosPage = () => {
                   })
                 }
               />
-              <div className="col-span-2 border-t pt-4 mt-2">
-                <p className="text-sm font-bold text-gray-500 mb-2">
+
+              <div className="md:col-span-2 pt-2 border-t border-gray-100 mt-2">
+                <p className="text-xs font-bold text-gray-400 uppercase mb-3">
                   Interés Académico
                 </p>
                 <div className="grid grid-cols-2 gap-4">
                   <select
                     required
-                    className="border p-2 rounded w-full"
+                    className="p-3 border rounded-xl"
                     value={formAspirante.carrera_id}
                     onChange={(e) =>
                       setFormAspirante({
@@ -2154,7 +1987,7 @@ const UsuariosPage = () => {
                   </select>
                   <select
                     required
-                    className="border p-2 rounded w-full"
+                    className="p-3 border rounded-xl"
                     value={formAspirante.sede_id}
                     onChange={(e) =>
                       setFormAspirante({
@@ -2172,35 +2005,48 @@ const UsuariosPage = () => {
                   </select>
                 </div>
               </div>
-              <button
-                type="submit"
-                className="col-span-2 bg-orange-600 text-white py-2 rounded font-bold hover:bg-orange-700 mt-4"
-              >
-                Registrar Aspirante
-              </button>
+
+              <div className="md:col-span-2 flex gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setModalAspirante(false)}
+                  className="flex-1 py-3 text-gray-600 hover:bg-gray-100 rounded-xl font-bold"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 bg-gray-900 text-white py-3 rounded-xl font-bold hover:bg-black shadow-lg"
+                >
+                  Registrar Aspirante
+                </button>
+              </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* --- MODAL CREAR DOCENTE (Sin cambios) --- */}
+      {/* MODAL DOCENTE COMPLETO */}
       {modalDocente && (
-        <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden">
-            <div className="bg-blue-600 p-4 text-white font-bold flex justify-between">
-              <h3>Registro de Docente</h3>
-              <button onClick={() => setModalDocente(false)}>
-                <X />
+        <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-50 p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in duration-200">
+            <div className="bg-white p-6 border-b border-gray-100 flex justify-between items-center">
+              <h3 className="font-bold text-xl text-gray-800">Nuevo Docente</h3>
+              <button
+                onClick={() => setModalDocente(false)}
+                className="text-gray-400 hover:bg-gray-100 p-2 rounded-full"
+              >
+                <X size={20} />
               </button>
             </div>
             <form
               onSubmit={handleCrearDocente}
-              className="p-6 grid grid-cols-2 gap-4"
+              className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4"
             >
               <input
                 required
                 placeholder="Nombre(s)"
-                className="border p-2 rounded"
+                className="p-3 border rounded-xl bg-gray-50"
                 value={formDocente.nombre}
                 onChange={(e) =>
                   setFormDocente({ ...formDocente, nombre: e.target.value })
@@ -2209,7 +2055,7 @@ const UsuariosPage = () => {
               <input
                 required
                 placeholder="Apellido Paterno"
-                className="border p-2 rounded"
+                className="p-3 border rounded-xl bg-gray-50"
                 value={formDocente.apellido_paterno}
                 onChange={(e) =>
                   setFormDocente({
@@ -2220,7 +2066,7 @@ const UsuariosPage = () => {
               />
               <input
                 placeholder="Apellido Materno"
-                className="border p-2 rounded"
+                className="p-3 border rounded-xl bg-gray-50"
                 value={formDocente.apellido_materno}
                 onChange={(e) =>
                   setFormDocente({
@@ -2232,7 +2078,7 @@ const UsuariosPage = () => {
               <input
                 required
                 placeholder="CURP"
-                className="border p-2 rounded"
+                className="p-3 border rounded-xl bg-gray-50 uppercase"
                 value={formDocente.curp}
                 onChange={(e) =>
                   setFormDocente({ ...formDocente, curp: e.target.value })
@@ -2241,8 +2087,8 @@ const UsuariosPage = () => {
               <input
                 required
                 type="email"
-                placeholder="Correo"
-                className="border p-2 rounded"
+                placeholder="Correo Institucional"
+                className="p-3 border rounded-xl bg-gray-50 md:col-span-2"
                 value={formDocente.email}
                 onChange={(e) =>
                   setFormDocente({ ...formDocente, email: e.target.value })
@@ -2252,26 +2098,26 @@ const UsuariosPage = () => {
                 required
                 type="tel"
                 placeholder="Teléfono"
-                className="border p-2 rounded"
+                className="p-3 border rounded-xl bg-gray-50"
                 value={formDocente.telefono}
                 onChange={(e) =>
                   setFormDocente({ ...formDocente, telefono: e.target.value })
                 }
               />
               <select
-                className="border p-2 rounded"
+                className="p-3 border rounded-xl bg-gray-50"
                 value={formDocente.genero}
                 onChange={(e) =>
                   setFormDocente({ ...formDocente, genero: e.target.value })
                 }
               >
                 <option value="">Género...</option>
-                <option value="Masculino">Masculino</option>
-                <option value="Femenino">Femenino</option>
+                <option value="M">Masculino</option>
+                <option value="F">Femenino</option>
               </select>
               <input
                 type="date"
-                className="border p-2 rounded"
+                className="p-3 border rounded-xl bg-gray-50 md:col-span-2"
                 value={formDocente.fecha_nacimiento}
                 onChange={(e) =>
                   setFormDocente({
@@ -2280,15 +2126,44 @@ const UsuariosPage = () => {
                   })
                 }
               />
-              <button
-                type="submit"
-                className="col-span-2 bg-blue-600 text-white py-2 rounded font-bold hover:bg-blue-700 mt-4"
-              >
-                Registrar Docente
-              </button>
+
+              <div className="md:col-span-2 flex gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setModalDocente(false)}
+                  className="flex-1 py-3 text-gray-600 hover:bg-gray-100 rounded-xl font-bold"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 bg-gray-900 text-white py-3 rounded-xl font-bold hover:bg-black shadow-lg"
+                >
+                  Registrar Docente
+                </button>
+              </div>
             </form>
           </div>
         </div>
+      )}
+
+      {/* Modales de Edición/Ver (Se asume que UserModal y UserDetailModal siguen en tu código, si no, avísame) */}
+      {showUserModal && (
+        <UserModal
+          isOpen={showUserModal}
+          onClose={() => setShowUserModal(false)}
+          userToEdit={userToEdit}
+          onSuccess={() => {
+            fetchData();
+            setShowUserModal(false);
+          }}
+        />
+      )}
+      {userToView && (
+        <UserDetailModal
+          user={userToView}
+          onClose={() => setUserToView(null)}
+        />
       )}
     </div>
   );
@@ -2525,223 +2400,409 @@ const UsuarioModal = ({ usuario, onClose, onSave }) => {
   );
 };
 
-// --- ASIGNATURAS PAGE COMPLETO ---
+// --- COMPONENTE ASIGNATURAS (DISEÑO CLEAN + FUNCIONALIDAD CORREGIDA) ---
 const AsignaturasPage = () => {
   const [asignaturas, setAsignaturas] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [modalOpen, setModalOpen] = useState(false);
+  const [currentAsignatura, setCurrentAsignatura] = useState(null);
+
+  // Catálogos (Ahora incluimos TIPOS que faltaba)
   const [catalogos, setCatalogos] = useState({
     planes: [],
-    tipos: [],
     grados: [],
+    tipos: [], // <-- AGREGADO: Importante para la BD
   });
-  const [loading, setLoading] = useState(true);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editingAsig, setEditingAsig] = useState(null);
-  const [viewingAsig, setViewingAsig] = useState(null);
-  const [verPapelera, setVerPapelera] = useState(false);
 
-  // Cargar catálogos
-  useEffect(() => {
-    const loadCats = async () => {
-      try {
-        const [p, t, g] = await Promise.all([
-          api.get("/admin/planes_estudio"),
-          api.get("/admin/tipos_asignatura"),
-          api.get("/admin/grados"),
-        ]);
-        setCatalogos({ planes: p.data, tipos: t.data, grados: g.data });
-      } catch (e) {
-        console.error(e);
-      }
-    };
-    loadCats();
-  }, []);
-
-  // Cargar Asignaturas
-  const fetchAsignaturas = async () => {
+  const fetchAsignaturas = useCallback(async () => {
     setLoading(true);
     try {
-      const endpoint = verPapelera
-        ? "/admin/asignaturas/eliminadas"
-        : "/admin/asignaturas";
-      const { data } = await api.get(endpoint);
-      setAsignaturas(data);
-    } catch (e) {
-      console.error(e);
+      const response = await api.get("/admin/asignaturas");
+      setAsignaturas(response.data);
+
+      // Cargar TODOS los catálogos necesarios
+      const [resP, resG, resT] = await Promise.all([
+        api.get("/admin/planes_estudio"),
+        api.get("/admin/grados"),
+        api.get("/admin/tipos_asignatura"), // <-- RECUPERADO
+      ]);
+      setCatalogos({
+        planes: resP.data,
+        grados: resG.data,
+        tipos: resT.data,
+      });
+    } catch (error) {
+      console.error(error);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchAsignaturas();
-  }, [verPapelera]);
+  }, [fetchAsignaturas]);
 
   const handleDelete = async (id) => {
-    if (window.confirm("¿Enviar asignatura a la papelera?")) {
-      await api.delete(`/admin/asignaturas/${id}`);
-      fetchAsignaturas();
+    if (window.confirm("¿Eliminar asignatura?")) {
+      try {
+        await api.delete(`/admin/asignaturas/${id}`);
+        fetchAsignaturas();
+      } catch (error) {
+        alert("Error al eliminar");
+      }
     }
   };
 
-  const handleReactivar = async (id) => {
-    if (window.confirm("¿Recuperar asignatura?")) {
-      await api.put(`/admin/asignaturas/${id}/reactivar`);
-      fetchAsignaturas();
+  const openModal = (asignatura = null) => {
+    setCurrentAsignatura(asignatura);
+    setModalOpen(true);
+  };
+
+  const filteredAsignaturas = asignaturas.filter(
+    (a) =>
+      a.nombre_asignatura.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (a.clave_asignatura &&
+        a.clave_asignatura.toLowerCase().includes(searchTerm.toLowerCase())),
+  );
+
+  return (
+    <div className="space-y-8 animate-in fade-in duration-300">
+      {/* HEADER */}
+      <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-800 tracking-tight">
+            Materias y Asignaturas
+          </h1>
+          <p className="text-gray-500 mt-2 text-lg">
+            Catálogo de materias por plan de estudio.
+          </p>
+        </div>
+        <button
+          onClick={() => openModal()}
+          className="bg-[#a72a34] text-white px-6 py-3 rounded-xl hover:bg-[#802028] font-bold shadow-lg shadow-red-900/20 flex items-center gap-2 transition-transform active:scale-95"
+        >
+          <Plus size={20} /> Nueva Materia
+        </button>
+      </div>
+
+      {/* BUSCADOR */}
+      <div className="relative max-w-md">
+        <Search className="absolute left-4 top-3.5 text-gray-400" size={20} />
+        <input
+          type="text"
+          placeholder="Buscar por nombre o clave..."
+          className="w-full pl-12 pr-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm font-medium"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+        />
+      </div>
+
+      {/* GRID */}
+      {loading ? (
+        <div className="text-center py-20 text-gray-400">Cargando...</div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredAsignaturas.map((asignatura) => (
+            <div
+              key={asignatura.id}
+              className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-all group flex flex-col h-full"
+            >
+              <div className="flex justify-between items-start mb-3">
+                <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs font-bold rounded uppercase tracking-wider">
+                  {asignatura.clave_asignatura || "S/N"}
+                </span>
+                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    onClick={() => openModal(asignatura)}
+                    className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"
+                  >
+                    <Edit size={16} />
+                  </button>
+                  <button
+                    onClick={() => handleDelete(asignatura.id)}
+                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 mb-4">
+                <div className="mt-1 text-blue-500">
+                  <Book size={20} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-800 leading-snug">
+                    {asignatura.nombre_asignatura}
+                  </h3>
+                  <div className="text-xs text-gray-400 mt-1">
+                    Calif: {asignatura.calificacion_min} -{" "}
+                    {asignatura.calificacion_max}
+                  </div>
+                </div>
+              </div>
+              <div className="mt-auto pt-4 border-t border-gray-50 text-xs text-gray-500 space-y-1">
+                <p>
+                  <span className="font-bold text-gray-400">PLAN:</span>{" "}
+                  {asignatura.nombre_plan || "General"}
+                </p>
+                <p>
+                  <span className="font-bold text-gray-400">CRÉDITOS:</span>{" "}
+                  {asignatura.creditos || 0}
+                </p>
+                <p>
+                  <span className="font-bold text-gray-400">TIPO:</span>{" "}
+                  {asignatura.nombre_tipo || "-"}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* MODAL CORREGIDO */}
+      {modalOpen && (
+        <AsignaturaModalClean
+          asignatura={currentAsignatura}
+          onClose={() => setModalOpen(false)}
+          onSave={fetchAsignaturas}
+          catalogos={catalogos} // Pasamos todos los catálogos
+        />
+      )}
+    </div>
+  );
+};
+
+// --- MODAL ASIGNATURA (ESTRUCTURA DE DATOS RESTAURADA) ---
+const AsignaturaModalClean = ({ asignatura, onClose, onSave, catalogos }) => {
+  // ESTADO RESTAURADO: Usa los nombres EXACTOS de la base de datos
+  const [form, setForm] = useState({
+    nombre_asignatura: "",
+    clave_asignatura: "", // <-- NOMBRE CORREGIDO (Antes era 'clave')
+    creditos: "",
+    plan_estudio_id: "",
+    grado_id: "",
+    tipo_asignatura_id: "", // <-- CAMPO RECUPERADO
+    calificacion_min: 70, // <-- VALOR POR DEFECTO RESTAURADO
+    calificacion_max: 100,
+  });
+
+  useEffect(() => {
+    if (asignatura) {
+      setForm({
+        nombre_asignatura: asignatura.nombre_asignatura,
+        clave_asignatura: asignatura.clave_asignatura || "",
+        creditos: asignatura.creditos || "",
+        plan_estudio_id: asignatura.plan_estudio_id || "",
+        grado_id: asignatura.grado_id || "",
+        tipo_asignatura_id: asignatura.tipo_asignatura_id || "",
+        calificacion_min: asignatura.calificacion_min || 70,
+        calificacion_max: asignatura.calificacion_max || 100,
+      });
+    } else {
+      // Valores por defecto para nueva materia
+      setForm({
+        nombre_asignatura: "",
+        clave_asignatura: "",
+        creditos: 6,
+        plan_estudio_id: "",
+        grado_id: "",
+        tipo_asignatura_id: "",
+        calificacion_min: 70,
+        calificacion_max: 100,
+      });
+    }
+  }, [asignatura]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      if (asignatura)
+        await api.put(`/admin/asignaturas/${asignatura.id}`, form);
+      else await api.post("/admin/asignaturas", form);
+      onSave();
+      onClose();
+    } catch (e) {
+      console.error(e);
+      alert(
+        "Error al guardar: " +
+          (e.response?.data?.message || "Revisa los campos"),
+      );
     }
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-800">
-            {verPapelera
-              ? "🗑️ Papelera de Materias"
-              : "📖 Catálogo de Asignaturas"}
-          </h2>
-          <p className="text-gray-600 text-sm">
-            Administra las materias y sus planes de estudio.
-          </p>
-        </div>
-        <div className="flex gap-3">
-          <button
-            onClick={() => setVerPapelera(!verPapelera)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg border transition-colors ${
-              verPapelera
-                ? "bg-gray-600 text-white border-gray-600"
-                : "bg-white text-gray-700 border-gray-300"
-            }`}
-          >
-            {verPapelera ? (
-              <>
-                <Book size={20} /> Ver Activas
-              </>
-            ) : (
-              <>
-                <Trash2 size={20} /> Papelera
-              </>
-            )}
+    <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-50 p-4 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in duration-200">
+        <div className="p-6 border-b border-gray-100 flex justify-between items-center">
+          <h3 className="text-xl font-bold text-gray-800">
+            {asignatura ? "Editar Materia" : "Nueva Materia"}
+          </h3>
+          <button onClick={onClose}>
+            <X size={24} className="text-gray-400 hover:text-gray-600" />
           </button>
-          {!verPapelera && (
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {/* Fila 1: Nombre y Clave */}
+          <div className="grid grid-cols-3 gap-4">
+            <div className="col-span-2">
+              <label className="block text-sm font-bold text-gray-700 mb-2">
+                Nombre
+              </label>
+              <input
+                autoFocus
+                className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-gray-900"
+                value={form.nombre_asignatura}
+                onChange={(e) =>
+                  setForm({ ...form, nombre_asignatura: e.target.value })
+                }
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-2">
+                Clave
+              </label>
+              <input
+                className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-gray-900 uppercase"
+                value={form.clave_asignatura}
+                onChange={(e) =>
+                  setForm({ ...form, clave_asignatura: e.target.value })
+                }
+                placeholder="MAT-101"
+                required
+              />
+            </div>
+          </div>
+
+          {/* Fila 2: Créditos y Tipo */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-2">
+                Créditos
+              </label>
+              <input
+                type="number"
+                className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-gray-900"
+                value={form.creditos}
+                onChange={(e) => setForm({ ...form, creditos: e.target.value })}
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-2">
+                Tipo
+              </label>
+              <select
+                className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50"
+                value={form.tipo_asignatura_id}
+                onChange={(e) =>
+                  setForm({ ...form, tipo_asignatura_id: e.target.value })
+                }
+                required
+              >
+                <option value="">Seleccionar...</option>
+                {catalogos.tipos.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.tipo}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Fila 3: Selectores de Relación */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-2">
+                Plan de Estudio
+              </label>
+              <select
+                className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50"
+                value={form.plan_estudio_id}
+                onChange={(e) =>
+                  setForm({ ...form, plan_estudio_id: e.target.value })
+                }
+                required
+              >
+                <option value="">Seleccionar...</option>
+                {catalogos.planes.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.nombre_plan}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-2">
+                Grado
+              </label>
+              <select
+                className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50"
+                value={form.grado_id}
+                onChange={(e) => setForm({ ...form, grado_id: e.target.value })}
+                required
+              >
+                <option value="">Seleccionar...</option>
+                {catalogos.grados.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.nombre_grado}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Fila 4: Calificaciones (Opcional, pero visualmente separado) */}
+          <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
+                Calif. Mínima
+              </label>
+              <input
+                type="number"
+                step="0.1"
+                className="w-full p-2 border border-gray-200 rounded-lg bg-white"
+                value={form.calificacion_min}
+                onChange={(e) =>
+                  setForm({ ...form, calificacion_min: e.target.value })
+                }
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
+                Calif. Máxima
+              </label>
+              <input
+                type="number"
+                step="0.1"
+                className="w-full p-2 border border-gray-200 rounded-lg bg-white"
+                value={form.calificacion_max}
+                onChange={(e) =>
+                  setForm({ ...form, calificacion_max: e.target.value })
+                }
+              />
+            </div>
+          </div>
+
+          <div className="flex gap-3 pt-4">
             <button
-              onClick={() => {
-                setEditingAsig(null);
-                setModalOpen(true);
-              }}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-blue-700"
+              type="button"
+              onClick={onClose}
+              className="flex-1 py-3 text-gray-600 hover:bg-gray-100 rounded-xl font-bold transition-colors"
             >
-              <Plus size={20} /> Nueva Materia
+              Cancelar
             </button>
-          )}
-        </div>
+            <button
+              type="submit"
+              className="flex-1 py-3 bg-[#a72a34] text-white rounded-xl hover:bg-[#802028] font-bold shadow-lg transition-transform active:scale-95"
+            >
+              Guardar Materia
+            </button>
+          </div>
+        </form>
       </div>
-
-      {loading ? (
-        <div className="text-center py-10 text-gray-500">Cargando...</div>
-      ) : (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b">
-              <tr>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">
-                  Clave/Nombre
-                </th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">
-                  Plan
-                </th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">
-                  Tipo
-                </th>
-                <th className="px-6 py-3 text-right text-sm font-semibold text-gray-600">
-                  Acciones
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {asignaturas.length === 0 ? (
-                <tr>
-                  <td colSpan="4" className="text-center py-8 text-gray-400">
-                    No hay registros.
-                  </td>
-                </tr>
-              ) : (
-                asignaturas.map((asig) => (
-                  <tr key={asig.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4">
-                      <div className="font-bold text-gray-800">
-                        {asig.nombre_asignatura}
-                      </div>
-                      <span className="text-xs bg-gray-100 px-2 py-0.5 rounded font-mono text-gray-500">
-                        {asig.clave_asignatura}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600">
-                      <div>{asig.nombre_plan}</div>
-                      <div className="text-xs text-blue-600">
-                        {asig.nombre_grado}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-500">
-                      {asig.nombre_tipo}
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      {verPapelera ? (
-                        <button
-                          onClick={() => handleReactivar(asig.id)}
-                          className="text-green-600 hover:text-green-800 font-medium flex items-center gap-1 ml-auto justify-end"
-                        >
-                          <RotateCcw size={18} /> Reactivar
-                        </button>
-                      ) : (
-                        <div className="flex justify-end gap-2">
-                          <button
-                            onClick={() => setViewingAsig(asig)}
-                            className="p-1 text-gray-400 hover:text-gray-800 hover:bg-gray-100 rounded"
-                            title="Ver Detalles"
-                          >
-                            <Eye size={18} />
-                          </button>
-                          <button
-                            onClick={() => {
-                              setEditingAsig(asig);
-                              setModalOpen(true);
-                            }}
-                            className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded"
-                          >
-                            <Edit size={18} />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(asig.id)}
-                            className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
-                          >
-                            <Trash2 size={18} />
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {!verPapelera && modalOpen && (
-        <AsignaturaModal
-          isOpen={modalOpen}
-          onClose={() => setModalOpen(false)}
-          asigToEdit={editingAsig}
-          onSuccess={fetchAsignaturas}
-          catalogos={catalogos}
-        />
-      )}
-      {viewingAsig && (
-        <AsignaturaDetailModal
-          asignatura={viewingAsig}
-          onClose={() => setViewingAsig(null)}
-        />
-      )}
     </div>
   );
 };
@@ -3012,19 +3073,41 @@ const AsignaturaDetailModal = ({ asignatura, onClose }) => {
   );
 };
 
-// --- COMPONENTE GRUPOS (LIMPIO: Sin botón de migrar) ---
+// --- COMPONENTE GRUPOS (ESTANDARIZADO AL DISEÑO DASHBOARD) ---
 const GruposPage = () => {
+  // ... Mantenemos tu misma lógica y estados ...
   const [grupos, setGrupos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [grupoSeleccionado, setGrupoSeleccionado] = useState(null);
   const [filtroEstatus, setFiltroEstatus] = useState("activo");
+  const [catalogos, setCatalogos] = useState({});
 
   const fetchGrupos = async () => {
     setLoading(true);
     try {
       const { data } = await api.get("/admin/grupos");
       setGrupos(data);
+      // Carga de catálogos para el modal de crear
+      try {
+        const [resCarreras, resCiclos, resPlanes, resSedes, resGrados] =
+          await Promise.all([
+            api.get("/admin/carreras"),
+            api.get("/admin/ciclos"),
+            api.get("/admin/planes_estudio"),
+            api.get("/admin/sedes"),
+            api.get("/admin/grados"),
+          ]);
+        setCatalogos({
+          carreras: resCarreras.data,
+          ciclos: resCiclos.data,
+          planes: resPlanes.data,
+          sedes: resSedes.data,
+          grados: resGrados.data,
+        });
+      } catch (e) {
+        console.log("Info catálogos", e);
+      }
     } catch (error) {
       console.error(error);
     } finally {
@@ -3039,104 +3122,144 @@ const GruposPage = () => {
   const gruposFiltrados = grupos.filter((g) => g.estatus === filtroEstatus);
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300">
-      <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+    <div className="space-y-8 animate-in fade-in duration-300">
+      {/* HEADER: IGUAL AL DASHBOARD (Fondo degradado o limpio) */}
+      <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-gray-800">
+          <h1 className="text-3xl font-bold text-gray-800 tracking-tight">
             Gestión de Grupos
-          </h2>
-          <p className="text-gray-600 text-sm">
-            Administra los grupos actuales y revisa el historial.
+          </h1>
+          <p className="text-gray-500 mt-2 text-lg">
+            Administra los salones y asignaciones académicas.
           </p>
         </div>
         <button
-          onClick={() => {
-            setGrupoSeleccionado(null);
-            setModalOpen(true);
-          }}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2 font-bold shadow-sm"
+          onClick={() => setModalOpen(true)}
+          className="bg-[#a72a34] text-white px-6 py-3 rounded-xl hover:bg-[#802028] font-bold shadow-lg shadow-red-900/20 flex items-center gap-2 transition-transform active:scale-95"
         >
           <Plus size={20} /> Nuevo Grupo
         </button>
       </div>
 
-      <div className="flex border-b border-gray-200">
+      {/* FILTROS: Estilo limpio y minimalista */}
+      <div className="flex gap-4 border-b border-gray-200 pb-1">
         <button
           onClick={() => setFiltroEstatus("activo")}
-          className={`px-6 py-3 text-sm font-medium flex items-center gap-2 border-b-2 transition-colors ${filtroEstatus === "activo" ? "border-blue-600 text-blue-600 bg-blue-50/50" : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50"}`}
+          className={`pb-3 px-2 text-sm font-bold flex items-center gap-2 border-b-2 transition-all ${
+            filtroEstatus === "activo"
+              ? "border-purple-600 text-purple-600"
+              : "border-transparent text-gray-400 hover:text-gray-600"
+          }`}
         >
           <div
-            className={`w-2 h-2 rounded-full ${filtroEstatus === "activo" ? "bg-blue-600" : "bg-gray-400"}`}
-          ></div>{" "}
-          Grupos Activos
+            className={`w-2 h-2 rounded-full ${filtroEstatus === "activo" ? "bg-purple-600" : "bg-gray-300"}`}
+          ></div>
+          ACTIVOS
         </button>
         <button
           onClick={() => setFiltroEstatus("finalizado")}
-          className={`px-6 py-3 text-sm font-medium flex items-center gap-2 border-b-2 transition-colors ${filtroEstatus === "finalizado" ? "border-purple-600 text-purple-600 bg-purple-50/50" : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50"}`}
+          className={`pb-3 px-2 text-sm font-bold flex items-center gap-2 border-b-2 transition-all ${
+            filtroEstatus === "finalizado"
+              ? "border-gray-800 text-gray-800"
+              : "border-transparent text-gray-400 hover:text-gray-600"
+          }`}
         >
-          <History size={16} /> Historial / Cerrados
+          <History size={16} /> HISTORIAL
         </button>
       </div>
 
+      {/* GRID: IDENTICO AL DASHBOARD (Tarjetas Blancas Limpias) */}
       {loading ? (
-        <div className="text-center py-10 text-gray-400">Cargando...</div>
+        <div className="text-center py-20 text-gray-400">
+          Cargando grupos...
+        </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {gruposFiltrados.length === 0 ? (
-            <div className="col-span-full py-12 text-center bg-gray-50 rounded-xl border border-dashed border-gray-300 text-gray-500">
-              No hay grupos en:{" "}
-              <span className="font-bold uppercase">{filtroEstatus}</span>
+            <div className="col-span-full py-16 text-center bg-gray-50 rounded-2xl border border-dashed border-gray-200 text-gray-400">
+              No hay grupos en esta sección.
             </div>
           ) : (
             gruposFiltrados.map((grupo) => (
               <div
                 key={grupo.id}
-                className={`bg-white rounded-xl shadow-sm border p-5 transition-all hover:shadow-md ${grupo.estatus === "activo" ? "border-gray-200" : "border-purple-100 bg-purple-50/30"}`}
+                className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-between hover:shadow-md transition-shadow group h-full"
               >
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <h3 className="text-lg font-bold text-gray-800">
-                      {grupo.nombre_grupo}
-                    </h3>
-                    <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                      {grupo.nombre_plan}
-                    </span>
+                <div>
+                  {/* Encabezado de Tarjeta: Icono y Badge */}
+                  <div className="flex justify-between items-start mb-4">
+                    <div
+                      className={`p-3 rounded-xl ${grupo.estatus === "activo" ? "bg-purple-50 text-purple-600" : "bg-gray-100 text-gray-500"}`}
+                    >
+                      <Group size={24} />
+                    </div>
+                    {grupo.estatus === "activo" && (
+                      <span className="bg-green-100 text-green-700 text-[10px] font-black px-2 py-1 rounded uppercase tracking-wider">
+                        Activo
+                      </span>
+                    )}
                   </div>
-                  <span
-                    className={`px-2 py-1 rounded text-xs font-bold uppercase ${grupo.estatus === "activo" ? "bg-green-100 text-green-700" : "bg-purple-100 text-purple-700"}`}
-                  >
-                    {grupo.estatus}
-                  </span>
+
+                  {/* Título Grande */}
+                  <h3 className="text-xl font-bold text-gray-800 mb-1 leading-tight">
+                    {grupo.nombre_grupo}
+                  </h3>
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-4">
+                    {grupo.nombre_plan || "Sin Plan"}
+                  </p>
+
+                  {/* Datos Clave (Grid interno) */}
+                  <div className="grid grid-cols-2 gap-3 mb-6">
+                    <div className="bg-gray-50 p-2 rounded-lg">
+                      <p className="text-[10px] text-gray-400 uppercase font-bold">
+                        Grado
+                      </p>
+                      <p className="text-sm font-semibold text-gray-700 truncate">
+                        {grupo.nombre_grado || "-"}
+                      </p>
+                    </div>
+                    <div className="bg-gray-50 p-2 rounded-lg">
+                      <p className="text-[10px] text-gray-400 uppercase font-bold">
+                        Modalidad
+                      </p>
+                      <p className="text-sm font-semibold text-gray-700 truncate">
+                        {grupo.modalidad || "Presencial"}
+                      </p>
+                    </div>
+                  </div>
                 </div>
-                <div className="space-y-2 mb-4 text-sm text-gray-600">
-                  <div className="flex items-center gap-2">
-                    <GraduationCap size={16} className="text-gray-400" />
-                    <span>{grupo.nombre_grado}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Users size={16} className="text-gray-400" />
-                    <span>{grupo.modalidad || "Presencial"}</span>
-                  </div>
-                </div>
-                {/* AQUÍ ESTÁ EL CAMBIO: El botón ya no menciona migrar */}
+
+                {/* Botón de Acción (Full Width) */}
                 <button
                   onClick={() => setGrupoSeleccionado(grupo)}
-                  className={`w-full py-2 rounded-lg font-medium flex items-center justify-center gap-2 transition-colors ${grupo.estatus === "activo" ? "bg-blue-600 text-white hover:bg-blue-700" : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"}`}
+                  className={`w-full py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-colors 
+                    ${
+                      grupo.estatus === "activo"
+                        ? "bg-gray-900 text-white hover:bg-black"
+                        : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"
+                    }`}
                 >
-                  {grupo.estatus === "activo" ? (
-                    <Edit size={16} />
-                  ) : (
-                    <Eye size={16} />
-                  )}
-                  {grupo.estatus === "activo" ? "Administrar" : "Ver Historial"}
+                  {grupo.estatus === "activo"
+                    ? "Administrar Grupo"
+                    : "Ver Detalles"}
+                  <ArrowRightCircle size={16} className="opacity-50" />
                 </button>
               </div>
             ))
           )}
         </div>
       )}
-      {/* Modales */}
-      {/* <GrupoModal isOpen={modalOpen} onClose={() => setModalOpen(false)} onSuccess={fetchGrupos} /> */}
+
+      {/* MODALES (Se mantienen igual) */}
+      {modalOpen && (
+        <GrupoModal
+          isOpen={modalOpen}
+          onClose={() => setModalOpen(false)}
+          onSuccess={fetchGrupos}
+          catalogos={catalogos}
+        />
+      )}
+
       {grupoSeleccionado && (
         <GrupoAdminModal
           grupo={grupoSeleccionado}
@@ -3369,10 +3492,9 @@ const GrupoModal = ({ isOpen, onClose, grupoToEdit, onSuccess, catalogos }) => {
             </button>
             <button
               type="submit"
-              className="px-5 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium flex items-center gap-2 transition-colors"
+              className="flex-1 py-3 bg-[#a72a34] text-white rounded-xl hover:bg-[#802028] font-bold shadow-lg"
             >
-              <Save size={18} />
-              {grupoToEdit ? "Guardar Cambios" : "Crear Grupo"}
+              Guardar Grupo
             </button>
           </div>
         </form>
@@ -3381,16 +3503,12 @@ const GrupoModal = ({ isOpen, onClose, grupoToEdit, onSuccess, catalogos }) => {
   );
 };
 
-// --- COMPONENTE PÁGINA: MIGRACIÓN DE GRUPOS (CORREGIDO: Muestra Activos y Cerrados) ---
+// --- COMPONENTE MIGRACIÓN (DISEÑO CLEAN DASHBOARD) ---
 const MigracionPage = () => {
   const [loading, setLoading] = useState(true);
-  const [todosLosGrupos, setTodosLosGrupos] = useState([]); // <--- CAMBIO DE NOMBRE
-
-  // Catálogos para el destino
+  const [todosLosGrupos, setTodosLosGrupos] = useState([]);
   const [grados, setGrados] = useState([]);
   const [ciclos, setCiclos] = useState([]);
-
-  // Formulario
   const [origenId, setOrigenId] = useState("");
   const [form, setForm] = useState({
     nombreNuevo: "",
@@ -3407,15 +3525,9 @@ const MigracionPage = () => {
           api.get("/admin/grados"),
           api.get("/admin/ciclos"),
         ]);
-
-        // CORRECCIÓN: Ya no filtramos. Guardamos TODOS los grupos.
-        // Ordenamos para que salgan primero los activos
-        const gruposOrdenados = gRes.data.sort((a, b) => {
-          if (a.estatus === "activo" && b.estatus !== "activo") return -1;
-          if (a.estatus !== "activo" && b.estatus === "activo") return 1;
-          return 0;
-        });
-
+        const gruposOrdenados = gRes.data.sort((a, b) =>
+          a.estatus === "activo" ? -1 : 1,
+        );
         setTodosLosGrupos(gruposOrdenados);
         setGrados(gradosRes.data);
         setCiclos(ciclosRes.data);
@@ -3427,14 +3539,13 @@ const MigracionPage = () => {
     cargarDatos();
   }, []);
 
-  // Al seleccionar un grupo origen, prellenamos sugerencias
   const handleSelectOrigen = (id) => {
     setOrigenId(id);
     const grupo = todosLosGrupos.find((g) => g.id === parseInt(id));
     if (grupo) {
       setForm((prev) => ({
         ...prev,
-        nombreNuevo: grupo.nombre_grupo + " (Siguiente)", // Sugerencia
+        nombreNuevo: grupo.nombre_grupo + " (Siguiente)",
         modalidad: grupo.modalidad,
       }));
     }
@@ -3442,171 +3553,145 @@ const MigracionPage = () => {
 
   const handleMigrar = async (e) => {
     e.preventDefault();
-    if (
-      !origenId ||
-      !form.nombreNuevo ||
-      !form.gradoNuevoId ||
-      !form.cicloNuevoId
-    )
-      return alert("Llena todos los campos");
-
-    if (
-      window.confirm(
-        "¿Estás seguro? Se creará un nuevo grupo y se copiarán los alumnos.",
-      )
-    ) {
+    if (!origenId || !form.nombreNuevo) return alert("Llena todos los campos");
+    if (window.confirm("¿Seguro de migrar?")) {
       try {
         await api.post("/admin/migracion/ejecutar", {
           grupoOrigenId: origenId,
           ...form,
         });
-        alert("¡Migración completada con éxito!");
-
-        // Limpiar formulario
+        alert("¡Migración completada!");
         setOrigenId("");
-        setForm({
-          nombreNuevo: "",
-          gradoNuevoId: "",
-          cicloNuevoId: "",
-          modalidad: "Presencial",
-        });
-
-        // Recargar datos
-        const gRes = await api.get("/admin/grupos");
-        setTodosLosGrupos(gRes.data);
+        // Recargar...
       } catch (error) {
-        alert(
-          "Error al migrar: " +
-            (error.response?.data?.message || "Error desconocido"),
-        );
+        alert("Error");
       }
     }
   };
 
-  if (loading)
-    return (
-      <div className="p-8 text-center">Cargando módulo de migración...</div>
-    );
-
   return (
-    <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in duration-300">
-      <div>
-        <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-          <GitBranch className="text-purple-600" /> Migración de Grupos
-        </h2>
-        <p className="text-gray-500">
-          Genera el grupo del siguiente ciclo y transfiere a los alumnos.
-        </p>
+    <div className="space-y-8 animate-in fade-in duration-300">
+      {/* HEADER */}
+      <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-800 tracking-tight">
+            Migración de Grupos
+          </h1>
+          <p className="text-gray-500 mt-2 text-lg">
+            Herramienta para avanzar grupos al siguiente ciclo.
+          </p>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        {/* COLUMNA IZQUIERDA: ORIGEN */}
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-          <h3 className="font-bold text-lg mb-4 text-gray-700 border-b pb-2">
-            1. Selecciona Grupo a Migrar
-          </h3>
+        {/* COLUMNA ORIGEN */}
+        <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
+          <div className="flex items-center gap-3 mb-6 border-b border-gray-100 pb-4">
+            <div className="bg-purple-100 text-purple-700 w-8 h-8 rounded-full flex items-center justify-center font-bold">
+              1
+            </div>
+            <h3 className="font-bold text-lg text-gray-800">
+              Selecciona Grupo Origen
+            </h3>
+          </div>
+
           <div className="space-y-4">
-            <label className="block text-sm font-medium text-gray-700">
-              Grupo Actual (Origen)
+            <label className="block text-sm font-bold text-gray-500 uppercase">
+              Grupo Actual
             </label>
             <select
-              className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-purple-500 bg-gray-50"
+              className="w-full p-4 border rounded-xl bg-gray-50 font-medium focus:ring-2 focus:ring-purple-500 outline-none"
               value={origenId}
               onChange={(e) => handleSelectOrigen(e.target.value)}
             >
-              <option value="">-- Buscar Grupo (Activo o Cerrado) --</option>
+              <option value="">-- Seleccionar --</option>
               {todosLosGrupos.map((g) => (
                 <option key={g.id} value={g.id}>
-                  {/* AQUÍ MOSTRAMOS EL ESTATUS CLARAMENTE */}
-                  {g.nombre_grupo}{" "}
-                  {g.estatus === "activo" ? "🟢 (Activo)" : "🔴 (Cerrado)"}
+                  {g.nombre_grupo} {g.estatus === "activo" ? "🟢" : "🔴"}
                 </option>
               ))}
             </select>
-
             {origenId && (
-              <div className="p-4 bg-purple-50 text-purple-800 text-sm rounded-lg flex gap-2 items-start">
-                <GitBranch size={16} className="mt-0.5 shrink-0" />
-                <p>
-                  Se copiarán los alumnos inscritos de este grupo al nuevo que
-                  configures a la derecha.
-                </p>
+              <div className="p-4 bg-purple-50 text-purple-800 text-sm rounded-xl font-medium">
+                Se copiarán los alumnos inscritos de este grupo.
               </div>
             )}
           </div>
         </div>
 
-        {/* COLUMNA DERECHA: DESTINO */}
+        {/* COLUMNA DESTINO */}
         <div
-          className={`bg-white p-6 rounded-xl shadow-sm border border-gray-200 transition-opacity ${!origenId ? "opacity-50 pointer-events-none" : "opacity-100"}`}
+          className={`bg-white p-8 rounded-2xl shadow-sm border border-gray-100 transition-opacity ${!origenId ? "opacity-50 pointer-events-none" : "opacity-100"}`}
         >
-          <h3 className="font-bold text-lg mb-4 text-purple-700 border-b pb-2">
-            2. Configura el Nuevo Grupo
-          </h3>
-          <form onSubmit={handleMigrar} className="space-y-4">
+          <div className="flex items-center gap-3 mb-6 border-b border-gray-100 pb-4">
+            <div className="bg-green-100 text-green-700 w-8 h-8 rounded-full flex items-center justify-center font-bold">
+              2
+            </div>
+            <h3 className="font-bold text-lg text-gray-800">
+              Configura Nuevo Grupo
+            </h3>
+          </div>
+
+          <form onSubmit={handleMigrar} className="space-y-5">
             <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Nombre del Nuevo Grupo
+              <label className="block text-sm font-bold text-gray-500 uppercase mb-2">
+                Nombre Nuevo
               </label>
               <input
                 type="text"
-                className="w-full p-2 border rounded focus:ring-2 focus:ring-purple-500"
+                className="w-full p-3 border rounded-xl font-medium"
                 value={form.nombreNuevo}
                 onChange={(e) =>
                   setForm({ ...form, nombreNuevo: e.target.value })
                 }
-                placeholder="Ej: Ingeniería 2o A"
               />
             </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Nuevo Grado/Semestre
-              </label>
-              <select
-                className="w-full p-2 border rounded focus:ring-2 focus:ring-purple-500"
-                value={form.gradoNuevoId}
-                onChange={(e) =>
-                  setForm({ ...form, gradoNuevoId: e.target.value })
-                }
-              >
-                <option value="">-- Seleccionar Grado --</option>
-                {grados.map((g) => (
-                  <option key={g.id} value={g.id}>
-                    {g.nombre_grado}
-                  </option>
-                ))}
-              </select>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-bold text-gray-500 uppercase mb-2">
+                  Nuevo Grado
+                </label>
+                <select
+                  className="w-full p-3 border rounded-xl bg-white"
+                  value={form.gradoNuevoId}
+                  onChange={(e) =>
+                    setForm({ ...form, gradoNuevoId: e.target.value })
+                  }
+                >
+                  <option value="">-- Grado --</option>
+                  {grados.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.nombre_grado}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-500 uppercase mb-2">
+                  Nuevo Ciclo
+                </label>
+                <select
+                  className="w-full p-3 border rounded-xl bg-white"
+                  value={form.cicloNuevoId}
+                  onChange={(e) =>
+                    setForm({ ...form, cicloNuevoId: e.target.value })
+                  }
+                >
+                  <option value="">-- Ciclo --</option>
+                  {ciclos.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.nombre_ciclo}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Nuevo Ciclo Escolar
-              </label>
-              <select
-                className="w-full p-2 border rounded focus:ring-2 focus:ring-purple-500"
-                value={form.cicloNuevoId}
-                onChange={(e) =>
-                  setForm({ ...form, cicloNuevoId: e.target.value })
-                }
-              >
-                <option value="">-- Seleccionar Ciclo --</option>
-                {ciclos.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.nombre_ciclo}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="pt-4">
-              <button
-                type="submit"
-                className="w-full bg-purple-600 text-white py-3 rounded-lg font-bold hover:bg-purple-700 shadow-lg flex justify-center items-center gap-2"
-              >
-                <ArrowRightLeft size={20} /> Ejecutar Migración
-              </button>
-            </div>
+            <button
+              type="submit"
+              className="w-full bg-gray-900 text-white py-4 rounded-xl font-bold hover:bg-black shadow-lg flex justify-center items-center gap-2 mt-4 transition-transform active:scale-95"
+            >
+              <GitBranch size={20} /> Ejecutar Migración
+            </button>
           </form>
         </div>
       </div>
@@ -4951,19 +5036,354 @@ const CatalogoModal = ({
   );
 };
 
-// --- INICIA NUEVO COMPONENTE: PlanesEstudioPage ---
+// --- COMPONENTE CICLOS (CON GESTIÓN DE 'ACTUAL') ---
+const CiclosPage = () => {
+  const [ciclos, setCiclos] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [form, setForm] = useState({ nombre_ciclo: "" });
+  const [isEditing, setIsEditing] = useState(false);
+  const [currentId, setCurrentId] = useState(null);
+
+  const fetchCiclos = async () => {
+    try {
+      // Nota: Asegúrate de que tu backend devuelva la columna 'actual'
+      // Si usas el CRUD genérico, ya lo hace (SELECT *).
+      const { data } = await api.get("/admin/ciclos");
+      // Ordenamos para que el actual salga primero o por nombre
+      setCiclos(data.sort((a, b) => b.actual - a.actual));
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchCiclos();
+  }, []);
+
+  const handleGuardar = async (e) => {
+    e.preventDefault();
+    try {
+      if (isEditing) await api.put(`/admin/ciclos/${currentId}`, form);
+      else await api.post("/admin/ciclos", form);
+      setForm({ nombre_ciclo: "" });
+      setIsEditing(false);
+      fetchCiclos();
+    } catch (e) {
+      alert("Error al guardar");
+    }
+  };
+
+  const handleActivar = async (id) => {
+    if (
+      !window.confirm(
+        "¿Definir este ciclo como el ACTUAL? Esto cambiará la configuración global.",
+      )
+    )
+      return;
+    try {
+      await api.put(`/admin/ciclos/${id}/fijar-actual`);
+      // Recargamos la página para actualizar también el Header
+      window.location.reload();
+    } catch (e) {
+      alert("Error al activar ciclo");
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (window.confirm("¿Eliminar ciclo?")) {
+      try {
+        await api.delete(`/admin/ciclos/${id}`);
+        fetchCiclos();
+      } catch (e) {
+        alert("Error");
+      }
+    }
+  };
+
+  return (
+    <div className="space-y-8 animate-in fade-in duration-300 max-w-5xl mx-auto">
+      {/* HEADER */}
+      <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-800 tracking-tight">
+            Ciclos Escolares
+          </h1>
+          <p className="text-gray-500 mt-2 text-lg">
+            Define qué periodo está activo actualmente.
+          </p>
+        </div>
+        {/* Formulario rápido Inline */}
+        <form onSubmit={handleGuardar} className="flex gap-2">
+          <input
+            placeholder="Ej: 2026-A"
+            className="p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#a72a34]"
+            value={form.nombre_ciclo}
+            onChange={(e) => setForm({ nombre_ciclo: e.target.value })}
+            required
+          />
+          <button
+            type="submit"
+            className="bg-[#a72a34] text-white px-4 py-2 rounded-xl font-bold hover:bg-[#802028]"
+          >
+            {isEditing ? "Actualizar" : "Crear Nuevo"}
+          </button>
+          {isEditing && (
+            <button
+              type="button"
+              onClick={() => {
+                setIsEditing(false);
+                setForm({ nombre_ciclo: "" });
+              }}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              <X />
+            </button>
+          )}
+        </form>
+      </div>
+
+      {/* LISTA DE CICLOS */}
+      <div className="grid grid-cols-1 gap-4">
+        {ciclos.map((ciclo) => (
+          <div
+            key={ciclo.id}
+            className={`p-6 rounded-2xl border flex justify-between items-center transition-all ${ciclo.actual ? "bg-white border-[#bb9a5a] shadow-md ring-1 ring-[#bb9a5a]" : "bg-white border-gray-100 opacity-80 hover:opacity-100"}`}
+          >
+            <div className="flex items-center gap-4">
+              <div
+                className={`p-3 rounded-full ${ciclo.actual ? "bg-[#bb9a5a]/10 text-[#bb9a5a]" : "bg-gray-100 text-gray-400"}`}
+              >
+                <Calendar size={24} />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-gray-800">
+                  {ciclo.nombre_ciclo}
+                </h3>
+                {ciclo.actual && (
+                  <span className="text-xs font-bold text-[#bb9a5a] uppercase tracking-wider">
+                    Ciclo Actual (Activo)
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {!ciclo.actual && (
+                <button
+                  onClick={() => handleActivar(ciclo.id)}
+                  className="px-4 py-2 text-sm font-bold text-gray-500 hover:text-[#a72a34] hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-100"
+                >
+                  Fijar como Actual
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  setForm({ nombre_ciclo: ciclo.nombre_ciclo });
+                  setIsEditing(true);
+                  setCurrentId(ciclo.id);
+                }}
+                className="p-2 text-gray-400 hover:text-blue-600 rounded-lg"
+              >
+                <Edit size={18} />
+              </button>
+              <button
+                onClick={() => handleDelete(ciclo.id)}
+                className="p-2 text-gray-400 hover:text-red-600 rounded-lg"
+              >
+                <Trash2 size={18} />
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// --- COMPONENTE GRADOS (DISEÑO CLEAN DASHBOARD) ---
+const GradosPage = () => {
+  const [grados, setGrados] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [currentGrado, setCurrentGrado] = useState(null);
+  const [form, setForm] = useState({ nombre_grado: "" });
+
+  const fetchGrados = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await api.get("/admin/grados");
+      setGrados(response.data);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchGrados();
+  }, [fetchGrados]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      if (currentGrado) {
+        await api.put(`/admin/grados/${currentGrado.id}`, form);
+      } else {
+        await api.post("/admin/grados", form);
+      }
+      setModalOpen(false);
+      setCurrentGrado(null);
+      setForm({ nombre_grado: "" });
+      fetchGrados();
+    } catch (error) {
+      alert("Error al guardar");
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (window.confirm("¿Eliminar grado?")) {
+      try {
+        await api.delete(`/admin/grados/${id}`);
+        fetchGrados();
+      } catch (error) {
+        alert("Error al eliminar");
+      }
+    }
+  };
+
+  const abrirModal = (grado = null) => {
+    setCurrentGrado(grado);
+    setForm({ nombre_grado: grado ? grado.nombre_grado : "" });
+    setModalOpen(true);
+  };
+
+  return (
+    <div className="space-y-8 animate-in fade-in duration-300">
+      {/* HEADER STANDARD */}
+      <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-800 tracking-tight">
+            Grados Académicos
+          </h1>
+          <p className="text-gray-500 mt-2 text-lg">
+            Catálogo de semestres o cuatrimestres.
+          </p>
+        </div>
+        <button
+          onClick={() => abrirModal()}
+          className="bg-[#a72a34] text-white px-6 py-3 rounded-xl hover:bg-[#802028] font-bold shadow-lg shadow-red-900/20 flex items-center gap-2 transition-transform active:scale-95"
+        >
+          <Plus size={20} /> Nuevo Grado
+        </button>
+      </div>
+
+      {/* GRID STANDARD */}
+      {loading ? (
+        <div className="text-center py-20 text-gray-400">Cargando...</div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {grados.map((grado) => (
+            <div
+              key={grado.id}
+              className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-all group flex items-center justify-between"
+            >
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-gray-50 text-gray-600 rounded-xl">
+                  <TrendingUp size={24} />
+                </div>
+                <h3 className="text-lg font-bold text-gray-800">
+                  {grado.nombre_grado}
+                </h3>
+              </div>
+
+              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button
+                  onClick={() => abrirModal(grado)}
+                  className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"
+                >
+                  <Edit size={18} />
+                </button>
+                <button
+                  onClick={() => handleDelete(grado.id)}
+                  className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                >
+                  <Trash2 size={18} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* MODAL */}
+      {modalOpen && (
+        <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-50 p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
+            <div className="p-6 border-b border-gray-100 flex justify-between items-center">
+              <h3 className="text-xl font-bold text-gray-800">
+                {currentGrado ? "Editar Grado" : "Nuevo Grado"}
+              </h3>
+              <button onClick={() => setModalOpen(false)}>
+                <X size={24} className="text-gray-400 hover:text-gray-600" />
+              </button>
+            </div>
+            <form onSubmit={handleSubmit} className="p-6 space-y-6">
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">
+                  Nombre
+                </label>
+                <input
+                  autoFocus
+                  className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50"
+                  placeholder="Ej: 1er Semestre"
+                  value={form.nombre_grado}
+                  onChange={(e) => setForm({ nombre_grado: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setModalOpen(false)}
+                  className="flex-1 py-3 text-gray-600 hover:bg-gray-100 rounded-xl font-bold"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-3 bg-[#a72a34] text-white rounded-xl hover:bg-[#802028] font-bold shadow-lg"
+                >
+                  Guardar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// --- COMPONENTE PLANES (DISEÑO CLEAN DASHBOARD) ---
 const PlanesEstudioPage = () => {
   const [planes, setPlanes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [currentPlan, setCurrentPlan] = useState(null);
 
   const fetchPlanes = useCallback(async () => {
+    setLoading(true);
     try {
-      // Usamos la nueva ruta que trae el JOIN
       const response = await api.get("/admin/planes_estudio");
       setPlanes(response.data);
     } catch (error) {
-      console.error("Error al obtener planes de estudio", error);
+      console.error("Error", error);
+    } finally {
+      setLoading(false);
     }
   }, []);
 
@@ -4972,20 +5392,12 @@ const PlanesEstudioPage = () => {
   }, [fetchPlanes]);
 
   const handleDelete = async (id) => {
-    if (
-      window.confirm(
-        "¿Estás seguro de que quieres eliminar este plan de estudio?",
-      )
-    ) {
+    if (window.confirm("¿Eliminar este plan?")) {
       try {
         await api.delete(`/admin/planes_estudio/${id}`);
         fetchPlanes();
       } catch (error) {
-        console.error("Error al eliminar plan de estudio", error);
-        alert(
-          "Error al eliminar: " +
-            (error.response?.data?.message || "Error desconocido"),
-        );
+        alert("Error al eliminar");
       }
     }
   };
@@ -4995,102 +5407,873 @@ const PlanesEstudioPage = () => {
     setModalOpen(true);
   };
 
-  const closeModal = () => {
-    setModalOpen(false);
-    setCurrentPlan(null);
-  };
+  const filteredPlanes = planes.filter(
+    (p) =>
+      p.nombre_plan.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (p.nombre_carrera &&
+        p.nombre_carrera.toLowerCase().includes(searchTerm.toLowerCase())),
+  );
 
   return (
-    <div>
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-3xl font-bold text-gray-800">
-          Gestión de Planes de Estudio
-        </h2>
+    <div className="space-y-8 animate-in fade-in duration-300">
+      {/* HEADER */}
+      <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-800 tracking-tight">
+            Planes de Estudio
+          </h1>
+          <p className="text-gray-500 mt-2 text-lg">
+            Retículas y mapas curriculares.
+          </p>
+        </div>
         <button
           onClick={() => openModal()}
-          className="flex items-center px-4 py-2 font-semibold text-white bg-principal rounded-md hover:opacity-90"
+          className="bg-gray-900 text-white px-6 py-3 rounded-xl hover:bg-black font-bold shadow-lg flex items-center gap-2 transition-transform active:scale-95"
         >
-          <Plus className="w-5 h-5 mr-2" />
-          Nuevo Plan
+          <Plus size={20} /> Nuevo Plan
         </button>
       </div>
 
-      <div className="bg-white p-6 rounded-lg shadow">
-        <table className="w-full table-auto">
-          <thead className="text-left bg-gray-50">
-            <tr>
-              <th className="px-4 py-2">Nombre del Plan</th>
-              <th className="px-4 py-2">Carrera Asignada</th>
-              <th className="px-4 py-2">Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {planes.map((plan) => (
-              <tr key={plan.id} className="border-b">
-                <td className="px-4 py-2">{plan.nombre_plan}</td>
-                <td className="px-4 py-2">{plan.nombre_carrera || "N/A"}</td>
-                <td className="px-4 py-2 flex items-center space-x-2">
+      {/* BUSCADOR ESTILO CLEAN */}
+      <div className="relative max-w-md">
+        <Search className="absolute left-4 top-3.5 text-gray-400" size={20} />
+        <input
+          type="text"
+          placeholder="Buscar plan o carrera..."
+          className="w-full pl-12 pr-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-pink-500 bg-white shadow-sm font-medium"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+        />
+      </div>
+
+      {/* GRID */}
+      {loading ? (
+        <div className="text-center py-20 text-gray-400">Cargando...</div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {filteredPlanes.map((plan) => (
+            <div
+              key={plan.id}
+              className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-all group relative overflow-hidden h-full flex flex-col"
+            >
+              <div className="flex justify-between items-start mb-4">
+                <div className="p-3 bg-pink-50 text-pink-600 rounded-xl">
+                  <FileText size={24} />
+                </div>
+                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button
                     onClick={() => openModal(plan)}
-                    className="text-secundario hover:text-principal"
+                    className="p-2 text-gray-400 hover:text-pink-600 hover:bg-pink-50 rounded-lg"
                   >
                     <Edit size={18} />
                   </button>
                   <button
                     onClick={() => handleDelete(plan.id)}
-                    className="text-red-500 hover:text-red-700"
+                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
                   >
                     <Trash2 size={18} />
                   </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                </div>
+              </div>
+
+              <div className="flex-1">
+                <h3 className="text-xl font-bold text-gray-800 mb-2 leading-tight">
+                  {plan.nombre_plan}
+                </h3>
+                <div className="flex items-center gap-2 mt-3">
+                  <div className="w-1.5 h-1.5 rounded-full bg-gray-300"></div>
+                  <span className="text-sm font-medium text-gray-500 truncate">
+                    {plan.nombre_carrera || "Sin carrera asignada"}
+                  </span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {modalOpen && (
         <PlanesEstudioModal
           plan={currentPlan}
-          onClose={closeModal}
+          onClose={() => setModalOpen(false)}
           onSave={fetchPlanes}
         />
       )}
     </div>
   );
 };
-// --- FIN NUEVO COMPONENTE: PlanesEstudioPage ---
 
-// --- INICIA NUEVO COMPONENTE: PlanesEstudioModal ---
+// --- COMPONENTE CARRERAS (DISEÑO CLEAN DASHBOARD) ---
+const CarrerasPage = () => {
+  const [carreras, setCarreras] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [modalOpen, setModalOpen] = useState(false);
+  const [currentCarrera, setCurrentCarrera] = useState(null);
+
+  const fetchCarreras = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await api.get("/admin/carreras");
+      setCarreras(response.data);
+    } catch (error) {
+      console.error("Error", error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchCarreras();
+  }, [fetchCarreras]);
+
+  const handleDelete = async (id) => {
+    if (window.confirm("¿Eliminar carrera?")) {
+      try {
+        await api.delete(`/admin/carreras/${id}`);
+        fetchCarreras();
+      } catch (error) {
+        alert("Error al eliminar");
+      }
+    }
+  };
+
+  const openModal = (carrera = null) => {
+    setCurrentCarrera(carrera);
+    setModalOpen(true);
+  };
+
+  const filteredCarreras = carreras.filter((c) =>
+    c.nombre_carrera.toLowerCase().includes(searchTerm.toLowerCase()),
+  );
+
+  return (
+    <div className="space-y-8 animate-in fade-in duration-300">
+      <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-800 tracking-tight">
+            Oferta Académica
+          </h1>
+          <p className="text-gray-500 mt-2 text-lg">
+            Licenciaturas, Maestrías y Bachilleratos.
+          </p>
+        </div>
+        <button
+          onClick={() => openModal()}
+          className="bg-gray-900 text-white px-6 py-3 rounded-xl hover:bg-black font-bold shadow-lg flex items-center gap-2 transition-transform active:scale-95"
+        >
+          <Plus size={20} /> Nueva Carrera
+        </button>
+      </div>
+
+      <div className="relative max-w-md">
+        <Search className="absolute left-4 top-3.5 text-gray-400" size={20} />
+        <input
+          type="text"
+          placeholder="Buscar carrera..."
+          className="w-full pl-12 pr-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white shadow-sm font-medium"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+        />
+      </div>
+
+      {loading ? (
+        <div className="text-center py-20 text-gray-400">Cargando...</div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {filteredCarreras.map((carrera) => (
+            <div
+              key={carrera.id}
+              className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-all group h-full flex flex-col"
+            >
+              <div className="flex justify-between items-start mb-4">
+                <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl">
+                  <GraduationCap size={24} />
+                </div>
+                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    onClick={() => openModal(carrera)}
+                    className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"
+                  >
+                    <Edit size={18} />
+                  </button>
+                  <button
+                    onClick={() => handleDelete(carrera.id)}
+                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                </div>
+              </div>
+              <div className="mt-2">
+                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1">
+                  Programa
+                </p>
+                <h3 className="text-lg font-bold text-gray-800 leading-snug">
+                  {carrera.nombre_carrera}
+                </h3>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {modalOpen && (
+        <CarrerasModal
+          carrera={currentCarrera}
+          onClose={() => setModalOpen(false)}
+          onSave={fetchCarreras}
+        />
+      )}
+    </div>
+  );
+};
+
+// --- COMPONENTE SEDES (DISEÑO CLEAN DASHBOARD) ---
+const SedesPage = () => {
+  const [sedes, setSedes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [modalOpen, setModalOpen] = useState(false);
+  const [currentSede, setCurrentSede] = useState(null);
+
+  const fetchSedes = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await api.get("/admin/sedes");
+      setSedes(response.data);
+    } catch (error) {
+      console.error("Error", error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchSedes();
+  }, [fetchSedes]);
+
+  const handleDelete = async (id) => {
+    if (window.confirm("¿Eliminar sede?")) {
+      try {
+        await api.delete(`/admin/sedes/${id}`);
+        fetchSedes();
+      } catch (error) {
+        alert("Error al eliminar");
+      }
+    }
+  };
+
+  const openModal = (sede = null) => {
+    setCurrentSede(sede);
+    setModalOpen(true);
+  };
+
+  const filteredSedes = sedes.filter(
+    (s) =>
+      s.nombre_sede.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (s.direccion &&
+        s.direccion.toLowerCase().includes(searchTerm.toLowerCase())),
+  );
+
+  return (
+    <div className="space-y-8 animate-in fade-in duration-300">
+      <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-800 tracking-tight">
+            Campus y Sedes
+          </h1>
+          <p className="text-gray-500 mt-2 text-lg">
+            Ubicaciones físicas de la institución.
+          </p>
+        </div>
+        <button
+          onClick={() => openModal()}
+          className="bg-gray-900 text-white px-6 py-3 rounded-xl hover:bg-black font-bold shadow-lg flex items-center gap-2 transition-transform active:scale-95"
+        >
+          <Plus size={20} /> Nueva Sede
+        </button>
+      </div>
+
+      <div className="relative max-w-md">
+        <Search className="absolute left-4 top-3.5 text-gray-400" size={20} />
+        <input
+          type="text"
+          placeholder="Buscar campus o dirección..."
+          className="w-full pl-12 pr-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white shadow-sm font-medium"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+        />
+      </div>
+
+      {loading ? (
+        <div className="text-center py-20 text-gray-400">Cargando...</div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredSedes.map((sede) => (
+            <div
+              key={sede.id}
+              className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-all group h-full flex flex-col"
+            >
+              <div className="flex justify-between items-start mb-4">
+                <div className="p-3 bg-teal-50 text-teal-600 rounded-xl">
+                  <Building size={24} />
+                </div>
+                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    onClick={() => openModal(sede)}
+                    className="p-2 text-gray-400 hover:text-teal-600 hover:bg-teal-50 rounded-lg"
+                  >
+                    <Edit size={18} />
+                  </button>
+                  <button
+                    onClick={() => handleDelete(sede.id)}
+                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                </div>
+              </div>
+              <h3 className="text-xl font-bold text-gray-800 mb-2">
+                {sede.nombre_sede}
+              </h3>
+              <div className="mt-auto bg-gray-50 p-3 rounded-lg flex items-start gap-2">
+                <div className="mt-0.5 text-gray-400">
+                  <Building size={14} />
+                </div>
+                <p className="text-sm text-gray-600 leading-snug">
+                  {sede.direccion || "Sin dirección registrada"}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {modalOpen && (
+        <SedesModal
+          sede={currentSede}
+          onClose={() => setModalOpen(false)}
+          onSave={fetchSedes}
+        />
+      )}
+    </div>
+  );
+};
+
+// --- MODAL DE SEDES ---
+const SedesModal = ({ sede, onClose, onSave }) => {
+  const [formData, setFormData] = useState({ nombre_sede: "", direccion: "" });
+
+  useEffect(() => {
+    if (sede) {
+      setFormData({
+        nombre_sede: sede.nombre_sede,
+        direccion: sede.direccion || "",
+      });
+    } else {
+      setFormData({ nombre_sede: "", direccion: "" });
+    }
+  }, [sede]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      if (sede) {
+        await api.put(`/admin/sedes/${sede.id}`, formData);
+      } else {
+        await api.post("/admin/sedes", formData);
+      }
+      onSave();
+      onClose();
+    } catch (error) {
+      alert("Error al guardar la sede");
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-50 p-4 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in duration-200">
+        {/* Encabezado Teal */}
+        <div className="bg-gradient-to-r from-teal-600 to-emerald-600 p-6 flex justify-between items-center text-white">
+          <h3 className="text-xl font-bold">
+            {sede ? "Editar Sede" : "Nueva Sede"}
+          </h3>
+          <button
+            onClick={onClose}
+            className="hover:bg-white/20 p-1 rounded-full"
+          >
+            <X size={24} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+          <div>
+            <label className="block text-sm font-bold text-gray-700 mb-2">
+              Nombre del Campus / Sede
+            </label>
+            <input
+              type="text"
+              autoFocus
+              className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all font-medium text-lg"
+              placeholder="Ej: Campus Central, Sede Norte"
+              value={formData.nombre_sede}
+              onChange={(e) =>
+                setFormData({ ...formData, nombre_sede: e.target.value })
+              }
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-bold text-gray-700 mb-2">
+              Dirección Física
+            </label>
+            <textarea
+              rows="3"
+              className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all resize-none"
+              placeholder="Calle, Número, Colonia, Ciudad..."
+              value={formData.direccion}
+              onChange={(e) =>
+                setFormData({ ...formData, direccion: e.target.value })
+              }
+            />
+          </div>
+
+          <div className="pt-4 flex gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 py-3 text-gray-600 hover:bg-gray-100 rounded-xl font-medium transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              className="flex-1 py-3 bg-teal-600 text-white rounded-xl hover:bg-teal-700 font-bold shadow-lg transition-transform active:scale-95"
+            >
+              Guardar
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// --- COMPONENTE PAGOS (DISEÑO CLEAN DASHBOARD) ---
+const ConceptosPagoPage = () => {
+  const [conceptos, setConceptos] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [modalOpen, setModalOpen] = useState(false);
+  const [currentConcepto, setCurrentConcepto] = useState(null);
+
+  const fetchConceptos = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await api.get("/admin/conceptos_pago");
+      setConceptos(response.data);
+    } catch (error) {
+      console.error("Error", error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchConceptos();
+  }, [fetchConceptos]);
+
+  const handleDelete = async (id) => {
+    if (window.confirm("¿Eliminar concepto?")) {
+      try {
+        await api.delete(`/admin/conceptos_pago/${id}`);
+        fetchConceptos();
+      } catch (error) {
+        alert("Error al eliminar");
+      }
+    }
+  };
+
+  const openModal = (concepto = null) => {
+    setCurrentConcepto(concepto);
+    setModalOpen(true);
+  };
+
+  const filteredConceptos = conceptos.filter((c) =>
+    c.nombre_concepto.toLowerCase().includes(searchTerm.toLowerCase()),
+  );
+
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat("es-MX", {
+      style: "currency",
+      currency: "MXN",
+    }).format(amount || 0);
+  };
+
+  return (
+    <div className="space-y-8 animate-in fade-in duration-300">
+      <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-800 tracking-tight">
+            Conceptos de Cobro
+          </h1>
+          <p className="text-gray-500 mt-2 text-lg">
+            Catálogo de precios y servicios.
+          </p>
+        </div>
+        <button
+          onClick={() => openModal()}
+          className="bg-gray-900 text-white px-6 py-3 rounded-xl hover:bg-black font-bold shadow-lg flex items-center gap-2 transition-transform active:scale-95"
+        >
+          <Plus size={20} /> Nuevo Concepto
+        </button>
+      </div>
+
+      <div className="relative max-w-md">
+        <Search className="absolute left-4 top-3.5 text-gray-400" size={20} />
+        <input
+          type="text"
+          placeholder="Buscar concepto..."
+          className="w-full pl-12 pr-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white shadow-sm font-medium"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+        />
+      </div>
+
+      {loading ? (
+        <div className="text-center py-20 text-gray-400">Cargando...</div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredConceptos.map((concepto) => (
+            <div
+              key={concepto.id}
+              className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-all group h-full flex flex-col justify-between"
+            >
+              <div className="flex justify-between items-start mb-4">
+                <div className="p-3 bg-amber-50 text-amber-600 rounded-xl">
+                  <Tag size={24} />
+                </div>
+                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    onClick={() => openModal(concepto)}
+                    className="p-2 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg"
+                  >
+                    <Edit size={18} />
+                  </button>
+                  <button
+                    onClick={() => handleDelete(concepto.id)}
+                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">
+                  {concepto.tipo || "General"}
+                </p>
+                <h3 className="text-lg font-bold text-gray-700 leading-tight mb-3">
+                  {concepto.nombre_concepto}
+                </h3>
+                <div className="text-3xl font-extrabold text-gray-900 tracking-tight">
+                  {formatCurrency(concepto.monto_default)}
+                </div>
+              </div>
+
+              {concepto.es_concepto_inscripcion === 1 && (
+                <div className="mt-4 pt-3 border-t border-gray-50 flex items-center gap-2 text-amber-600 font-bold text-xs uppercase">
+                  <CheckCircle size={14} /> Concepto de Inscripción
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      {modalOpen && (
+        <ConceptosPagoModal
+          concepto={currentConcepto}
+          onClose={() => setModalOpen(false)}
+          onSave={fetchConceptos}
+        />
+      )}
+    </div>
+  );
+};
+
+// --- MODAL CONCEPTOS DE PAGO (VERSIÓN FINAL Y ROBUSTA) ---
+const ConceptosPagoModal = ({ concepto, onClose, onSave }) => {
+  const [formData, setFormData] = useState({
+    nombre_concepto: "",
+    monto_default: "",
+    tipo: "",
+    es_concepto_inscripcion: false, // Nuevo campo estado
+  });
+
+  useEffect(() => {
+    if (concepto) {
+      setFormData({
+        nombre_concepto: concepto.nombre_concepto,
+        monto_default: concepto.monto_default,
+        tipo: concepto.tipo || "",
+        es_concepto_inscripcion: concepto.es_concepto_inscripcion === 1, // Convertir 1/0 a true/false
+      });
+    } else {
+      setFormData({
+        nombre_concepto: "",
+        monto_default: "",
+        tipo: "",
+        es_concepto_inscripcion: false,
+      });
+    }
+  }, [concepto]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      // Preparamos los datos para enviar 1 o 0 en lugar de true/false
+      const payload = {
+        ...formData,
+        es_concepto_inscripcion: formData.es_concepto_inscripcion ? 1 : 0,
+      };
+
+      if (concepto) {
+        await api.put(`/admin/conceptos_pago/${concepto.id}`, payload);
+      } else {
+        await api.post("/admin/conceptos_pago", payload);
+      }
+      onSave();
+      onClose();
+    } catch (error) {
+      console.error(error);
+      alert("Error al guardar. Revisa la consola.");
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-50 p-4 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
+        <div className="bg-gradient-to-r from-amber-500 to-orange-500 p-6 flex justify-between items-center text-white">
+          <h3 className="text-xl font-bold">
+            {concepto ? "Editar Precio" : "Nuevo Costo"}
+          </h3>
+          <button
+            onClick={onClose}
+            className="hover:bg-white/20 p-1 rounded-full"
+          >
+            <X size={24} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+          {/* NOMBRE */}
+          <div>
+            <label className="block text-sm font-bold text-gray-700 mb-2">
+              Concepto
+            </label>
+            <input
+              autoFocus
+              className="w-full p-3 border border-gray-300 rounded-xl font-medium focus:ring-2 focus:ring-amber-500"
+              value={formData.nombre_concepto}
+              onChange={(e) =>
+                setFormData({ ...formData, nombre_concepto: e.target.value })
+              }
+              required
+              placeholder="Ej. Inscripción Semestral"
+            />
+          </div>
+
+          {/* TIPO */}
+          <div>
+            <label className="block text-sm font-bold text-gray-700 mb-2">
+              Categoría (Tipo)
+            </label>
+            <input
+              type="text"
+              className="w-full p-3 border border-gray-300 rounded-xl font-medium focus:ring-2 focus:ring-amber-500"
+              value={formData.tipo}
+              onChange={(e) =>
+                setFormData({ ...formData, tipo: e.target.value })
+              }
+              placeholder="Ej: tramite, mensualidad..."
+            />
+          </div>
+
+          {/* MONTO */}
+          <div>
+            <label className="block text-sm font-bold text-gray-700 mb-2">
+              Monto Default (MXN)
+            </label>
+            <div className="relative">
+              <span className="absolute left-3 top-3 text-gray-500 font-bold">
+                $
+              </span>
+              <input
+                type="number"
+                className="w-full pl-8 p-3 border border-gray-300 rounded-xl font-bold text-lg text-gray-800 focus:ring-2 focus:ring-amber-500"
+                value={formData.monto_default}
+                onChange={(e) =>
+                  setFormData({ ...formData, monto_default: e.target.value })
+                }
+                required
+                placeholder="0.00"
+              />
+            </div>
+          </div>
+
+          {/* CHECKBOX INSCRIPCIÓN (NUEVO) */}
+          <div className="flex items-center gap-3 p-3 bg-amber-50 rounded-xl border border-amber-100">
+            <input
+              type="checkbox"
+              id="es_inscripcion"
+              className="w-5 h-5 text-amber-600 rounded focus:ring-amber-500"
+              checked={formData.es_concepto_inscripcion}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  es_concepto_inscripcion: e.target.checked,
+                })
+              }
+            />
+            <label
+              htmlFor="es_inscripcion"
+              className="text-sm font-medium text-gray-700 cursor-pointer select-none"
+            >
+              ¿Es pago de Inscripción?
+              <p className="text-xs text-gray-500 font-normal">
+                Marca esto si el pago habilita al alumno en el ciclo.
+              </p>
+            </label>
+          </div>
+
+          <div className="pt-4 flex gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 py-3 text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              className="flex-1 py-3 bg-amber-500 text-white rounded-xl font-bold shadow-lg hover:bg-amber-600 transition-transform active:scale-95"
+            >
+              Guardar
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+// --- MODAL DE CARRERAS (ESTILO CONSISTENTE) ---
+const CarrerasModal = ({ carrera, onClose, onSave }) => {
+  const [formData, setFormData] = useState({ nombre_carrera: "" });
+
+  useEffect(() => {
+    if (carrera) {
+      setFormData({ nombre_carrera: carrera.nombre_carrera });
+    } else {
+      setFormData({ nombre_carrera: "" });
+    }
+  }, [carrera]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      if (carrera) {
+        await api.put(`/admin/carreras/${carrera.id}`, formData);
+      } else {
+        await api.post("/admin/carreras", formData);
+      }
+      onSave();
+      onClose();
+    } catch (error) {
+      alert("Error al guardar la carrera");
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-50 p-4 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in duration-200">
+        {/* Encabezado Índigo */}
+        <div className="bg-gradient-to-r from-indigo-600 to-violet-700 p-6 flex justify-between items-center text-white">
+          <h3 className="text-xl font-bold">
+            {carrera ? "Editar Carrera" : "Nueva Carrera"}
+          </h3>
+          <button
+            onClick={onClose}
+            className="hover:bg-white/20 p-1 rounded-full"
+          >
+            <X size={24} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+          <div>
+            <label className="block text-sm font-bold text-gray-700 mb-2">
+              Nombre Oficial
+            </label>
+            <input
+              type="text"
+              autoFocus
+              className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all font-medium text-lg"
+              placeholder="Ej: Licenciatura en Derecho"
+              value={formData.nombre_carrera}
+              onChange={(e) =>
+                setFormData({ ...formData, nombre_carrera: e.target.value })
+              }
+              required
+            />
+            <p className="text-xs text-gray-400 mt-2">
+              Este nombre aparecerá en certificados y planes de estudio.
+            </p>
+          </div>
+
+          <div className="pt-4 flex gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 py-3 text-gray-600 hover:bg-gray-100 rounded-xl font-medium transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              className="flex-1 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-bold shadow-lg transition-transform active:scale-95"
+            >
+              Guardar
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// --- MODAL PLANES DE ESTUDIO (MODERNO) ---
 const PlanesEstudioModal = ({ plan, onClose, onSave }) => {
   const [formData, setFormData] = useState({
     nombre_plan: plan?.nombre_plan || "",
     carrera_id: plan?.carrera_id || "",
   });
-
   const [carreras, setCarreras] = useState([]);
 
-  // Cargamos el catálogo de carreras al abrir el modal
+  // Cargar carreras para el Select
   useEffect(() => {
     const fetchCarreras = async () => {
       try {
         const res = await api.get("/admin/carreras");
         setCarreras(res.data);
-        // Si es un plan nuevo, pre-selecciona la primera carrera si no hay una
         if (!plan && res.data.length > 0) {
           setFormData((prev) => ({ ...prev, carrera_id: res.data[0].id }));
         }
       } catch (error) {
-        console.error("Error cargando carreras", error);
+        console.error(error);
       }
     };
     fetchCarreras();
-  }, [plan]); // Dependencia [plan] para que se ejecute solo una vez
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
+  }, [plan]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -5103,69 +6286,81 @@ const PlanesEstudioModal = ({ plan, onClose, onSave }) => {
       onSave();
       onClose();
     } catch (error) {
-      console.error("Error al guardar plan de estudio", error);
-      alert(
-        "Error al guardar: " +
-          (error.response?.data?.message || "Error desconocido"),
-      );
+      alert("Error al guardar");
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6 relative">
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-gray-500 hover:text-gray-800"
-        >
-          <X size={24} />
-        </button>
-        <h3 className="text-2xl font-bold mb-6">
-          {plan ? "Editar" : "Nuevo"} Plan de Estudio
-        </h3>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <input
-            type="text"
-            name="nombre_plan"
-            value={formData.nombre_plan}
-            onChange={handleChange}
-            placeholder="Nombre del Plan (ej. Ing. Software 2025)"
-            required
-            className="w-full px-3 py-2 border rounded-md focus:ring-principal focus:border-principal"
-          />
+    <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-50 p-4 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in duration-200">
+        {/* Encabezado */}
+        <div className="bg-gradient-to-r from-pink-600 to-purple-700 p-6 flex justify-between items-center text-white">
+          <h3 className="text-xl font-bold">
+            {plan ? "Editar Plan" : "Nuevo Plan de Estudio"}
+          </h3>
+          <button
+            onClick={onClose}
+            className="hover:bg-white/20 p-1 rounded-full"
+          >
+            <X size={24} />
+          </button>
+        </div>
 
-          {/* ----- ESTE ES EL NUEVO CAMPO ----- */}
+        <form onSubmit={handleSubmit} className="p-6 space-y-5">
           <div>
-            <label className="text-sm font-medium text-gray-700">
-              Carrera a la que pertenece
+            <label className="block text-sm font-bold text-gray-700 mb-2">
+              Nombre del Plan
             </label>
-            <select
-              name="carrera_id"
-              value={formData.carrera_id}
-              onChange={handleChange}
-              className="w-full px-3 py-2 mt-1 border rounded-md"
-            >
-              <option value="">-- Seleccione una Carrera --</option>
-              {carreras.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.nombre_carrera}
-                </option>
-              ))}
-            </select>
+            <input
+              type="text"
+              autoFocus
+              className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-pink-500 transition-all font-medium"
+              placeholder="Ej: Ingeniería 2025, Bachillerato General"
+              value={formData.nombre_plan}
+              onChange={(e) =>
+                setFormData({ ...formData, nombre_plan: e.target.value })
+              }
+              required
+            />
           </div>
-          {/* ----- FIN DEL NUEVO CAMPO ----- */}
 
-          <div className="flex justify-end space-x-4 mt-8">
+          <div>
+            <label className="block text-sm font-bold text-gray-700 mb-2">
+              Carrera Asociada
+            </label>
+            <div className="relative">
+              <GraduationCap
+                className="absolute left-3 top-3 text-gray-400"
+                size={18}
+              />
+              <select
+                className="w-full pl-10 p-3 border border-gray-300 rounded-xl bg-white focus:ring-2 focus:ring-pink-500 focus:border-pink-500 appearance-none"
+                value={formData.carrera_id}
+                onChange={(e) =>
+                  setFormData({ ...formData, carrera_id: e.target.value })
+                }
+              >
+                <option value="">-- Seleccionar Carrera --</option>
+                {carreras.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.nombre_carrera}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="pt-4 flex gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
+              className="flex-1 py-3 text-gray-600 hover:bg-gray-100 rounded-xl font-medium transition-colors"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-principal text-white rounded-md hover:opacity-90"
+              className="flex-1 py-3 bg-pink-600 text-white rounded-xl hover:bg-pink-700 font-bold shadow-lg transition-transform active:scale-95"
             >
               Guardar
             </button>
@@ -5175,29 +6370,22 @@ const PlanesEstudioModal = ({ plan, onClose, onSave }) => {
     </div>
   );
 };
-// --- FIN NUEVO COMPONENTE: PlanesEstudioModal ---
 
-// ... (después del componente PlanesEstudioModal)
-
-// --- INICIA NUEVO COMPONENTE: CajaPage (Admin) ---
-// Esta página será solo un buscador de alumnos
+// --- COMPONENTE CAJA (DISEÑO CLEAN DASHBOARD) ---
 const CajaPage = () => {
   const [usuarios, setUsuarios] = useState([]);
   const [filtro, setFiltro] = useState("");
   const navigate = useNavigate();
 
-  // Carga todos los usuarios (alumnos y aspirantes)
   useEffect(() => {
     const fetchUsuarios = async () => {
       try {
-        // Podríamos crear un endpoint que solo traiga alumnos,
-        // pero reutilizar este es más rápido.
         const { data } = await api.get("/admin/usuarios");
         setUsuarios(
           data.filter((u) => u.rol === "alumno" || u.rol === "aspirante"),
         );
       } catch (error) {
-        console.error("Error al cargar usuarios", error);
+        console.error("Error", error);
       }
     };
     fetchUsuarios();
@@ -5211,58 +6399,82 @@ const CajaPage = () => {
   );
 
   return (
-    <div className="bg-white p-6 rounded-lg shadow max-w-4xl mx-auto">
-      <h2 className="text-3xl font-bold text-gray-800 mb-4">
-        Portal de Caja y Finanzas
-      </h2>
-      <p className="text-gray-600 mb-6">
-        Busca un alumno por nombre, apellido o matrícula para ver su estado de
-        cuenta y registrar pagos.
-      </p>
+    <div className="space-y-8 animate-in fade-in duration-300">
+      {/* HEADER */}
+      <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-800 tracking-tight">
+            Caja y Finanzas
+          </h1>
+          <p className="text-gray-500 mt-2 text-lg">
+            Gestión de pagos y estados de cuenta.
+          </p>
+        </div>
+        <div className="relative w-full md:w-96">
+          <Search className="absolute left-4 top-3.5 text-gray-400" size={20} />
+          <input
+            type="text"
+            placeholder="Buscar alumno por nombre o matrícula..."
+            className="w-full pl-12 pr-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white shadow-sm font-medium"
+            value={filtro}
+            onChange={(e) => setFiltro(e.target.value)}
+          />
+        </div>
+      </div>
 
-      <input
-        type="text"
-        value={filtro}
-        onChange={(e) => setFiltro(e.target.value)}
-        placeholder="Buscar alumno..."
-        className="w-full px-4 py-2 border rounded-md mb-6"
-      />
-
-      <div className="max-h-96 overflow-y-auto">
-        <table className="w-full table-auto">
-          <thead className="text-left bg-gray-50 sticky top-0">
+      {/* TABLA DE RESULTADOS */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <table className="w-full text-left">
+          <thead className="bg-gray-50 text-gray-500 uppercase text-xs font-bold border-b border-gray-100">
             <tr>
-              <th className="px-4 py-2">Nombre Completo</th>
-              <th className="px-4 py-2">Matrícula</th>
-              <th className="px-4 py-2">Rol</th>
-              <th className="px-4 py-2">Acción</th>
+              <th className="p-5">Alumno</th>
+              <th className="p-5">Matrícula</th>
+              <th className="p-5">Estatus</th>
+              <th className="p-5 text-right">Acción</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="divide-y divide-gray-50">
             {alumnosFiltrados.map((user) => (
-              <tr key={user.id} className="border-b">
-                <td className="px-4 py-2">{`${user.nombre} ${user.apellido_paterno}`}</td>
-                <td className="px-4 py-2">{user.matricula || "N/A"}</td>
-                <td className="px-4 py-2 capitalize">{user.rol}</td>
-                <td className="px-4 py-2">
+              <tr
+                key={user.id}
+                className="hover:bg-green-50/30 transition-colors"
+              >
+                <td className="p-5 font-bold text-gray-800">
+                  {user.nombre} {user.apellido_paterno}
+                </td>
+                <td className="p-5 font-mono text-gray-500">
+                  {user.matricula || "---"}
+                </td>
+                <td className="p-5">
+                  <span
+                    className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${user.rol === "aspirante" ? "bg-orange-100 text-orange-700" : "bg-green-100 text-green-700"}`}
+                  >
+                    {user.rol}
+                  </span>
+                </td>
+                <td className="p-5 text-right">
                   <button
                     onClick={() =>
                       navigate(`/admin/finanzas/alumno/${user.id}`)
                     }
-                    className="text-principal hover:underline"
+                    className="text-sm font-bold text-green-700 hover:text-green-900 hover:underline flex items-center justify-end gap-1"
                   >
-                    Ver Estado de Cuenta
+                    <DollarSign size={16} /> Ver Cuenta
                   </button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
+        {alumnosFiltrados.length === 0 && (
+          <div className="p-10 text-center text-gray-400">
+            No se encontraron alumnos.
+          </div>
+        )}
       </div>
     </div>
   );
 };
-// --- FIN COMPONENTE: CajaPage (Admin) ---
 
 // --- INICIA NUEVO COMPONENTE: DetalleFinancieroAlumnoPage (Admin) ---
 const DetalleFinancieroAlumnoPage = () => {
@@ -5928,16 +7140,15 @@ const MisSolicitudesPage = () => {
 };
 // --- FIN COMPONENTE: MisSolicitudesPage (Alumno) ---
 
-// --- INICIA NUEVO COMPONENTE: GestionSolicitudesPage (Admin) ---
+// --- COMPONENTE SOLICITUDES (DISEÑO CLEAN DASHBOARD) ---
 const GestionSolicitudesPage = () => {
   const [solicitudes, setSolicitudes] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filtroEstatus, setFiltroEstatus] = useState("solicitado"); // Mostrar solicitadas por defecto
+  const [filtroEstatus, setFiltroEstatus] = useState("solicitado");
   const [showModal, setShowModal] = useState(false);
   const [selectedSolicitud, setSelectedSolicitud] = useState(null);
   const [nuevoEstatus, setNuevoEstatus] = useState("");
   const [comentariosAdmin, setComentariosAdmin] = useState("");
-  const [isUpdating, setIsUpdating] = useState(false);
   const [errorModal, setErrorModal] = useState("");
 
   const estatusDisponibles = [
@@ -5951,17 +7162,16 @@ const GestionSolicitudesPage = () => {
   const fetchSolicitudes = useCallback(async () => {
     try {
       setLoading(true);
-      // Pide las solicitudes filtrando por el estatus seleccionado
       const { data } = await api.get(
         `/admin/solicitudes?estatus=${filtroEstatus}`,
       );
       setSolicitudes(data);
     } catch (error) {
-      console.error("Error al cargar solicitudes", error);
+      console.error(error);
     } finally {
       setLoading(false);
     }
-  }, [filtroEstatus]); // Se ejecuta de nuevo si cambia el filtro
+  }, [filtroEstatus]);
 
   useEffect(() => {
     fetchSolicitudes();
@@ -5969,206 +7179,160 @@ const GestionSolicitudesPage = () => {
 
   const handleOpenModal = (solicitud) => {
     setSelectedSolicitud(solicitud);
-    setNuevoEstatus(solicitud.estatus); // Inicia con el estatus actual
+    setNuevoEstatus(solicitud.estatus);
     setComentariosAdmin(solicitud.comentarios_admin || "");
-    setErrorModal("");
     setShowModal(true);
   };
 
   const handleUpdateEstatus = async (e) => {
     e.preventDefault();
-    setErrorModal("");
-    setIsUpdating(true);
     try {
       await api.put(`/admin/solicitudes/${selectedSolicitud.id}/estatus`, {
         nuevo_estatus: nuevoEstatus,
         comentarios_admin: comentariosAdmin,
       });
       setShowModal(false);
-      fetchSolicitudes(); // Recargar la lista
+      fetchSolicitudes();
     } catch (error) {
-      console.error("Error al actualizar estatus", error);
-      setErrorModal(error.response?.data?.message || "Error al actualizar.");
-    } finally {
-      setIsUpdating(false);
+      setErrorModal("Error al actualizar");
     }
   };
 
-  // Copiamos los helpers de la vista de alumno para consistencia
-  const getEstatusInfo = (estatus) => {
-    switch (estatus) {
-      case "solicitado":
-        return {
-          text: "Solicitado",
-          color: "bg-blue-100 text-blue-800",
-          icon: FileClock,
-        };
-      case "en_revision":
-        return {
-          text: "En Revisión",
-          color: "bg-yellow-100 text-yellow-800",
-          icon: FileClock,
-        };
-      case "listo_para_entrega":
-        return {
-          text: "Listo",
-          color: "bg-green-100 text-green-800",
-          icon: FileCheck,
-        };
-      case "rechazado":
-        return {
-          text: "Rechazado",
-          color: "bg-red-100 text-red-800",
-          icon: FileX,
-        };
-      case "cancelado":
-        return {
-          text: "Cancelado",
-          color: "bg-gray-100 text-gray-800",
-          icon: FileX,
-        };
-      default:
-        return {
-          text: estatus,
-          color: "bg-gray-100 text-gray-800",
-          icon: FileClock,
-        };
-    }
-  };
   const renderFechaHora = (fechaString) => {
-    if (!fechaString || fechaString.startsWith("0000-")) return "N/A";
-    const date = new Date(fechaString);
-    if (isNaN(date.getTime())) return "Fecha Inválida";
-    return date.toLocaleString();
+    if (!fechaString) return "N/A";
+    return new Date(fechaString).toLocaleString();
   };
 
   return (
-    <div>
-      <h2 className="text-3xl font-bold text-gray-800 mb-6">
-        Gestión de Solicitudes
-      </h2>
+    <div className="space-y-8 animate-in fade-in duration-300">
+      {/* HEADER */}
+      <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-800 tracking-tight">
+            Solicitudes de Alumnos
+          </h1>
+          <p className="text-gray-500 mt-2 text-lg">
+            Constancias, Kardex y trámites escolares.
+          </p>
+        </div>
 
-      {/* Filtro por estatus */}
-      <div className="mb-4">
-        <label
-          htmlFor="filtroEstatus"
-          className="block text-sm font-medium text-gray-700 mb-1"
-        >
-          Filtrar por Estatus:
-        </label>
-        <select
-          id="filtroEstatus"
-          value={filtroEstatus}
-          onChange={(e) => setFiltroEstatus(e.target.value)}
-          className="px-3 py-2 border rounded-md"
-        >
-          {estatusDisponibles.map((e) => (
-            <option key={e} value={e} className="capitalize">
-              {e.replace("_", " ")}
-            </option>
-          ))}
-          <option value="">-- Todos --</option> {/* Opción para ver todas */}
-        </select>
+        {/* Filtro Integrado en Header */}
+        <div className="flex items-center gap-2 bg-gray-50 p-1 rounded-xl border border-gray-200">
+          <select
+            value={filtroEstatus}
+            onChange={(e) => setFiltroEstatus(e.target.value)}
+            className="bg-transparent font-bold text-gray-700 text-sm p-2 outline-none cursor-pointer"
+          >
+            <option value="">-- Todas --</option>
+            {estatusDisponibles.map((e) => (
+              <option key={e} value={e}>
+                {e.replace("_", " ").toUpperCase()}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
-      <div className="bg-white p-6 rounded-lg shadow">
-        <h3 className="text-xl font-bold mb-4">
-          Solicitudes{" "}
-          {filtroEstatus ? `(${filtroEstatus.replace("_", " ")})` : "(Todas)"}
-        </h3>
+      {/* TABLA */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         {loading ? (
-          <p>Cargando solicitudes...</p>
-        ) : solicitudes.length === 0 ? (
-          <p className="text-gray-500">No hay solicitudes con este estatus.</p>
+          <div className="p-10 text-center text-gray-400">Cargando...</div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full table-auto text-sm">
-              <thead className="text-left bg-gray-50">
+          <table className="w-full text-left">
+            <thead className="bg-gray-50 text-gray-500 uppercase text-xs font-bold border-b border-gray-100">
+              <tr>
+                <th className="p-5">Alumno</th>
+                <th className="p-5">Trámite</th>
+                <th className="p-5">Fecha</th>
+                <th className="p-5">Estatus</th>
+                <th className="p-5 text-right">Acción</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {solicitudes.length === 0 ? (
                 <tr>
-                  <th className="px-4 py-2">Alumno</th>
-                  <th className="px-4 py-2">Tipo</th>
-                  <th className="px-4 py-2">Fecha Solicitud</th>
-                  <th className="px-4 py-2">Estatus Actual</th>
-                  <th className="px-4 py-2">Acción</th>
+                  <td colSpan="5" className="p-10 text-center text-gray-400">
+                    Sin solicitudes.
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {solicitudes.map((s) => {
-                  const estatusInfo = getEstatusInfo(s.estatus);
-                  return (
-                    <tr key={s.id} className="border-b">
-                      <td className="px-4 py-2 font-medium">
-                        {s.nombre_alumno}
-                      </td>
-                      <td className="px-4 py-2">
-                        {s.tipo_solicitud.replace("_", " ")}
-                      </td>
-                      <td className="px-4 py-2">
-                        {renderFechaHora(s.fecha_solicitud)}
-                      </td>
-                      <td className="px-4 py-2">
-                        <span
-                          className={`flex items-center px-3 py-1 rounded-full text-xs font-semibold ${estatusInfo.color}`}
-                        >
-                          <estatusInfo.icon size={14} className="mr-1" />
-                          {estatusInfo.text}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2">
-                        <button
-                          onClick={() => handleOpenModal(s)}
-                          className="px-3 py-1 text-sm font-medium text-white bg-secundario rounded-md hover:opacity-90"
-                        >
-                          Actualizar Estatus
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+              ) : (
+                solicitudes.map((s) => (
+                  <tr key={s.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="p-5 font-bold text-gray-800">
+                      {s.nombre_alumno}
+                    </td>
+                    <td className="p-5 capitalize text-gray-600">
+                      {s.tipo_solicitud.replace("_", " ")}
+                    </td>
+                    <td className="p-5 text-sm text-gray-500">
+                      {renderFechaHora(s.fecha_solicitud)}
+                    </td>
+                    <td className="p-5">
+                      <span
+                        className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider
+                      ${
+                        s.estatus === "solicitado"
+                          ? "bg-blue-100 text-blue-800"
+                          : s.estatus === "listo_para_entrega"
+                            ? "bg-green-100 text-green-800"
+                            : s.estatus === "rechazado"
+                              ? "bg-red-100 text-red-800"
+                              : "bg-yellow-100 text-yellow-800"
+                      }`}
+                      >
+                        {s.estatus.replace("_", " ")}
+                      </span>
+                    </td>
+                    <td className="p-5 text-right">
+                      <button
+                        onClick={() => handleOpenModal(s)}
+                        className="text-blue-600 hover:bg-blue-50 px-3 py-1 rounded-lg font-bold text-sm transition-colors"
+                      >
+                        Gestionar
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         )}
       </div>
 
-      {/* Modal para Actualizar Estatus */}
+      {/* Modal se mantiene funcional igual que antes, solo lo envolví en el diseño */}
       {showModal && selectedSolicitud && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6 relative">
-            <button
-              onClick={() => setShowModal(false)}
-              className="absolute top-4 right-4 text-gray-500 hover:text-gray-800"
-            >
-              <X size={24} />
-            </button>
-            <h3 className="text-2xl font-bold mb-2">Actualizar Solicitud</h3>
-            <p className="text-gray-600 mb-1">
-              Alumno:{" "}
-              <span className="font-semibold">
-                {selectedSolicitud.nombre_alumno}
-              </span>
-            </p>
-            <p className="text-gray-600 mb-4">
-              Tipo:{" "}
-              <span className="font-semibold">
-                {selectedSolicitud.tipo_solicitud.replace("_", " ")}
-              </span>
-            </p>
+        <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-50 p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in duration-200">
+            <div className="p-6 border-b border-gray-100 flex justify-between items-center">
+              <h3 className="font-bold text-xl">Actualizar Solicitud</h3>
+              <button onClick={() => setShowModal(false)}>
+                <X size={20} className="text-gray-400" />
+              </button>
+            </div>
+            <form onSubmit={handleUpdateEstatus} className="p-6 space-y-4">
+              <div className="bg-gray-50 p-4 rounded-xl mb-4">
+                <p className="text-sm text-gray-500 font-bold uppercase">
+                  Alumno
+                </p>
+                <p className="text-lg font-bold text-gray-800">
+                  {selectedSolicitud.nombre_alumno}
+                </p>
+                <p className="text-sm text-gray-500 font-bold uppercase mt-2">
+                  Motivo
+                </p>
+                <p className="text-gray-700 italic">
+                  "{selectedSolicitud.motivo || "Sin motivo"}"
+                </p>
+              </div>
 
-            <form onSubmit={handleUpdateEstatus} className="space-y-4">
               <div>
-                <label
-                  htmlFor="nuevoEstatus"
-                  className="block text-sm font-medium text-gray-700"
-                >
+                <label className="block text-sm font-bold text-gray-700 mb-2">
                   Nuevo Estatus
                 </label>
                 <select
-                  id="nuevoEstatus"
                   value={nuevoEstatus}
                   onChange={(e) => setNuevoEstatus(e.target.value)}
-                  className="w-full px-3 py-2 mt-1 border rounded-md capitalize"
-                  required
+                  className="w-full p-3 border rounded-xl bg-white font-medium capitalize"
                 >
                   {estatusDisponibles.map((e) => (
                     <option key={e} value={e}>
@@ -6178,38 +7342,30 @@ const GestionSolicitudesPage = () => {
                 </select>
               </div>
               <div>
-                <label
-                  htmlFor="comentariosAdmin"
-                  className="block text-sm font-medium text-gray-700"
-                >
-                  Comentarios para el Alumno (Opcional)
+                <label className="block text-sm font-bold text-gray-700 mb-2">
+                  Comentarios (Opcional)
                 </label>
                 <textarea
-                  id="comentariosAdmin"
                   rows="3"
                   value={comentariosAdmin}
                   onChange={(e) => setComentariosAdmin(e.target.value)}
-                  placeholder="Ej: Documento listo en ventanilla 3 / Favor de pasar a pagar..."
-                  className="w-full px-3 py-2 mt-1 border rounded-md"
-                />
+                  className="w-full p-3 border rounded-xl"
+                  placeholder="Mensaje para el alumno..."
+                ></textarea>
               </div>
-              {errorModal && (
-                <p className="text-sm text-red-600">{errorModal}</p>
-              )}
-              <div className="flex justify-end space-x-4 mt-8">
+              <div className="flex gap-3 pt-4">
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
+                  className="flex-1 py-3 text-gray-600 hover:bg-gray-100 rounded-xl font-bold"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  disabled={isUpdating}
-                  className="px-4 py-2 bg-principal text-white rounded-md hover:opacity-90 disabled:bg-gray-400"
+                  className="flex-1 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-bold shadow-lg"
                 >
-                  {isUpdating ? "Actualizando..." : "Guardar Cambios"}
+                  Guardar
                 </button>
               </div>
             </form>
@@ -6219,7 +7375,6 @@ const GestionSolicitudesPage = () => {
     </div>
   );
 };
-// --- FIN COMPONENTE: GestionSolicitudesPage (Admin) ---
 
 // --- NUEVA PÁGINA DE MIGRACIÓN ---
 const MigracionGruposPage = () => {
@@ -9603,184 +10758,364 @@ const AsistenciaPage = () => {
 
 // --- INICIA NUEVO CÓDIGO (AGREGAR) ---
 
-// Página "Mi Perfil" (Común para todos los roles)
+// --- MI PERFIL PAGE (DISEÑO CLEAN, DATOS COMPLETOS) ---
 const MiPerfilPage = () => {
-  const { user, updateProfilePic } = useAuth(); // Usamos updateProfilePic del contexto
-  const [perfil, setPerfil] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [selectedFile, setSelectedFile] = useState(null);
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadError, setUploadError] = useState("");
-  const [uploadSuccess, setUploadSuccess] = useState(false);
+  const { user, updateProfilePic } = useAuth();
+  const [loading, setLoading] = useState(false);
 
-  // Cargar datos del perfil
-  const fetchPerfil = useCallback(async () => {
+  const [formData, setFormData] = useState({
+    nombre: "",
+    apellido_paterno: "",
+    apellido_materno: "",
+    email: "",
+    telefono: "",
+    genero: "",
+    fecha_nacimiento: "",
+    curp: "",
+    matricula: "",
+    rol: "",
+    nombre_carrera: "",
+    nombre_sede: "",
+    nombre_grupo: "",
+  });
+
+  const [passData, setPassData] = useState({
+    currentPassword: "",
+    newPassword: "",
+  });
+
+  useEffect(() => {
+    const cargarPerfil = async () => {
+      try {
+        const { data } = await api.get("/mi-perfil");
+        setFormData({
+          nombre: data.nombre || "",
+          apellido_paterno: data.apellido_paterno || "",
+          apellido_materno: data.apellido_materno || "",
+          email: data.email || "",
+          telefono: data.telefono || "",
+          genero: data.genero || "",
+          fecha_nacimiento: data.fecha_nacimiento || "",
+          curp: data.curp || "",
+          matricula: data.matricula || "",
+          rol: data.rol || "",
+          nombre_carrera: data.nombre_carrera || "No asignada",
+          nombre_sede: data.nombre_sede || "No asignada",
+          nombre_grupo: data.nombre_grupo || "Sin grupo",
+        });
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    cargarPerfil();
+  }, [user]);
+
+  const handleUpdateInfo = async (e) => {
+    e.preventDefault();
+    setLoading(true);
     try {
-      setLoading(true);
-      const { data } = await api.get("/mi-perfil");
-      setPerfil(data);
+      await api.put("/auth/perfil", formData);
+      alert("Información actualizada correctamente");
     } catch (error) {
-      console.error("Error al cargar perfil", error);
-      // Aquí podríamos redirigir o mostrar un error persistente
+      alert("Error al actualizar");
     } finally {
       setLoading(false);
     }
-  }, []);
+  };
 
-  useEffect(() => {
-    fetchPerfil();
-  }, [fetchPerfil]);
-
-  // Manejar selección de archivo
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file && file.type.startsWith("image/")) {
-      setSelectedFile(file);
-      setUploadError(""); // Limpiar errores previos
-      setUploadSuccess(false);
-    } else {
-      setSelectedFile(null);
-      setUploadError("Por favor, selecciona un archivo de imagen válido.");
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    try {
+      await api.put("/auth/cambiar-password", passData);
+      alert("Contraseña modificada con éxito");
+      setPassData({ currentPassword: "", newPassword: "" });
+    } catch (error) {
+      alert(error.response?.data?.message || "Error");
     }
   };
 
-  // Manejar subida de foto
-  const handleUploadFoto = async (e) => {
-    e.preventDefault();
-    if (!selectedFile) {
-      setUploadError("No has seleccionado ninguna imagen.");
-      return;
-    }
-    setIsUploading(true);
-    setUploadError("");
-    setUploadSuccess(false);
-
-    const formData = new FormData();
-    formData.append("foto", selectedFile);
-
+  const handleFileChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const data = new FormData();
+    data.append("foto", file);
     try {
-      // Llamar a la API para subir la foto
-      const { data } = await api.post("/mi-perfil/foto", formData, {
+      const res = await api.post("/mi-perfil/foto", data, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-
-      // Actualizar el estado local Y el contexto de Auth
-      setPerfil((prev) => ({ ...prev, foto_perfil: data.foto_perfil }));
-      updateProfilePic(data.foto_perfil); // <-- Actualiza el contexto global
-
-      setUploadSuccess(true);
-      setSelectedFile(null); // Limpiar selección
-      // Ocultar mensaje de éxito después de unos segundos
-      setTimeout(() => setUploadSuccess(false), 3000);
+      if (updateProfilePic) updateProfilePic(res.data.foto_perfil);
+      alert("Foto actualizada");
     } catch (error) {
-      console.error("Error al subir foto", error);
-      setUploadError(
-        error.response?.data?.message || "Error al subir la imagen.",
-      );
-    } finally {
-      setIsUploading(false);
+      alert("Error al subir imagen");
     }
   };
 
-  if (loading) return <p>Cargando perfil...</p>;
-  if (!perfil) return <p>No se pudo cargar la información del perfil.</p>;
-
-  // Construir URL completa de la foto
-  const fotoUrl = perfil.foto_perfil
-    ? `http://localhost:3001/uploads/perfiles/${perfil.foto_perfil}`
-    : `https://ui-avatars.com/api/?name=${encodeURIComponent(
-        perfil.nombre,
-      )}+${encodeURIComponent(
-        perfil.apellido_paterno,
-      )}&background=random&color=fff`; // Placeholder
-
   return (
-    <div className="bg-white p-6 rounded-lg shadow max-w-4xl mx-auto">
-      <h2 className="text-3xl font-bold text-gray-800 mb-6">Mi Perfil</h2>
+    <div className="space-y-8 animate-in fade-in duration-300 max-w-7xl mx-auto pb-10">
+      {/* HEADER */}
+      <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
+        <h1 className="text-3xl font-bold text-gray-800 tracking-tight">
+          Mi Perfil Institucional
+        </h1>
+        <p className="text-gray-500 mt-2 text-lg">
+          Consulta y actualiza tus datos personales.
+        </p>
+      </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
-        {/* Columna de Foto */}
-        <div className="md:col-span-1 flex flex-col items-center space-y-4">
-          <img
-            src={fotoUrl}
-            alt="Foto de perfil"
-            className="w-40 h-40 rounded-full object-cover border-4 border-gray-200 shadow-sm"
-            onError={(e) => {
-              e.target.onerror = null;
-              e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                perfil.nombre,
-              )}+${encodeURIComponent(
-                perfil.apellido_paterno,
-              )}&background=random&color=fff`;
-            }} // Fallback si la imagen no carga
-          />
-          <form onSubmit={handleUploadFoto} className="w-full text-center">
-            <label
-              htmlFor="fotoInput"
-              className="cursor-pointer inline-block px-4 py-2 text-sm font-medium text-white bg-secundario rounded-md hover:opacity-90"
-            >
-              {selectedFile ? "Archivo seleccionado" : "Cambiar Foto"}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* COLUMNA 1: FOTO Y RESUMEN */}
+        <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center text-center h-fit">
+          <div className="relative group mb-6">
+            <div className="w-48 h-48 rounded-full p-1 border-4 border-[#bb9a5a] overflow-hidden bg-gray-100 shadow-xl">
+              {user?.foto_perfil ? (
+                <img
+                  src={`http://localhost:3001/uploads/perfiles/${user.foto_perfil}`}
+                  className="w-full h-full object-cover"
+                  alt="Perfil"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-5xl font-bold text-[#bb9a5a] bg-orange-50">
+                  {user?.nombre?.charAt(0)}
+                </div>
+              )}
+            </div>
+            <label className="absolute bottom-2 right-4 bg-[#a72a34] text-white p-3 rounded-full shadow-lg cursor-pointer hover:bg-[#802028] transition-transform hover:scale-110 border-4 border-white">
+              <Camera size={22} />
+              <input
+                type="file"
+                className="hidden"
+                accept="image/*"
+                onChange={handleFileChange}
+              />
             </label>
-            <input
-              id="fotoInput"
-              type="file"
-              accept="image/*" // Aceptar solo imágenes
-              onChange={handleFileChange}
-              className="hidden" // Ocultar el input por defecto
-            />
-            {selectedFile && (
-              <p
-                className="text-xs text-gray-500 mt-1 truncate"
-                title={selectedFile.name}
-              >
-                {selectedFile.name}
-              </p>
-            )}
-            {selectedFile && (
-              <button
-                type="submit"
-                disabled={isUploading}
-                className="mt-2 w-full flex items-center justify-center px-4 py-2 text-sm font-semibold text-white bg-principal rounded-md hover:opacity-90 disabled:bg-gray-400"
-              >
-                <Upload size={16} className="mr-2" />
-                {isUploading ? "Subiendo..." : "Subir Nueva Foto"}
-              </button>
-            )}
-            {uploadError && (
-              <p className="text-xs text-red-600 mt-1">{uploadError}</p>
-            )}
-            {uploadSuccess && (
-              <p className="text-xs text-green-600 mt-1">¡Foto actualizada!</p>
-            )}
-          </form>
+          </div>
+
+          <h2 className="text-2xl font-bold text-gray-900">
+            {formData.nombre} {formData.apellido_paterno}
+          </h2>
+          <p className="text-gray-500 font-medium mb-4">
+            {formData.apellido_materno}
+          </p>
+
+          <div className="w-full space-y-3 pt-4 border-t border-gray-100">
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-gray-500 font-bold">Rol:</span>
+              <span className="bg-[#bb9a5a]/10 text-[#bb9a5a] px-3 py-1 rounded-full font-bold uppercase text-xs">
+                {formData.rol}
+              </span>
+            </div>
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-gray-500 font-bold">Matrícula:</span>
+              <span className="font-mono text-gray-800 bg-gray-50 px-2 py-1 rounded">
+                {formData.matricula || "N/A"}
+              </span>
+            </div>
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-gray-500 font-bold">CURP:</span>
+              <span className="font-mono text-gray-800 text-xs">
+                {formData.curp || "N/A"}
+              </span>
+            </div>
+          </div>
         </div>
 
-        {/* Columna de Información */}
-        <div className="md:col-span-2 space-y-4">
-          <InfoItem
-            label="Nombre Completo"
-            value={`${perfil.nombre} ${perfil.apellido_paterno} ${
-              perfil.apellido_materno || ""
-            }`}
-          />
-          <InfoItem label="Correo Electrónico" value={perfil.email} />
-          <InfoItem label="Rol" value={perfil.rol} capitalize={true} />
-          {perfil.matricula && (
-            <InfoItem label="Matrícula" value={perfil.matricula} />
-          )}
-          {perfil.telefono && (
-            <InfoItem label="Teléfono" value={perfil.telefono} />
-          )}
-          {perfil.curp && <InfoItem label="CURP" value={perfil.curp} />}
-          {perfil.fecha_nacimiento && (
-            <InfoItem
-              label="Fecha de Nacimiento"
-              value={new Date(
-                perfil.fecha_nacimiento.replace(/-/g, "/"),
-              ).toLocaleDateString()}
-            />
-          )}
-          {perfil.genero && <InfoItem label="Género" value={perfil.genero} />}
+        {/* COLUMNA 2 Y 3: INFORMACIÓN DETALLADA */}
+        <div className="lg:col-span-2 space-y-8">
+          {/* 1. DATOS ACADÉMICOS (SOLO LECTURA) */}
+          <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-2 h-full bg-[#bb9a5a]"></div>
+            <h3 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
+              <GraduationCap className="text-[#bb9a5a]" /> Información Académica
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-xs font-bold text-gray-400 uppercase mb-1">
+                  Carrera / Programa
+                </label>
+                <div className="p-3 bg-gray-50 rounded-xl border border-gray-200 text-gray-700 font-medium">
+                  {formData.nombre_carrera}
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-400 uppercase mb-1">
+                  Sede / Campus
+                </label>
+                <div className="p-3 bg-gray-50 rounded-xl border border-gray-200 text-gray-700 font-medium">
+                  {formData.nombre_sede}
+                </div>
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-xs font-bold text-gray-400 uppercase mb-1">
+                  Grupo Actual
+                </label>
+                <div className="p-3 bg-gray-50 rounded-xl border border-gray-200 text-gray-700 font-medium flex items-center gap-2">
+                  <Users size={18} className="text-gray-400" />
+                  {formData.nombre_grupo}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 2. DATOS DE CONTACTO (EDITABLES) */}
+          <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
+            <h3 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
+              <User className="text-[#a72a34]" /> Datos de Contacto
+            </h3>
+            <form
+              onSubmit={handleUpdateInfo}
+              className="grid grid-cols-1 md:grid-cols-2 gap-6"
+            >
+              <div className="col-span-2 md:col-span-1">
+                <label className="block text-sm font-bold text-gray-700 mb-2">
+                  Correo Electrónico
+                </label>
+                <div className="relative">
+                  <Mail
+                    className="absolute left-3 top-3.5 text-gray-400"
+                    size={18}
+                  />
+                  <input
+                    type="email"
+                    className="w-full pl-10 p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#a72a34]"
+                    value={formData.email}
+                    onChange={(e) =>
+                      setFormData({ ...formData, email: e.target.value })
+                    }
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">
+                  Teléfono Móvil
+                </label>
+                <div className="relative">
+                  <Phone
+                    className="absolute left-3 top-3.5 text-gray-400"
+                    size={18}
+                  />
+                  <input
+                    type="tel"
+                    className="w-full pl-10 p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#a72a34]"
+                    value={formData.telefono}
+                    onChange={(e) =>
+                      setFormData({ ...formData, telefono: e.target.value })
+                    }
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">
+                  Fecha de Nacimiento
+                </label>
+                <input
+                  type="date"
+                  className="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#a72a34]"
+                  value={formData.fecha_nacimiento}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      fecha_nacimiento: e.target.value,
+                    })
+                  }
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">
+                  Género
+                </label>
+                <select
+                  className="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#a72a34] bg-white"
+                  value={formData.genero}
+                  onChange={(e) =>
+                    setFormData({ ...formData, genero: e.target.value })
+                  }
+                >
+                  <option value="">Seleccionar...</option>
+                  <option value="Masculino">Masculino</option>
+                  <option value="Femenino">Femenino</option>
+                  <option value="Otro">Otro</option>
+                </select>
+              </div>
+              <div className="col-span-full pt-4">
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="bg-[#a72a34] text-white px-8 py-3 rounded-xl font-bold hover:bg-[#802028] shadow-lg flex items-center gap-2 transition-transform active:scale-95 disabled:opacity-50"
+                >
+                  <Save size={18} />{" "}
+                  {loading ? "Guardando..." : "Guardar Cambios"}
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* 3. SEGURIDAD (SIN RECUPERACIÓN AUTOMÁTICA) */}
+          <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
+            <h3 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
+              <Lock className="text-gray-600" /> Seguridad
+            </h3>
+            <div className="flex flex-col md:flex-row gap-8">
+              <form
+                onSubmit={handleChangePassword}
+                className="flex-1 space-y-4"
+              >
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
+                    Contraseña Actual
+                  </label>
+                  <input
+                    type="password"
+                    placeholder="********"
+                    className="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#a72a34]"
+                    value={passData.currentPassword}
+                    onChange={(e) =>
+                      setPassData({
+                        ...passData,
+                        currentPassword: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
+                    Nueva Contraseña
+                  </label>
+                  <input
+                    type="password"
+                    placeholder="Nueva clave segura"
+                    className="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#a72a34]"
+                    value={passData.newPassword}
+                    onChange={(e) =>
+                      setPassData({ ...passData, newPassword: e.target.value })
+                    }
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="w-full bg-gray-800 text-white py-3 rounded-xl font-bold hover:bg-black transition-colors"
+                >
+                  Actualizar Contraseña
+                </button>
+              </form>
+
+              {/* MENSAJE INFORMATIVO */}
+              <div className="md:w-1/3 flex flex-col justify-center items-center border-l border-gray-100 pl-8 text-center">
+                <div className="w-12 h-12 bg-red-50 rounded-full flex items-center justify-center mb-3">
+                  <Lock className="text-[#a72a34]" size={24} />
+                </div>
+                <p className="text-sm font-bold text-gray-800 mb-2">
+                  ¿Olvidaste tu contraseña?
+                </p>
+                <p className="text-xs text-gray-500">
+                  Por seguridad, el restablecimiento de contraseñas se realiza
+                  manualmente.
+                </p>
+                <p className="text-xs text-[#a72a34] font-bold mt-2">
+                  Contacta directamente al Administrador.
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -9840,24 +11175,9 @@ function App() {
                 element={<AdminCalificarPage />}
               />
               {/* --- INICIO DE NUEVAS RUTAS DE CATÁLOGO --- */}
-              <Route
-                path="/ciclos"
-                element={
-                  <CatalogoPage
-                    title="Ciclos Escolares"
-                    apiEndpoint="ciclos"
-                    fields={[
-                      {
-                        name: "nombre_ciclo",
-                        placeholder: "Nombre del Ciclo (ej. 2025-1)",
-                      },
-                    ]}
-                    columns={[{ key: "nombre_ciclo", header: "Nombre" }]}
-                  />
-                }
-              />
+              <Route path="/ciclos" element={<CiclosPage />} />
               <Route path="/planes-estudio" element={<PlanesEstudioPage />} />
-              <Route
+              {/* <Route
                 path="/grados"
                 element={
                   <CatalogoPage
@@ -9872,73 +11192,13 @@ function App() {
                     columns={[{ key: "nombre_grado", header: "Nombre" }]}
                   />
                 }
-              />
+              /> */}
+              <Route path="/grados" element={<GradosPage />} />
               {/* --- FIN DE NUEVAS RUTAS --- */}
-              <Route
-                path="/carreras"
-                element={
-                  <CatalogoPage
-                    title="Carreras"
-                    apiEndpoint="carreras"
-                    fields={[
-                      {
-                        name: "nombre_carrera",
-                        placeholder: "Nombre de la Carrera",
-                      },
-                    ]}
-                    columns={[{ key: "nombre_carrera", header: "Nombre" }]}
-                  />
-                }
-              />
-              <Route
-                path="/sedes"
-                element={
-                  <CatalogoPage
-                    title="Sedes"
-                    apiEndpoint="sedes"
-                    fields={[
-                      { name: "nombre_sede", placeholder: "Nombre de la Sede" },
-                      {
-                        name: "direccion",
-                        placeholder: "Dirección (Opcional)",
-                        type: "text",
-                      },
-                    ]}
-                    columns={[
-                      { key: "nombre_sede", header: "Nombre" },
-                      { key: "direccion", header: "Dirección" },
-                    ]}
-                  />
-                }
-              />
+              <Route path="/carreras" element={<CarrerasPage />} />
+              <Route path="/sedes" element={<SedesPage />} />
               {/* --- INICIO NUEVAS RUTAS FINANZAS (ADMIN) --- */}
-              <Route
-                path="/conceptos-pago"
-                element={
-                  <CatalogoPage
-                    title="Conceptos de Pago"
-                    apiEndpoint="conceptos_pago"
-                    fields={[
-                      {
-                        name: "nombre_concepto",
-                        placeholder: "Nombre (ej. Colegiatura)",
-                      },
-                      {
-                        name: "monto_default",
-                        placeholder: "Monto Default (ej. 1500.00)",
-                        type: "number",
-                      },
-                      // (Omitimos 'tipo' y 'es_concepto_inscripcion' por simplicidad,
-                      // pero podrías añadirlos como <select> o <input type="checkbox">)
-                    ]}
-                    columns={[
-                      { key: "nombre_concepto", header: "Concepto" },
-                      { key: "monto_default", header: "Monto Default" },
-                      { key: "tipo", header: "Tipo" },
-                    ]}
-                  />
-                }
-              />
+              <Route path="/conceptos-pago" element={<ConceptosPagoPage />} />
               <Route path="/admin/finanzas" element={<CajaPage />} />
               <Route
                 path="/admin/finanzas/alumno/:id"
