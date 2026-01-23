@@ -5283,27 +5283,22 @@ const CatalogoModal = ({
   );
 };
 
-// --- COMPONENTE CICLOS (CON PAPELERA Y DISEÑO FINAL) ---
+// --- COMPONENTE CICLOS (CORREGIDO: SIN EL "0") ---
 const CiclosPage = () => {
   const [ciclos, setCiclos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ nombre_ciclo: "" });
   const [isEditing, setIsEditing] = useState(false);
   const [currentId, setCurrentId] = useState(null);
-
-  // ESTADO NUEVO: Controla si vemos activos o eliminados
   const [verEliminados, setVerEliminados] = useState(false);
 
   const fetchCiclos = useCallback(async () => {
     setLoading(true);
     try {
-      // Cambiamos la ruta según qué queramos ver
       const endpoint = verEliminados
         ? "/admin/ciclos/eliminados"
         : "/admin/ciclos";
       const { data } = await api.get(endpoint);
-
-      // Si estamos viendo activos, ordenamos por 'actual'
       if (!verEliminados) {
         setCiclos(data.sort((a, b) => b.actual - a.actual));
       } else {
@@ -5354,7 +5349,6 @@ const CiclosPage = () => {
     }
   };
 
-  // NUEVO: Función para restaurar
   const handleRestaurar = async (id) => {
     if (window.confirm("¿Restaurar este ciclo?")) {
       try {
@@ -5382,7 +5376,6 @@ const CiclosPage = () => {
         </div>
 
         <div className="flex gap-3 items-center">
-          {/* Botón Toggle Papelera */}
           <button
             onClick={() => setVerEliminados(!verEliminados)}
             className={`p-3 rounded-xl font-bold flex items-center gap-2 transition-colors ${verEliminados ? "bg-gray-100 text-gray-600" : "bg-red-50 text-[#a72a34]"}`}
@@ -5392,7 +5385,6 @@ const CiclosPage = () => {
             {verEliminados ? "Volver" : "Papelera"}
           </button>
 
-          {/* Formulario (Solo visible en Activos) */}
           {!verEliminados && (
             <form onSubmit={handleGuardar} className="flex gap-2">
               <input
@@ -5451,11 +5443,16 @@ const CiclosPage = () => {
                   <h3 className="text-xl font-bold text-gray-800">
                     {ciclo.nombre_ciclo}
                   </h3>
-                  {ciclo.actual && (
+
+                  {/* --- AQUÍ ESTABA EL ERROR DEL "0" --- */}
+                  {/* Corregido: ciclo.actual === 1 */}
+                  {ciclo.actual === 1 && (
                     <span className="text-xs font-bold text-[#a72a34] uppercase tracking-wider">
                       Ciclo Actual (Activo)
                     </span>
                   )}
+                  {/* ----------------------------------- */}
+
                   {verEliminados && (
                     <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
                       Eliminado
@@ -5465,7 +5462,6 @@ const CiclosPage = () => {
               </div>
 
               <div className="flex items-center gap-2">
-                {/* ACCIONES PARA ACTIVOS */}
                 {!verEliminados && (
                   <>
                     {!ciclo.actual && (
@@ -5496,7 +5492,6 @@ const CiclosPage = () => {
                   </>
                 )}
 
-                {/* ACCIONES PARA ELIMINADOS (PAPELERA) */}
                 {verEliminados && (
                   <button
                     onClick={() => handleRestaurar(ciclo.id)}
