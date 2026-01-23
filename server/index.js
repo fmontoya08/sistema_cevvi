@@ -1660,7 +1660,7 @@ createCatalogCrudRoutes(adminRouter, "tipos_asignatura", ["tipo"]);
 // createCatalogCrudRoutes(adminRouter, "grados", ["nombre_grado"]);
 // createCatalogCrudRoutes(adminRouter, "ciclos", ["nombre_ciclo"]);
 createCatalogCrudRoutes(adminRouter, "sedes", ["nombre_sede", "direccion"]);
-createCatalogCrudRoutes(adminRouter, "carreras", ["nombre_carrera"]);
+// createCatalogCrudRoutes(adminRouter, "carreras", ["nombre_carrera"]);
 
 // ... (después del createCatalogCrudRoutes de "sedes")
 
@@ -1680,6 +1680,88 @@ createCatalogCrudRoutes(adminRouter, "conceptos_pago", [
 // ... (Tus rutas anteriores de Ciclos GET, POST, PUT, DELETE) ...
 
 // --- RUTAS ESPECÍFICAS PARA GRADOS (SOFT DELETE) ---
+// --- RUTAS CARRERAS (CORREGIDO: ELIMINAR LA LÍNEA createCatalogCrudRoutes DE CARRERAS) ---
+
+// 1. GET: Carreras Activas (FILTRO IMPORTANTE: activo = 1)
+adminRouter.get("/carreras", async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      "SELECT * FROM carreras WHERE activo = 1 ORDER BY nombre_carrera ASC",
+    );
+    res.json(rows);
+  } catch (error) {
+    res.status(500).send({ message: "Error al obtener carreras" });
+  }
+});
+
+// 2. GET: Papelera (FILTRO IMPORTANTE: activo = 0)
+adminRouter.get("/carreras/eliminadas", async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      "SELECT * FROM carreras WHERE activo = 0 ORDER BY nombre_carrera ASC",
+    );
+    res.json(rows);
+  } catch (error) {
+    res.status(500).send({ message: "Error al obtener papelera" });
+  }
+});
+
+// 3. POST: Crear
+adminRouter.post("/carreras", async (req, res) => {
+  const { nombre_carrera } = req.body;
+  try {
+    // Al crear, forzamos activo = 1
+    await db.query(
+      "INSERT INTO carreras (nombre_carrera, activo) VALUES (?, 1)",
+      [nombre_carrera],
+    );
+    res.status(201).send({ message: "Carrera creada exitosamente" });
+  } catch (error) {
+    if (error.code === "ER_DUP_ENTRY")
+      return res.status(400).send({ message: "Esa carrera ya existe." });
+    res.status(500).send({ message: "Error al crear carrera" });
+  }
+});
+
+// 4. PUT: Editar
+adminRouter.put("/carreras/:id", async (req, res) => {
+  const { nombre_carrera } = req.body;
+  try {
+    await db.query("UPDATE carreras SET nombre_carrera = ? WHERE id = ?", [
+      nombre_carrera,
+      req.params.id,
+    ]);
+    res.send({ message: "Carrera actualizada" });
+  } catch (error) {
+    res.status(500).send({ message: "Error al actualizar" });
+  }
+});
+
+// 5. DELETE: Soft Delete (ESTO ARREGLA EL "NO PUEDO ELIMINAR")
+adminRouter.delete("/carreras/:id", async (req, res) => {
+  try {
+    // En lugar de DELETE FROM, hacemos UPDATE activo = 0
+    await db.query("UPDATE carreras SET activo = 0 WHERE id = ?", [
+      req.params.id,
+    ]);
+    res.send({ message: "Carrera enviada a la papelera" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({ message: "Error al eliminar" });
+  }
+});
+
+// 6. PUT: Restaurar
+adminRouter.put("/carreras/:id/reactivar", async (req, res) => {
+  try {
+    await db.query("UPDATE carreras SET activo = 1 WHERE id = ?", [
+      req.params.id,
+    ]);
+    res.send({ message: "Carrera restaurada correctamente" });
+  } catch (error) {
+    res.status(500).send({ message: "Error al restaurar" });
+  }
+});
 
 // 1. GET: Activos
 adminRouter.get("/grados", async (req, res) => {

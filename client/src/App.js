@@ -78,6 +78,7 @@ import {
   User,
   Lock,
   Camera,
+  BookOpen,
 } from "lucide-react";
 import { Bar, Pie } from "react-chartjs-2";
 import {
@@ -6017,43 +6018,81 @@ const PlanModal = ({ plan, carreras, onClose, onSave }) => {
   );
 };
 
-// --- COMPONENTE CARRERAS (DISEÑO CLEAN DASHBOARD) ---
+// --- COMPONENTE CARRERAS (DISEÑO TARJETAS TIPO "GRADOS") ---
 const CarrerasPage = () => {
   const [carreras, setCarreras] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [verEliminados, setVerEliminados] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+
+  // Estado para el Modal
   const [modalOpen, setModalOpen] = useState(false);
-  const [currentCarrera, setCurrentCarrera] = useState(null);
+  const [editingItem, setEditingItem] = useState(null);
+  const [form, setForm] = useState({ nombre_carrera: "" });
 
   const fetchCarreras = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await api.get("/admin/carreras");
-      setCarreras(response.data);
-    } catch (error) {
-      console.error("Error", error);
+      const endpoint = verEliminados
+        ? "/admin/carreras/eliminadas"
+        : "/admin/carreras";
+      const { data } = await api.get(endpoint);
+      setCarreras(data);
+    } catch (e) {
+      console.error(e);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [verEliminados]);
 
   useEffect(() => {
     fetchCarreras();
   }, [fetchCarreras]);
 
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      if (editingItem) {
+        await api.put(`/admin/carreras/${editingItem.id}`, form);
+        alert("Carrera actualizada correctamente.");
+      } else {
+        await api.post("/admin/carreras", form);
+        alert("Carrera creada correctamente.");
+      }
+      setModalOpen(false);
+      setForm({ nombre_carrera: "" });
+      setEditingItem(null);
+      fetchCarreras();
+    } catch (error) {
+      alert(error.response?.data?.message || "Error al guardar");
+    }
+  };
+
   const handleDelete = async (id) => {
-    if (window.confirm("¿Eliminar carrera?")) {
+    if (window.confirm("¿Enviar esta carrera a la papelera?")) {
       try {
         await api.delete(`/admin/carreras/${id}`);
         fetchCarreras();
-      } catch (error) {
+      } catch (e) {
         alert("Error al eliminar");
       }
     }
   };
 
-  const openModal = (carrera = null) => {
-    setCurrentCarrera(carrera);
+  const handleRestaurar = async (id) => {
+    if (window.confirm("¿Restaurar carrera?")) {
+      try {
+        await api.put(`/admin/carreras/${id}/reactivar`);
+        fetchCarreras();
+      } catch (e) {
+        alert("Error al restaurar");
+      }
+    }
+  };
+
+  const openModal = (item = null) => {
+    setEditingItem(item);
+    setForm({ nombre_carrera: item ? item.nombre_carrera : "" });
     setModalOpen(true);
   };
 
@@ -6062,81 +6101,169 @@ const CarrerasPage = () => {
   );
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-300">
+    <div className="space-y-8 animate-in fade-in duration-300 max-w-5xl mx-auto">
+      {/* HEADER */}
       <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-800 tracking-tight">
-            Oferta Académica
+            {verEliminados ? "Papelera de Carreras" : "Oferta Académica"}
           </h1>
           <p className="text-gray-500 mt-2 text-lg">
-            Licenciaturas, Maestrías y Bachilleratos.
+            {verEliminados
+              ? "Carreras desactivadas."
+              : "Licenciaturas e Ingenierías disponibles."}
           </p>
         </div>
-        <button
-          onClick={() => openModal()}
-          className="bg-gray-900 text-white px-6 py-3 rounded-xl hover:bg-black font-bold shadow-lg flex items-center gap-2 transition-transform active:scale-95"
-        >
-          <Plus size={20} /> Nueva Carrera
-        </button>
+
+        <div className="flex gap-3 items-center">
+          <button
+            onClick={() => setVerEliminados(!verEliminados)}
+            className={`px-5 py-3 rounded-xl font-bold flex items-center gap-2 border-2 transition-colors ${verEliminados ? "bg-gray-100 border-gray-200 text-gray-600" : "bg-red-50 border-red-50 text-[#a72a34]"}`}
+          >
+            {verEliminados ? <ArrowLeft size={18} /> : <Trash2 size={18} />}
+            {verEliminados ? "Volver" : "Papelera"}
+          </button>
+
+          {!verEliminados && (
+            <button
+              onClick={() => openModal()}
+              className="bg-[#a72a34] text-white px-6 py-3 rounded-xl hover:bg-[#802028] font-bold flex items-center gap-2 shadow-lg shadow-red-900/20 transition-transform active:scale-95"
+            >
+              <Plus size={20} /> Nueva Carrera
+            </button>
+          )}
+        </div>
       </div>
 
-      <div className="relative max-w-md">
+      {/* BUSCADOR */}
+      <div className="relative">
         <Search className="absolute left-4 top-3.5 text-gray-400" size={20} />
         <input
           type="text"
           placeholder="Buscar carrera..."
-          className="w-full pl-12 pr-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white shadow-sm font-medium"
+          className="w-full pl-12 pr-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#a72a34] bg-white shadow-sm font-medium"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
       </div>
 
+      {/* GRID DE TARJETAS (ESTILO GRADOS) */}
       {loading ? (
         <div className="text-center py-20 text-gray-400">Cargando...</div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {filteredCarreras.map((carrera) => (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {filteredCarreras.length === 0 && (
+            <div className="col-span-full p-10 text-center text-gray-400 italic bg-white rounded-2xl border border-dashed border-gray-200">
+              No se encontraron carreras.
+            </div>
+          )}
+
+          {filteredCarreras.map((c) => (
             <div
-              key={carrera.id}
-              className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-all group h-full flex flex-col"
+              key={c.id}
+              className={`p-6 rounded-2xl border flex justify-between items-center transition-all group ${verEliminados ? "bg-gray-50 border-gray-200 grayscale opacity-80" : "bg-white border-gray-100 hover:shadow-md hover:border-[#a72a34]/30"}`}
             >
-              <div className="flex justify-between items-start mb-4">
-                <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl">
-                  <GraduationCap size={24} />
+              <div className="flex items-center gap-4 overflow-hidden">
+                <div
+                  className={`p-3 rounded-xl flex-shrink-0 ${verEliminados ? "bg-gray-200 text-gray-500" : "bg-red-50 text-[#a72a34]"}`}
+                >
+                  <BookOpen size={24} />
                 </div>
-                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button
-                    onClick={() => openModal(carrera)}
-                    className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"
-                  >
-                    <Edit size={18} />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(carrera.id)}
-                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
-                  >
-                    <Trash2 size={18} />
-                  </button>
+                <div className="flex flex-col min-w-0">
+                  <h3 className="font-bold text-gray-800 text-lg truncate pr-2">
+                    {c.nombre_carrera}
+                  </h3>
+                  {verEliminados && (
+                    <span className="text-xs text-red-500 font-bold uppercase tracking-wider">
+                      Eliminada
+                    </span>
+                  )}
                 </div>
               </div>
-              <div className="mt-2">
-                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1">
-                  Programa
-                </p>
-                <h3 className="text-lg font-bold text-gray-800 leading-snug">
-                  {carrera.nombre_carrera}
-                </h3>
+
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {!verEliminados ? (
+                  <>
+                    <button
+                      onClick={() => openModal(c)}
+                      className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                      title="Editar"
+                    >
+                      <Edit size={20} />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(c.id)}
+                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      title="Eliminar"
+                    >
+                      <Trash2 size={20} />
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => handleRestaurar(c.id)}
+                    className="flex items-center gap-2 px-3 py-2 bg-white border border-[#a72a34] text-[#a72a34] rounded-lg font-bold text-sm hover:bg-[#a72a34] hover:text-white transition-all shadow-sm"
+                  >
+                    <RotateCcw size={16} /> Restaurar
+                  </button>
+                )}
               </div>
             </div>
           ))}
         </div>
       )}
+
+      {/* MODAL CREAR/EDITAR */}
       {modalOpen && (
-        <CarrerasModal
-          carrera={currentCarrera}
-          onClose={() => setModalOpen(false)}
-          onSave={fetchCarreras}
-        />
+        <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-50 p-4 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all scale-100">
+            <div className="bg-white p-6 border-b flex justify-between items-center">
+              <h3 className="font-bold text-xl text-gray-800">
+                {editingItem ? "Editar Carrera" : "Nueva Carrera"}
+              </h3>
+              <button
+                onClick={() => setModalOpen(false)}
+                className="text-gray-400 hover:bg-gray-100 p-2 rounded-full"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="p-6 space-y-6">
+              <div>
+                <label className="block text-xs font-bold text-gray-400 uppercase mb-2">
+                  Nombre Oficial
+                </label>
+                <input
+                  required
+                  autoFocus
+                  placeholder="Ej: Licenciatura en Derecho"
+                  className="w-full p-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#a72a34] outline-none font-medium text-gray-800"
+                  value={form.nombre_carrera}
+                  onChange={(e) =>
+                    setForm({ ...form, nombre_carrera: e.target.value })
+                  }
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setModalOpen(false)}
+                  className="flex-1 py-3 text-gray-500 font-bold hover:bg-gray-100 rounded-xl transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 bg-[#a72a34] text-white py-3 rounded-xl font-bold hover:bg-[#802028] shadow-lg transition-transform active:scale-95"
+                >
+                  Guardar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );
