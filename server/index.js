@@ -78,43 +78,128 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-async function enviarCredenciales(email, nombre, matricula) {
+// --- FUNCIÓN DE CORREO (CON EMAIL, MATRÍCULA Y LOGO) ---
+async function enviarCredenciales(email, nombre, matricula, rol) {
+  const esDocente = rol === "docente";
+  const titulo = esDocente
+    ? "Bienvenido al Claustro Docente"
+    : "¡Bienvenido a la Comunidad!";
+
+  // Textos personalizados
+  const textoIntro = esDocente
+    ? "Es un honor darle la bienvenida. Aquí tiene sus credenciales para acceder al portal académico y gestionar sus grupos."
+    : "Tu inscripción ha sido procesada exitosamente. Guarda estos datos, son tu llave de acceso a la plataforma.";
+
+  // ⚠️ IMPORTANTE: Pon aquí el LINK PÚBLICO de tu logo (ej: https://tudominio.com/logo.png)
+  // Mientras no tengas dominio, usa esta imagen genérica o sube tu logo a un sitio como imgur.com
+  const logoUrl = "https://cdn-icons-png.flaticon.com/512/2991/2991195.png";
+
   const mailOptions = {
-    // El 'from' DEBE ser tu correo configurado arriba
     from: '"Plataforma Escolar" <contacto@puntocerodigital.com.mx>',
     to: email,
-    subject: "Bienvenido a la Plataforma - Credenciales de Acceso",
+    subject: `Tus Credenciales de Acceso - ${nombre}`,
     html: `
-      <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
-        <div style="background-color: #6d28d9; padding: 20px; text-align: center;">
-          <h2 style="color: white; margin: 0;">¡Bienvenido a la Comunidad!</h2>
-        </div>
-        <div style="padding: 20px;">
-          <p>Hola <strong>${nombre}</strong>,</p>
-          <p>Tu cuenta ha sido creada exitosamente en nuestra plataforma.</p>
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 0; }
+          .container { max-width: 600px; margin: 40px auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.05); }
           
-          <div style="background-color: #f3f4f6; padding: 15px; border-radius: 8px; margin: 20px 0;">
-            <p style="margin: 5px 0;"><strong>Usuario:</strong> ${email}</p>
-            <p style="margin: 5px 0;"><strong>Contraseña Temporal:</strong> ${matricula}</p>
-            <p style="margin: 5px 0;"><strong>Matrícula / ID:</strong> ${matricula}</p>
+          /* HEADER ROJO VINO */
+          .header { background-color: #a72a34; padding: 40px 20px; text-align: center; }
+          .logo-circle { background: white; width: 80px; height: 80px; border-radius: 50%; margin: 0 auto 15px auto; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+          .logo-img { width: 50px; height: 50px; object-fit: contain; }
+          .header h1 { color: #ffffff; margin: 0; font-size: 22px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; }
+          
+          /* CONTENIDO */
+          .content { padding: 40px 30px; color: #333333; }
+          .welcome-text { font-size: 16px; line-height: 1.6; color: #4b5563; margin-bottom: 30px; text-align: center; }
+          
+          /* TARJETA DE CREDENCIALES */
+          .card { background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 0; overflow: hidden; margin-bottom: 30px; }
+          .card-header { background-color: #eff6ff; padding: 15px; text-align: center; border-bottom: 1px solid #e2e8f0; color: #1e3a8a; font-weight: bold; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; }
+          
+          .card-body { padding: 20px; }
+          
+          .field { margin-bottom: 20px; text-align: center; }
+          .field:last-child { margin-bottom: 0; }
+          .label { font-size: 11px; color: #64748b; text-transform: uppercase; margin-bottom: 6px; font-weight: 700; letter-spacing: 0.5px; }
+          .value { font-size: 18px; color: #0f172a; font-family: Consolas, Monaco, 'Courier New', monospace; font-weight: 600; background: #ffffff; padding: 10px 15px; border-radius: 6px; border: 1px solid #cbd5e1; display: inline-block; min-width: 200px; }
+          
+          /* BOTÓN */
+          .btn-container { text-align: center; margin-top: 30px; }
+          .btn { background-color: #a72a34; color: #ffffff !important; padding: 16px 32px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px; display: inline-block; box-shadow: 0 4px 6px rgba(167, 42, 52, 0.2); }
+          .btn:hover { background-color: #802028; }
+
+          .footer { background-color: #1f2937; color: #9ca3af; padding: 30px; text-align: center; font-size: 12px; line-height: 1.5; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <div class="logo-circle">
+               <img src="${logoUrl}" alt="Logo" class="logo-img">
+            </div>
+            <h1>${titulo}</h1>
           </div>
           
-          <p>Por favor ingresa al sistema y completa tu información.</p>
-          
-          <div style="text-align: center; margin-top: 30px;">
-            <a href="http://localhost:3000" style="background-color: #6d28d9; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;">Ir a la Plataforma</a>
+          <div class="content">
+            <p class="welcome-text">
+              Hola, <strong>${nombre}</strong>.<br>
+              ${textoIntro}
+            </p>
+            
+            <div class="card">
+              <div class="card-header" style="background-color: #fdf2f2; color: #a72a34;">
+                Credenciales de Acceso
+              </div>
+              <div class="card-body">
+                
+                <div class="field">
+                  <div class="label">Correo Registrado</div>
+                  <div class="value">${email}</div>
+                </div>
+
+                <div class="field">
+                  <div class="label">Matrícula (Usuario)</div>
+                  <div class="value" style="letter-spacing: 2px;">${matricula}</div>
+                </div>
+                
+                <div class="field">
+                  <div class="label">Contraseña Inicial</div>
+                  <div class="value" style="letter-spacing: 2px;">${matricula}</div>
+                </div>
+
+              </div>
+            </div>
+
+            <p style="text-align: center; font-size: 13px; color: #6b7280; margin-bottom: 30px;">
+              💡 <strong>Tip:</strong> Puedes cambiar tu contraseña en la sección "Mi Perfil" después de ingresar.
+            </p>
+
+            <div class="btn-container">
+              <a href="http://localhost:3000" class="btn">Ingresar al Portal</a>
+            </div>
+          </div>
+
+          <div class="footer">
+            <p><strong>Universidad Digital</strong><br>Formando el futuro.</p>
+            <p style="margin-top: 20px; font-size: 11px; color: #4b5563;">
+              Este mensaje contiene información confidencial de acceso.<br>
+              Si recibiste este correo por error, por favor elimínalo.
+            </p>
           </div>
         </div>
-        <div style="background-color: #f9fafb; padding: 10px; text-align: center; font-size: 12px; color: #6b7280;">
-          Enviado automáticamente por Punto Cero Digital
-        </div>
-      </div>
+      </body>
+      </html>
     `,
   };
 
   try {
     await transporter.sendMail(mailOptions);
-    console.log(`Correo enviado exitosamente a ${email}`);
+    console.log(`Correo enviado a ${email} (${rol})`);
   } catch (error) {
     console.error("Error enviando correo:", error);
   }
@@ -1304,18 +1389,89 @@ function createCatalogCrudRoutes(router, tableName, fields) {
 }
 // --- RUTAS CRUD PERSONALIZADAS PARA PLANES DE ESTUDIO ---
 
-// GET /admin/planes_estudio (Con JOIN a carreras)
+// --- RUTAS PLANES DE ESTUDIO (CON SOFT DELETE) ---
+
+// 1. GET: Activos (Solo activo = 1)
 adminRouter.get("/planes_estudio", async (req, res) => {
   try {
     const sql = `
       SELECT p.*, c.nombre_carrera 
       FROM planes_estudio p 
       LEFT JOIN carreras c ON p.carrera_id = c.id
+      WHERE p.activo = 1
       ORDER BY p.nombre_plan
     `;
     res.json((await db.query(sql))[0]);
   } catch (error) {
     res.status(500).send({ message: "Error al obtener planes" });
+  }
+});
+
+// 2. GET: Eliminados (Papelera)
+adminRouter.get("/planes_estudio/eliminados", async (req, res) => {
+  try {
+    const sql = `
+      SELECT p.*, c.nombre_carrera 
+      FROM planes_estudio p 
+      LEFT JOIN carreras c ON p.carrera_id = c.id
+      WHERE p.activo = 0
+      ORDER BY p.nombre_plan
+    `;
+    res.json((await db.query(sql))[0]);
+  } catch (error) {
+    res.status(500).send({ message: "Error al obtener papelera" });
+  }
+});
+
+// 3. POST: Crear
+adminRouter.post("/planes_estudio", async (req, res) => {
+  try {
+    const { nombre_plan, carrera_id } = req.body;
+    await db.query(
+      "INSERT INTO planes_estudio (nombre_plan, carrera_id, activo) VALUES (?, ?, 1)",
+      [nombre_plan, carrera_id || null],
+    );
+    res.status(201).send({ message: "Plan de estudio creado" });
+  } catch (error) {
+    res.status(500).send({ message: "Error al crear el plan" });
+  }
+});
+
+// 4. PUT: Actualizar
+adminRouter.put("/planes_estudio/:id", async (req, res) => {
+  try {
+    const { nombre_plan, carrera_id } = req.body;
+    await db.query(
+      "UPDATE planes_estudio SET nombre_plan = ?, carrera_id = ? WHERE id = ?",
+      [nombre_plan, carrera_id || null, req.params.id],
+    );
+    res.send({ message: "Plan de estudio actualizado" });
+  } catch (error) {
+    res.status(500).send({ message: "Error al actualizar el plan" });
+  }
+});
+
+// 5. DELETE: Soft Delete (Enviar a papelera)
+adminRouter.delete("/planes_estudio/:id", async (req, res) => {
+  try {
+    await db.query("UPDATE planes_estudio SET activo = 0 WHERE id = ?", [
+      req.params.id,
+    ]);
+    res.send({ message: "Plan de estudio enviado a la papelera" });
+  } catch (error) {
+    res.status(500).send({ message: "Error al eliminar el plan" });
+  }
+});
+
+// 6. PUT: Restaurar (Sacar de papelera)
+adminRouter.put("/planes_estudio/:id/reactivar", async (req, res) => {
+  try {
+    await db.query("UPDATE planes_estudio SET activo = 1 WHERE id = ?", [
+      req.params.id,
+    ]);
+    res.send({ message: "Plan restaurado correctamente" });
+  } catch (error) {
+    res.status(500).send({ message: "Error al restaurar plan" });
   }
 });
 
@@ -1501,8 +1657,8 @@ app.put("/api/notificaciones/marcar-leidas", verifyToken, async (req, res) => {
 createCatalogCrudRoutes(adminRouter, "tipos_asignatura", ["tipo"]);
 // ... (el resto de tus rutas)
 createCatalogCrudRoutes(adminRouter, "tipos_asignatura", ["tipo"]);
-createCatalogCrudRoutes(adminRouter, "grados", ["nombre_grado"]);
-createCatalogCrudRoutes(adminRouter, "ciclos", ["nombre_ciclo"]);
+// createCatalogCrudRoutes(adminRouter, "grados", ["nombre_grado"]);
+// createCatalogCrudRoutes(adminRouter, "ciclos", ["nombre_ciclo"]);
 createCatalogCrudRoutes(adminRouter, "sedes", ["nombre_sede", "direccion"]);
 createCatalogCrudRoutes(adminRouter, "carreras", ["nombre_carrera"]);
 
@@ -1518,6 +1674,173 @@ createCatalogCrudRoutes(adminRouter, "conceptos_pago", [
 ]);
 // --- FIN: CRUD PARA CONCEPTOS DE PAGO ---
 // --- GESTIÓN DE CICLO ACTUAL ---
+
+// --- RUTAS ESPECÍFICAS PARA CICLOS (SOFT DELETE) ---
+
+// ... (Tus rutas anteriores de Ciclos GET, POST, PUT, DELETE) ...
+
+// --- RUTAS ESPECÍFICAS PARA GRADOS (SOFT DELETE) ---
+
+// 1. GET: Activos
+adminRouter.get("/grados", async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      "SELECT * FROM grados WHERE activo = 1 ORDER BY nombre_grado",
+    );
+    res.json(rows);
+  } catch (error) {
+    res.status(500).send({ message: "Error al obtener grados" });
+  }
+});
+
+// 2. GET: Eliminados (Papelera)
+adminRouter.get("/grados/eliminados", async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      "SELECT * FROM grados WHERE activo = 0 ORDER BY nombre_grado",
+    );
+    res.json(rows);
+  } catch (error) {
+    res.status(500).send({ message: "Error al obtener papelera" });
+  }
+});
+
+// 3. POST: Crear
+adminRouter.post("/grados", async (req, res) => {
+  const { nombre_grado } = req.body;
+  try {
+    await db.query("INSERT INTO grados (nombre_grado, activo) VALUES (?, 1)", [
+      nombre_grado,
+    ]);
+    res.status(201).send({ message: "Grado creado" });
+  } catch (error) {
+    if (error.code === "ER_DUP_ENTRY")
+      return res.status(400).send({ message: "El grado ya existe." });
+    res.status(500).send({ message: "Error al crear" });
+  }
+});
+
+// 4. PUT: Actualizar
+adminRouter.put("/grados/:id", async (req, res) => {
+  const { nombre_grado } = req.body;
+  try {
+    await db.query("UPDATE grados SET nombre_grado = ? WHERE id = ?", [
+      nombre_grado,
+      req.params.id,
+    ]);
+    res.send({ message: "Grado actualizado" });
+  } catch (error) {
+    res.status(500).send({ message: "Error al actualizar" });
+  }
+});
+
+// 5. DELETE: Soft Delete
+adminRouter.delete("/grados/:id", async (req, res) => {
+  try {
+    await db.query("UPDATE grados SET activo = 0 WHERE id = ?", [
+      req.params.id,
+    ]);
+    res.send({ message: "Enviado a la papelera" });
+  } catch (error) {
+    res.status(500).send({ message: "Error al eliminar" });
+  }
+});
+
+// 6. PUT: Restaurar
+adminRouter.put("/grados/:id/reactivar", async (req, res) => {
+  try {
+    await db.query("UPDATE grados SET activo = 1 WHERE id = ?", [
+      req.params.id,
+    ]);
+    res.send({ message: "Restaurado correctamente" });
+  } catch (error) {
+    res.status(500).send({ message: "Error al restaurar" });
+  }
+});
+// 5. GET: Ver Papelera (Solo inactivos)
+adminRouter.get("/ciclos/eliminados", async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      "SELECT * FROM ciclos WHERE activo = 0 ORDER BY nombre_ciclo DESC",
+    );
+    res.json(rows);
+  } catch (error) {
+    res.status(500).send({ message: "Error al cargar papelera" });
+  }
+});
+
+// 6. PUT: Restaurar (Sacar de la papelera)
+adminRouter.put("/ciclos/:id/reactivar", async (req, res) => {
+  try {
+    await db.query("UPDATE ciclos SET activo = 1 WHERE id = ?", [
+      req.params.id,
+    ]);
+    res.send({ message: "Ciclo restaurado correctamente." });
+  } catch (error) {
+    res.status(500).send({ message: "Error al restaurar ciclo" });
+  }
+});
+
+// 1. GET: Obtener solo los ciclos ACTIVOS
+adminRouter.get("/ciclos", async (req, res) => {
+  try {
+    // Ordenamos: Primero el 'actual' (si existe), luego por nombre descendente (los más nuevos primero)
+    const [rows] = await db.query(
+      "SELECT * FROM ciclos WHERE activo = 1 ORDER BY actual DESC, nombre_ciclo DESC",
+    );
+    res.json(rows);
+  } catch (error) {
+    console.error("Error al obtener ciclos:", error);
+    res.status(500).send({ message: "Error al cargar ciclos" });
+  }
+});
+
+// 2. POST: Crear nuevo ciclo
+adminRouter.post("/ciclos", async (req, res) => {
+  const { nombre_ciclo } = req.body;
+  try {
+    // Se crea activo por defecto (1) y no actual (0)
+    await db.query(
+      "INSERT INTO ciclos (nombre_ciclo, activo, actual) VALUES (?, 1, 0)",
+      [nombre_ciclo],
+    );
+    res.status(201).send({ message: "Ciclo creado con éxito" });
+  } catch (error) {
+    if (error.code === "ER_DUP_ENTRY")
+      return res
+        .status(400)
+        .send({ message: "El nombre del ciclo ya existe." });
+    res.status(500).send({ message: "Error al crear ciclo" });
+  }
+});
+
+// 3. PUT: Actualizar nombre
+adminRouter.put("/ciclos/:id", async (req, res) => {
+  const { nombre_ciclo } = req.body;
+  try {
+    await db.query("UPDATE ciclos SET nombre_ciclo = ? WHERE id = ?", [
+      nombre_ciclo,
+      req.params.id,
+    ]);
+    res.send({ message: "Ciclo actualizado" });
+  } catch (error) {
+    res.status(500).send({ message: "Error al actualizar" });
+  }
+});
+
+// 4. DELETE: Soft Delete (Papelera)
+adminRouter.delete("/ciclos/:id", async (req, res) => {
+  try {
+    // En lugar de borrar, marcamos activo = 0
+    await db.query("UPDATE ciclos SET activo = 0 WHERE id = ?", [
+      req.params.id,
+    ]);
+    res.send({ message: "Ciclo enviado a la papelera." });
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({ message: "Error al eliminar ciclo" });
+  }
+});
 
 // 1. PUT: Fijar un ciclo como ACTUAL
 adminRouter.put("/ciclos/:id/fijar-actual", async (req, res) => {
@@ -1728,22 +2051,87 @@ adminRouter.post("/adeudos/:id/marcar-pagado", async (req, res) => {
 
 // ... (Ahora sí, la ruta adminRouter.get("/usuarios", ...)
 
-// --- ACTUALIZA ESTA RUTA EN index.js (Línea aprox 1200) ---
+// --- RUTAS DE USUARIOS (CON SOFT DELETE) ---
+
+// 1. GET: Lista de Usuarios (SOLO ACTIVOS)
+// --- RUTA: OBTENER USUARIOS (CORREGIDA PARA VER TODOS LOS DATOS) ---
 adminRouter.get("/usuarios", async (req, res) => {
   try {
     const sql = `
-      SELECT u.*, c.nombre_carrera, s.nombre_sede, 
-      DATE_FORMAT(u.fecha_nacimiento, '%Y-%m-%d') as fecha_nacimiento
+      SELECT 
+        u.id, u.nombre, u.apellido_paterno, u.apellido_materno, 
+        u.email, u.rol, u.matricula, u.foto_perfil, u.activo,
+        u.telefono, u.curp, u.genero,
+        u.carrera_id, u.sede_id,
+        DATE_FORMAT(u.fecha_nacimiento, '%Y-%m-%d') as fecha_nacimiento,
+        c.nombre_carrera, 
+        s.nombre_sede
       FROM usuarios u
-      LEFT JOIN carreras c ON u.carrera_interes_id = c.id
-      LEFT JOIN sedes s ON u.sede_interes_id = s.id
+      -- El JOIN revisa ambas columnas por si acaso usas una u otra
+      LEFT JOIN carreras c ON (u.carrera_id = c.id OR u.carrera_interes_id = c.id)
+      LEFT JOIN sedes s ON (u.sede_id = s.id OR u.sede_interes_id = s.id)
       WHERE u.activo = 1
       ORDER BY u.id DESC
     `;
     const [rows] = await db.query(sql);
     res.json(rows);
   } catch (error) {
+    console.error("Error al cargar usuarios:", error);
     res.status(500).send({ message: "Error al obtener usuarios" });
+  }
+});
+
+// 2. GET: Papelera de Usuarios (SOLO ELIMINADOS)
+adminRouter.get("/usuarios/eliminados", async (req, res) => {
+  try {
+    const sql = `
+      SELECT u.id, u.email, u.nombre, u.apellido_paterno, u.rol, u.foto_perfil, u.matricula
+      FROM usuarios u
+      WHERE u.activo = 0
+      ORDER BY u.id DESC
+    `;
+    const [rows] = await db.query(sql);
+    res.json(rows);
+  } catch (error) {
+    res.status(500).send({ message: "Error al obtener papelera" });
+  }
+});
+
+// 3. POST: Crear Usuario (Mantenemos tu lógica de crear, asegurando activo=1)
+// (Asegúrate de que tu ruta POST /usuarios actual no cambie mucho,
+// solo verifica que al insertar no necesitas pasar 'activo' porque el default es 1)
+
+// 4. DELETE: Soft Delete (Enviar a papelera)
+adminRouter.delete("/usuarios/:id", async (req, res) => {
+  const userIdToDelete = parseInt(req.params.id);
+  const myId = req.user.id;
+
+  // Protección: No puedes eliminarte a ti mismo
+  if (userIdToDelete === myId) {
+    return res
+      .status(400)
+      .send({ message: "No puedes eliminar tu propia cuenta." });
+  }
+
+  try {
+    await db.query("UPDATE usuarios SET activo = 0 WHERE id = ?", [
+      userIdToDelete,
+    ]);
+    res.send({ message: "Usuario enviado a la papelera." });
+  } catch (error) {
+    res.status(500).send({ message: "Error al eliminar usuario." });
+  }
+});
+
+// 5. PUT: Restaurar Usuario
+adminRouter.put("/usuarios/:id/reactivar", async (req, res) => {
+  try {
+    await db.query("UPDATE usuarios SET activo = 1 WHERE id = ?", [
+      req.params.id,
+    ]);
+    res.send({ message: "Usuario restaurado correctamente." });
+  } catch (error) {
+    res.status(500).send({ message: "Error al restaurar usuario." });
   }
 });
 
@@ -1787,77 +2175,124 @@ adminRouter.put("/usuarios/:id/reactivar", async (req, res) => {
     res.status(500).send({ message: "Error al reactivar usuario" });
   }
 });
+
+// --- CREAR USUARIO (CONSECUTIVO AUTOMÁTICO + CORREO DE BIENVENIDA) ---
 adminRouter.post("/usuarios", async (req, res) => {
   const {
-    email,
-    password,
     nombre,
-    rol,
     apellido_paterno,
     apellido_materno,
-    genero,
+    email,
     telefono,
+    genero,
     curp,
     fecha_nacimiento,
+    rol,
+    carrera_id,
+    sede_id,
   } = req.body;
-  if (curp && !CURP_REGEX.test(curp)) {
-    return res
-      .status(400)
-      .send({ message: "El formato de la CURP no es válido." });
-  }
-  if (!["aspirante", "alumno", "docente", "admin"].includes(rol))
-    return res.status(400).send({ message: "Rol no válido" });
-  const connection = await db.getConnection(); // Obtenemos una conexión del pool
+
+  const connection = await db.getConnection();
+
   try {
-    await connection.beginTransaction(); // 1. Iniciamos la transacción
+    await connection.beginTransaction();
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    // 1. VALIDACIONES BÁSICAS
+    if (curp && !CURP_REGEX.test(curp)) {
+      await connection.rollback();
+      return res
+        .status(400)
+        .send({ message: "El formato de la CURP es inválido." });
+    }
 
-    // 2. Insertamos al usuario SIN matrícula
-    const [insertResult] = await connection.query(
-      "INSERT INTO usuarios (email, password, nombre, rol, apellido_paterno, apellido_materno, genero, telefono, curp, fecha_nacimiento) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      [
-        email,
-        hashedPassword,
-        nombre,
-        rol,
-        apellido_paterno || null,
-        apellido_materno || null,
-        genero || null,
-        telefono || null,
-        curp || null,
-        fecha_nacimiento || null,
-      ],
+    // Verificar duplicados antes de procesar
+    const [existing] = await connection.query(
+      "SELECT email, curp FROM usuarios WHERE email = ? OR curp = ?",
+      [email, curp],
+    );
+    if (existing.length > 0) {
+      await connection.rollback();
+      const user = existing[0];
+      if (user.curp === curp)
+        return res.status(400).send({ message: "La CURP ya está registrada." });
+      if (user.email === email)
+        return res
+          .status(400)
+          .send({ message: "El correo ya está registrado." });
+    }
+
+    // 2. GENERAR MATRÍCULA AUTOMÁTICA (Lógica de Consecutivo)
+    const currentYear = new Date().getFullYear().toString();
+
+    // Buscamos la última matrícula de este año
+    const [lastUser] = await connection.query(
+      "SELECT matricula FROM usuarios WHERE matricula LIKE ? ORDER BY CAST(matricula AS UNSIGNED) DESC LIMIT 1",
+      [`${currentYear}%`],
     );
 
-    const newUserId = insertResult.insertId; // 3. Obtenemos el ID del nuevo usuario
+    let nextSequence = 1;
+    if (lastUser.length > 0 && lastUser[0].matricula) {
+      const lastMatriculaStr = lastUser[0].matricula.toString();
+      // Extraemos solo la parte numérica final (ignorando el año)
+      const sequencePart = lastMatriculaStr.substring(4);
+      nextSequence = parseInt(sequencePart, 10) + 1;
+    }
 
-    // 4. Generamos la matrícula (Ej: 2025 + 0001 -> "20250001")
-    const year = new Date().getFullYear();
-    const matricula = `${year}${String(newUserId).padStart(4, "0")}`;
+    // Formamos la matrícula: 2026 + 0020
+    const finalMatricula = `${currentYear}${nextSequence.toString().padStart(4, "0")}`;
 
-    // 5. Actualizamos al usuario con su nueva matrícula
-    await connection.query("UPDATE usuarios SET matricula = ? WHERE id = ?", [
-      matricula,
-      newUserId,
+    // 3. LA CONTRASEÑA ES LA MATRÍCULA
+    const hashedPassword = await bcrypt.hash(finalMatricula, 10);
+
+    // 4. INSERTAR EN BASE DE DATOS
+    const sql = `
+      INSERT INTO usuarios 
+      (nombre, apellido_paterno, apellido_materno, email, password, telefono, genero, curp, fecha_nacimiento, rol, carrera_id, sede_id, matricula, activo) 
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+    `;
+
+    await connection.query(sql, [
+      nombre,
+      apellido_paterno,
+      apellido_materno || null,
+      email,
+      hashedPassword,
+      telefono,
+      genero,
+      curp,
+      fecha_nacimiento,
+      rol,
+      carrera_id || null,
+      sede_id || null,
+      finalMatricula,
     ]);
 
-    await connection.commit(); // 6. Confirmamos la transacción
-    res
-      .status(201)
-      .send({ message: "Usuario registrado con matrícula: " + matricula });
+    await connection.commit();
+
+    // 5. ENVÍO DE CORREO (¡RECUPERADO!)
+    // Usamos la función que ya tienes definida arriba en tu archivo.
+    // Le pasamos la matrícula como tercer argumento porque actúa como password inicial.
+    try {
+      // AHORA PASAMOS 'rol' AL FINAL PARA QUE EL CORREO SEPA QUÉ TEXTO USAR
+      await enviarCredenciales(email, nombre, finalMatricula, rol);
+      console.log("Correo de bienvenida enviado.");
+    } catch (mailError) {
+      console.error("Fallo envío correo:", mailError);
+    }
+
+    res.status(201).send({
+      message: "Usuario creado y notificado.",
+      matricula: finalMatricula,
+    });
   } catch (error) {
-    await connection.rollback(); // 7. Revertimos en caso de error
-    if (error.code === "ER_DUP_ENTRY")
-      return res
-        .status(409)
-        .send({ message: "El correo electrónico o la CURP ya están en uso." });
+    await connection.rollback();
     console.error(error);
-    res.status(500).send({ message: "Error al registrar el usuario" });
+    res.status(500).send({ message: "Error en el servidor al crear usuario." });
   } finally {
-    connection.release(); // 8. Siempre liberamos la conexión
+    connection.release();
   }
 });
+
 adminRouter.get("/usuarios/:id", async (req, res) =>
   res.json(
     (
@@ -1891,7 +2326,7 @@ adminRouter.put("/usuarios/:id", async (req, res) => {
   if (password) {
     const hashedPassword = await bcrypt.hash(password, 10);
     sql =
-      "UPDATE usuarios SET nombre=?, apellido_paterno=?, apellido_materno=?, email=?, password=?, rol=?, genero=?, telefono=?, curp=?, fecha_nacimiento=? WHERE id=?";
+      "UPDATE usuarios SET nombre=?, apellido_paterno=?, apellido_materno=?, email=?, password=?, rol=?, genero=?, telefono=?, curp=?, fecha_nacimiento=?, carrera_id=?, sede_id=? WHERE id=?";
     params = [
       nombre,
       apellido_paterno || null,
