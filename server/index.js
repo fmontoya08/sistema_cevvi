@@ -973,7 +973,257 @@ apiRouter.post("/calificar-grupo-completo", async (req, res) => {
 const adminRouter = express.Router();
 adminRouter.use(isAdmin); // ¡Importante! 'isAdmin' se aplica a todas las rutas de 'adminRouter'
 
-// --- INICIO: RUTAS DE GESTIÓN DE SOLICITUDES (ADMIN) ---
+// --- RUTAS DE GESTIÓN FINANCIERA (ADMIN --> ALUMNO) ---
+
+// 1. OBTENER FINANZAS DE UN ALUMNO ESPECÍFICO
+adminRouter.get("/alumnos/:id/finanzas", async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      `
+      SELECT 
+        a.id,
+        c.nombre_concepto,
+        a.monto_a_pagar,
+        a.estatus_pago,
+        a.fecha_vencimiento,
+        a.fecha_pago,
+        u.nombre, u.apellido_paterno, u.matricula -- Datos del alumno
+      FROM adeudos_alumnos a
+      INNER JOIN conceptos_pago c ON a.concepto_id = c.id
+      INNER JOIN usuarios u ON a.alumno_id = u.id
+      WHERE a.alumno_id = ?
+      ORDER BY a.fecha_vencimiento DESC
+    `,
+      [req.params.id],
+    );
+    res.json(rows);
+  } catch (error) {
+    res.status(500).send({ message: "Error al cargar finanzas" });
+  }
+});
+
+// 2. CREAR CARGO MANUAL (Asignar deuda)
+adminRouter.post("/finanzas/cargo", async (req, res) => {
+  const { alumno_id, concepto_id, fecha_vencimiento } = req.body;
+  try {
+    // Obtenemos el monto default del concepto
+    const [[concepto]] = await db.query(
+      "SELECT * FROM conceptos_pago WHERE id = ?",
+      [concepto_id],
+    );
+
+    await db.query(
+      "INSERT INTO adeudos_alumnos (alumno_id, concepto_id, monto_a_pagar, estatus_pago, fecha_vencimiento) VALUES (?, ?, ?, 'pendiente', ?)",
+      [alumno_id, concepto_id, concepto.monto_default, fecha_vencimiento],
+    );
+    res.json({ message: "Cargo asignado correctamente" });
+  } catch (error) {
+    res.status(500).send({ message: "Error al asignar cargo" });
+  }
+});
+
+// 3. REGISTRAR PAGO (Cobrar)
+adminRouter.put("/finanzas/pagar/:adeudoId", async (req, res) => {
+  try {
+    await db.query(
+      "UPDATE adeudos_alumnos SET estatus_pago = 'pagado', fecha_pago = NOW(), registrado_por_usuario_id = ? WHERE id = ?",
+      [req.user.id, req.params.adeudoId], // Registramos quién cobró
+    );
+    res.json({ message: "Pago registrado exitosamente" });
+  } catch (error) {
+    res.status(500).send({ message: "Error al registrar pago" });
+  }
+});
+
+// 4. ELIMINAR CARGO (Corrección de errores)
+adminRouter.delete("/finanzas/cargo/:id", async (req, res) => {
+  try {
+    await db.query("DELETE FROM adeudos_alumnos WHERE id = ?", [req.params.id]);
+    res.json({ message: "Cargo eliminado" });
+  } catch (error) {
+    res.status(500).send({ message: "Error al eliminar cargo" });
+  }
+});
+
+// --- RUTAS DE MIGRACIÓN (CORREGIDO PARA TABLA PIVOTE 'grupo_alumnos') ---
+
+// 1. OBTENER ESTRUCTURA (Grupos disponibles)
+adminRouter.get("/migracion-grupos/estructura", async (req, res) => {
+  try {
+    const sql = `
+      SELECT 
+        g.id, g.nombre_grupo, g.grado_id, g.ciclo_id,
+        COALESCE(c.nombre_ciclo, 'Sin Ciclo') as nombre_ciclo,
+        COALESCE(ca.nombre_carrera, 'Sin Carrera') as nombre_carrera,
+        COALESCE(gr.nombre_grado, 'Sin Grado') as nombre_grado
+      FROM grupos g
+      LEFT JOIN ciclos c ON g.ciclo_id = c.id
+      LEFT JOIN planes_estudio p ON g.plan_estudio_id = p.id
+      LEFT JOIN carreras ca ON p.carrera_id = ca.id
+      LEFT JOIN grados gr ON g.grado_id = gr.id
+      WHERE g.estatus = 'activo'
+      ORDER BY c.nombre_ciclo DESC, ca.nombre_carrera ASC, gr.nombre_grado ASC
+    `;
+    const [rows] = await db.query(sql);
+    res.json(rows);
+  } catch (error) {
+    console.error("Error cargando grupos:", error);
+    res.json([]);
+  }
+});
+
+// 2. OBTENER ALUMNOS (Corrección: Usando tabla pivote 'grupo_alumnos')
+adminRouter.get("/migracion-grupos/alumnos/:grupoId", async (req, res) => {
+  try {
+    const sql = `
+      SELECT u.id, u.nombre, u.apellido_paterno, u.apellido_materno, u.matricula 
+      FROM usuarios u
+      INNER JOIN grupo_alumnos ga ON u.id = ga.alumno_id
+      WHERE ga.grupo_id = ? AND u.rol = 'alumno'
+      ORDER BY u.apellido_paterno ASC
+    `;
+    const [rows] = await db.query(sql, [req.params.grupoId]);
+    res.json(rows);
+  } catch (error) {
+    console.error("Error cargando alumnos:", error);
+    res.status(500).send({ message: "Error al cargar alumnos" });
+  }
+});
+
+// 3. EJECUTAR MIGRACIÓN (Corrección: Actualizando 'grupo_alumnos')
+adminRouter.post("/migracion-grupos/ejecutar", async (req, res) => {
+  const { alumnosIds, nuevoGrupoId, grupoOrigenId } = req.body; // <--- Ojo: Recibimos grupoOrigenId
+
+  if (!alumnosIds || !nuevoGrupoId || !grupoOrigenId) {
+    return res.status(400).send({ message: "Datos incompletos." });
+  }
+
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // Actualizamos la inscripción en la tabla pivote
+    // Movemos al alumno del grupo VIEJO al NUEVO
+    const sql = `
+      UPDATE grupo_alumnos 
+      SET grupo_id = ? 
+      WHERE grupo_id = ? AND alumno_id IN (?)
+    `;
+    await connection.query(sql, [nuevoGrupoId, grupoOrigenId, alumnosIds]);
+
+    // Opcional: Si también quieres actualizar el campo 'grupo_id' en usuarios para tenerlo doble (por si acaso)
+    await connection.query("UPDATE usuarios SET grupo_id = ? WHERE id IN (?)", [
+      nuevoGrupoId,
+      alumnosIds,
+    ]);
+
+    await connection.commit();
+    res.json({ message: "Migración exitosa." });
+  } catch (error) {
+    await connection.rollback();
+    console.error("Error en migración:", error);
+    res.status(500).send({ message: "Error al migrar." });
+  } finally {
+    connection.release();
+  }
+});
+// 2. OBTENER ALUMNOS DE UN GRUPO (ORIGEN)
+// Corrección: Buscamos en 'usuarios' y quitamos el filtro 'activo' que no existe
+adminRouter.get("/migracion-grupos/alumnos/:grupoId", async (req, res) => {
+  try {
+    const sql = `
+      SELECT id, nombre, apellido_paterno, apellido_materno, matricula 
+      FROM usuarios 
+      WHERE grupo_id = ? AND rol = 'alumno'
+      ORDER BY apellido_paterno ASC
+    `;
+    const [rows] = await db.query(sql, [req.params.grupoId]);
+    res.json(rows);
+  } catch (error) {
+    console.error("Error cargando alumnos:", error);
+    res.status(500).send({ message: "Error al cargar alumnos" });
+  }
+});
+
+// 3. EJECUTAR MIGRACIÓN MASIVA
+// Corrección: Actualizamos la tabla 'usuarios'
+adminRouter.post("/migracion-grupos/ejecutar", async (req, res) => {
+  const { alumnosIds, nuevoGrupoId } = req.body;
+
+  if (!alumnosIds || alumnosIds.length === 0 || !nuevoGrupoId) {
+    return res.status(400).send({ message: "Datos incompletos." });
+  }
+
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // Actualizamos el grupo_id en la tabla USUARIOS
+    const sql = `UPDATE usuarios SET grupo_id = ? WHERE id IN (?)`;
+    await connection.query(sql, [nuevoGrupoId, alumnosIds]);
+
+    await connection.commit();
+    res.json({ message: "Migración exitosa." });
+  } catch (error) {
+    await connection.rollback();
+    console.error("Error en migración:", error);
+    res.status(500).send({ message: "Error al migrar." });
+  } finally {
+    connection.release();
+  }
+});
+
+// 2. OBTENER ALUMNOS DE UN GRUPO (ORIGEN)
+adminRouter.get("/migracion-grupos/alumnos/:grupoId", async (req, res) => {
+  try {
+    // Buscamos usuarios con rol 'alumno' que pertenezcan a este grupo
+    const sql = `
+      SELECT id, nombre, apellido_paterno, apellido_materno, matricula 
+      FROM usuarios 
+      WHERE grupo_id = ? AND rol = 'alumno' AND activo = 1
+      ORDER BY apellido_paterno ASC
+    `;
+    const [rows] = await db.query(sql, [req.params.grupoId]);
+    res.json(rows);
+  } catch (error) {
+    console.error("Error cargando alumnos:", error);
+    res.status(500).send({ message: "Error al cargar alumnos" });
+  }
+});
+
+// 3. EJECUTAR MIGRACIÓN MASIVA
+adminRouter.post("/migracion-grupos/ejecutar", async (req, res) => {
+  const { alumnosIds, nuevoGrupoId } = req.body;
+
+  if (!alumnosIds || alumnosIds.length === 0 || !nuevoGrupoId) {
+    return res
+      .status(400)
+      .send({ message: "Datos incompletos para la migración." });
+  }
+
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // Actualizamos el grupo_id de todos los alumnos seleccionados
+    // Usamos 'users' o 'usuarios' según tu tabla (en tu index.js veo que usas 'usuarios')
+    const sql = `UPDATE usuarios SET grupo_id = ? WHERE id IN (?)`;
+
+    // query espera el array de IDs directamente
+    await connection.query(sql, [nuevoGrupoId, alumnosIds]);
+
+    await connection.commit();
+    res.json({
+      message: `Se movieron ${alumnosIds.length} alumnos correctamente.`,
+    });
+  } catch (error) {
+    await connection.rollback();
+    console.error("Error en migración masiva:", error);
+    res.status(500).send({ message: "Error en la migración masiva" });
+  } finally {
+    connection.release();
+  }
+});
 
 // --- RUTA DASHBOARD CORREGIDA ---
 adminRouter.get("/dashboard-stats", async (req, res) => {
@@ -1612,6 +1862,109 @@ const commonRouter = express.Router(); // O usa tu router existente
 
 // Nota: Asegúrate de usar 'app.get' o 'apiRouter.get' según corresponda en esa parte de tu archivo.
 // Si usas un router específico, cámbialo. Aquí asumo que usas 'app' o el router principal.
+// --- MIDDLEWARE DE AUTENTICACIÓN (Necesario para proteger rutas) ---
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers["authorization"];
+  const token = authHeader && authHeader.split(" ")[1]; // Bearer TOKEN
+
+  if (token == null) return res.sendStatus(401); // No hay token
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) return res.sendStatus(403); // Token inválido o expirado
+    req.user = user;
+    next();
+  });
+};
+
+// --- RUTAS DE CONCEPTOS DE PAGO (ADMINISTRACIÓN) ---
+
+// 1. LISTAR CONCEPTOS
+adminRouter.get("/conceptos_pago", async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      "SELECT * FROM conceptos_pago ORDER BY id DESC",
+    );
+    res.json(rows);
+  } catch (error) {
+    res.status(500).send({ message: "Error al obtener conceptos" });
+  }
+});
+
+// 2. CREAR CONCEPTO
+adminRouter.post("/conceptos_pago", async (req, res) => {
+  const { nombre_concepto, monto_default, tipo, es_concepto_inscripcion } =
+    req.body;
+  try {
+    await db.query(
+      "INSERT INTO conceptos_pago (nombre_concepto, monto_default, tipo, es_concepto_inscripcion) VALUES (?, ?, ?, ?)",
+      [nombre_concepto, monto_default, tipo, es_concepto_inscripcion ? 1 : 0],
+    );
+    res.status(201).send({ message: "Concepto creado" });
+  } catch (error) {
+    res.status(500).send({ message: "Error al crear concepto" });
+  }
+});
+
+// 3. EDITAR CONCEPTO
+adminRouter.put("/conceptos_pago/:id", async (req, res) => {
+  const { nombre_concepto, monto_default, tipo, es_concepto_inscripcion } =
+    req.body;
+  try {
+    await db.query(
+      "UPDATE conceptos_pago SET nombre_concepto=?, monto_default=?, tipo=?, es_concepto_inscripcion=? WHERE id=?",
+      [
+        nombre_concepto,
+        monto_default,
+        tipo,
+        es_concepto_inscripcion ? 1 : 0,
+        req.params.id,
+      ],
+    );
+    res.send({ message: "Concepto actualizado" });
+  } catch (error) {
+    res.status(500).send({ message: "Error al actualizar" });
+  }
+});
+
+// 4. ELIMINAR CONCEPTO
+adminRouter.delete("/conceptos_pago/:id", async (req, res) => {
+  try {
+    await db.query("DELETE FROM conceptos_pago WHERE id = ?", [req.params.id]);
+    res.send({ message: "Concepto eliminado" });
+  } catch (error) {
+    res.status(500).send({ message: "Error al eliminar (puede estar en uso)" });
+  }
+});
+
+// --- RUTA FINANZAS ALUMNO (ESTADO DE CUENTA) ---
+app.get("/alumno/finanzas/resumen", authenticateToken, async (req, res) => {
+  // Solo permitimos alumnos
+  if (req.user.rol !== "alumno") return res.sendStatus(403);
+
+  try {
+    const alumnoId = req.user.id;
+
+    const sql = `
+      SELECT 
+        a.id,
+        c.nombre_concepto,
+        a.monto_a_pagar,
+        a.estatus_pago, -- 'pendiente','pagado','vencido'
+        a.fecha_vencimiento,
+        a.fecha_pago
+      FROM adeudos_alumnos a
+      INNER JOIN conceptos_pago c ON a.concepto_id = c.id
+      WHERE a.alumno_id = ?
+      ORDER BY a.fecha_vencimiento DESC
+    `;
+
+    const [rows] = await db.query(sql, [alumnoId]);
+    res.json(rows);
+  } catch (error) {
+    console.error("Error al obtener finanzas:", error);
+    res.status(500).send({ message: "Error al cargar estado de cuenta" });
+  }
+});
 
 // --- REEMPLAZA TU RUTA DE NOTIFICACIONES POR ESTA ---
 app.get("/api/notificaciones", verifyToken, async (req, res) => {
@@ -1654,9 +2007,9 @@ app.put("/api/notificaciones/marcar-leidas", verifyToken, async (req, res) => {
 // --- FIN RUTAS PLANES DE ESTUDIO ---
 
 // AHORA SÍ, CONTINÚA CON LA LÍNEA ORIGINAL:
-createCatalogCrudRoutes(adminRouter, "tipos_asignatura", ["tipo"]);
+// createCatalogCrudRoutes(adminRouter, "tipos_asignatura", ["tipo"]);
 // ... (el resto de tus rutas)
-createCatalogCrudRoutes(adminRouter, "tipos_asignatura", ["tipo"]);
+// createCatalogCrudRoutes(adminRouter, "tipos_asignatura", ["tipo"]);
 // createCatalogCrudRoutes(adminRouter, "grados", ["nombre_grado"]);
 // createCatalogCrudRoutes(adminRouter, "ciclos", ["nombre_ciclo"]);
 // createCatalogCrudRoutes(adminRouter, "sedes", ["nombre_sede", "direccion"]);
@@ -1675,19 +2028,150 @@ createCatalogCrudRoutes(adminRouter, "tipos_asignatura", ["tipo"]);
 // // --- FIN: CRUD PARA CONCEPTOS DE PAGO ---
 // --- GESTIÓN DE CICLO ACTUAL ---
 
-// --- RUTAS ESPECÍFICAS PARA CICLOS (SOFT DELETE) ---
+// --- RUTAS ASIGNATURAS (ESTRATEGIA A PRUEBA DE FALLOS) ---
 
-// ... (Tus rutas anteriores de Ciclos GET, POST, PUT, DELETE) ...
+// 1. CATÁLOGOS (Traemos TODO para que el Frontend decida qué mostrar)
+adminRouter.get("/catalogos/planes", async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      "SELECT * FROM planes_estudio WHERE activo = 1",
+    );
+    res.json(rows);
+  } catch (e) {
+    res.json([]);
+  }
+});
 
-// --- RUTAS ESPECÍFICAS PARA GRADOS (SOFT DELETE) ---
-// --- RUTAS CARRERAS (CORREGIDO: ELIMINAR LA LÍNEA createCatalogCrudRoutes DE CARRERAS) ---
+adminRouter.get("/catalogos/tipos-asignatura", async (req, res) => {
+  try {
+    const [rows] = await db.query("SELECT * FROM tipos_asignatura");
+    res.json(rows);
+  } catch (e) {
+    res.json([]);
+  }
+});
 
-// --- RUTAS SEDES (DISEÑO NUEVO + SOFT DELETE) ---
-// --- RUTAS SEDES (CORREGIDO: FILTROS + SOFT DELETE) ---
+adminRouter.get("/catalogos/grados", async (req, res) => {
+  try {
+    const [rows] = await db.query("SELECT * FROM grados WHERE activo = 1");
+    res.json(rows);
+  } catch (e) {
+    res.json([]);
+  }
+});
 
-// --- RUTAS CONCEPTOS DE PAGO (DISEÑO TARJETAS + SOFT DELETE) ---
+// 2. CRUD ASIGNATURAS
 
-// --- RUTAS CONCEPTOS DE PAGO (CORREGIDO: TABLA SINGULAR 'conceptos_pago') ---
+// GET: Listar (Sin JOINs peligrosos, solo datos crudos + activo)
+adminRouter.get("/asignaturas", async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      "SELECT * FROM asignaturas WHERE activo = 1 ORDER BY nombre_asignatura ASC",
+    );
+    res.json(rows);
+  } catch (error) {
+    res.status(500).send({ message: "Error al obtener asignaturas" });
+  }
+});
+
+// GET: Papelera
+adminRouter.get("/asignaturas/eliminadas", async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      "SELECT * FROM asignaturas WHERE activo = 0 ORDER BY nombre_asignatura ASC",
+    );
+    res.json(rows);
+  } catch (error) {
+    res.status(500).send({ message: "Error al obtener papelera" });
+  }
+});
+
+// POST: Crear
+adminRouter.post("/asignaturas", async (req, res) => {
+  const {
+    nombre_asignatura,
+    clave_asignatura,
+    creditos,
+    calificacion_max,
+    calificacion_min,
+    plan_estudio_id,
+    tipo_asignatura_id,
+    grado_id,
+  } = req.body;
+  try {
+    const sql = `INSERT INTO asignaturas (nombre_asignatura, clave_asignatura, creditos, calificacion_max, calificacion_min, plan_estudio_id, tipo_asignatura_id, grado_id, activo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`;
+    await db.query(sql, [
+      nombre_asignatura,
+      clave_asignatura,
+      creditos,
+      calificacion_max || 100,
+      calificacion_min || 70,
+      plan_estudio_id,
+      tipo_asignatura_id,
+      grado_id,
+    ]);
+    res.status(201).send({ message: "Creado correctamente" });
+  } catch (error) {
+    if (error.code === "ER_DUP_ENTRY")
+      return res.status(400).send({ message: "La clave ya existe." });
+    res.status(500).send({ message: "Error al crear." });
+  }
+});
+
+// PUT: Editar
+adminRouter.put("/asignaturas/:id", async (req, res) => {
+  const {
+    nombre_asignatura,
+    clave_asignatura,
+    creditos,
+    calificacion_max,
+    calificacion_min,
+    plan_estudio_id,
+    tipo_asignatura_id,
+    grado_id,
+  } = req.body;
+  try {
+    const sql = `UPDATE asignaturas SET nombre_asignatura=?, clave_asignatura=?, creditos=?, calificacion_max=?, calificacion_min=?, plan_estudio_id=?, tipo_asignatura_id=?, grado_id=? WHERE id=?`;
+    await db.query(sql, [
+      nombre_asignatura,
+      clave_asignatura,
+      creditos,
+      calificacion_max,
+      calificacion_min,
+      plan_estudio_id,
+      tipo_asignatura_id,
+      grado_id,
+      req.params.id,
+    ]);
+    res.send({ message: "Actualizado correctamente" });
+  } catch (error) {
+    res.status(500).send({ message: "Error al actualizar" });
+  }
+});
+
+// DELETE: Soft Delete
+adminRouter.delete("/asignaturas/:id", async (req, res) => {
+  try {
+    await db.query("UPDATE asignaturas SET activo = 0 WHERE id = ?", [
+      req.params.id,
+    ]);
+    res.send({ message: "Eliminado" });
+  } catch (e) {
+    res.status(500).send({ message: "Error" });
+  }
+});
+
+// PUT: Restaurar
+adminRouter.put("/asignaturas/:id/reactivar", async (req, res) => {
+  try {
+    await db.query("UPDATE asignaturas SET activo = 1 WHERE id = ?", [
+      req.params.id,
+    ]);
+    res.send({ message: "Restaurado" });
+  } catch (e) {
+    res.status(500).send({ message: "Error" });
+  }
+});
 
 // 1. GET: Activos
 adminRouter.get("/conceptos-pagos", async (req, res) => {
@@ -2708,10 +3192,17 @@ adminRouter.get("/grupos/:id/alumnos-disponibles", async (req, res) => {
 // --- RUTAS DE ASIGNATURAS CORREGIDAS ---
 
 // GET Asignaturas (Solo activas)
+// --- RUTAS ASIGNATURAS (ADAPTADAS A TU ESTRUCTURA SQL EXACTA) ---
+
+// 1. GET: Activas (Con JOINs para traer nombres de planes, tipos y grados)
 adminRouter.get("/asignaturas", async (req, res) => {
   try {
     const sql = `
-      SELECT a.*, p.nombre_plan, t.tipo as nombre_tipo, g.nombre_grado 
+      SELECT 
+        a.*,
+        p.nombre_plan,
+        t.nombre_tipo_asignatura, 
+        g.nombre_grado
       FROM asignaturas a
       LEFT JOIN planes_estudio p ON a.plan_estudio_id = p.id
       LEFT JOIN tipos_asignatura t ON a.tipo_asignatura_id = t.id
@@ -2722,8 +3213,130 @@ adminRouter.get("/asignaturas", async (req, res) => {
     const [rows] = await db.query(sql);
     res.json(rows);
   } catch (error) {
-    console.error(error); // Agregué esto para que veas el error en la consola negra si vuelve a fallar
+    console.error(error);
     res.status(500).send({ message: "Error al obtener asignaturas" });
+  }
+});
+
+// 2. GET: Papelera
+adminRouter.get("/asignaturas/eliminadas", async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      "SELECT * FROM asignaturas WHERE activo = 0 ORDER BY nombre_asignatura ASC",
+    );
+    res.json(rows);
+  } catch (error) {
+    res.status(500).send({ message: "Error al obtener papelera" });
+  }
+});
+
+// 3. POST: Crear
+adminRouter.post("/asignaturas", async (req, res) => {
+  // Extraemos EXACTAMENTE tus campos
+  const {
+    nombre_asignatura,
+    clave_asignatura,
+    creditos,
+    calificacion_max,
+    calificacion_min,
+    plan_estudio_id,
+    tipo_asignatura_id,
+    grado_id,
+  } = req.body;
+
+  try {
+    const sql = `
+      INSERT INTO asignaturas 
+      (nombre_asignatura, clave_asignatura, creditos, calificacion_max, calificacion_min, plan_estudio_id, tipo_asignatura_id, grado_id, activo) 
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+    `;
+
+    await db.query(sql, [
+      nombre_asignatura,
+      clave_asignatura,
+      creditos,
+      calificacion_max || 100.0,
+      calificacion_min || 70.0,
+      plan_estudio_id,
+      tipo_asignatura_id,
+      grado_id,
+    ]);
+
+    res.status(201).send({ message: "Asignatura creada exitosamente" });
+  } catch (error) {
+    console.error(error);
+    if (error.code === "ER_DUP_ENTRY")
+      return res
+        .status(400)
+        .send({ message: "La clave de asignatura ya existe." });
+    res.status(500).send({
+      message:
+        "Error al crear asignatura. Verifica que existan los Planes, Tipos y Grados seleccionados.",
+    });
+  }
+});
+
+// 4. PUT: Editar
+adminRouter.put("/asignaturas/:id", async (req, res) => {
+  const {
+    nombre_asignatura,
+    clave_asignatura,
+    creditos,
+    calificacion_max,
+    calificacion_min,
+    plan_estudio_id,
+    tipo_asignatura_id,
+    grado_id,
+  } = req.body;
+
+  try {
+    const sql = `
+      UPDATE asignaturas SET 
+        nombre_asignatura=?, clave_asignatura=?, creditos=?, 
+        calificacion_max=?, calificacion_min=?, 
+        plan_estudio_id=?, tipo_asignatura_id=?, grado_id=?
+      WHERE id=?
+    `;
+
+    await db.query(sql, [
+      nombre_asignatura,
+      clave_asignatura,
+      creditos,
+      calificacion_max,
+      calificacion_min,
+      plan_estudio_id,
+      tipo_asignatura_id,
+      grado_id,
+      req.params.id,
+    ]);
+    res.send({ message: "Asignatura actualizada" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({ message: "Error al actualizar" });
+  }
+});
+
+// 5. DELETE: Soft Delete
+adminRouter.delete("/asignaturas/:id", async (req, res) => {
+  try {
+    await db.query("UPDATE asignaturas SET activo = 0 WHERE id = ?", [
+      req.params.id,
+    ]);
+    res.send({ message: "Asignatura enviada a la papelera" });
+  } catch (error) {
+    res.status(500).send({ message: "Error al eliminar" });
+  }
+});
+
+// 6. PUT: Restaurar
+adminRouter.put("/asignaturas/:id/reactivar", async (req, res) => {
+  try {
+    await db.query("UPDATE asignaturas SET activo = 1 WHERE id = ?", [
+      req.params.id,
+    ]);
+    res.send({ message: "Asignatura restaurada correctamente" });
+  } catch (error) {
+    res.status(500).send({ message: "Error al restaurar" });
   }
 });
 

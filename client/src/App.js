@@ -79,6 +79,7 @@ import {
   Lock,
   Camera,
   BookOpen,
+  AlertCircle,
 } from "lucide-react";
 import { Bar, Pie } from "react-chartjs-2";
 import {
@@ -2648,62 +2649,151 @@ const UsuarioModal = ({ usuario, onClose, onSave }) => {
   );
 };
 
-// --- COMPONENTE ASIGNATURAS (DISEÑO CLEAN + FUNCIONALIDAD CORREGIDA) ---
+// --- COMPONENTE ASIGNATURAS (INTEGRACIÓN DEFINITIVA) ---
 const AsignaturasPage = () => {
   const [asignaturas, setAsignaturas] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [verEliminados, setVerEliminados] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [modalOpen, setModalOpen] = useState(false);
-  const [currentAsignatura, setCurrentAsignatura] = useState(null);
 
-  // Catálogos (Ahora incluimos TIPOS que faltaba)
-  const [catalogos, setCatalogos] = useState({
-    planes: [],
-    grados: [],
-    tipos: [], // <-- AGREGADO: Importante para la BD
+  // Catálogos
+  const [planes, setPlanes] = useState([]);
+  const [tipos, setTipos] = useState([]);
+  const [grados, setGrados] = useState([]);
+
+  // Modal
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState(null);
+
+  const [form, setForm] = useState({
+    nombre_asignatura: "",
+    clave_asignatura: "",
+    creditos: "",
+    calificacion_max: "100.00",
+    calificacion_min: "70.00",
+    plan_estudio_id: "",
+    tipo_asignatura_id: "",
+    grado_id: "",
   });
 
-  const fetchAsignaturas = useCallback(async () => {
+  // 1. CARGA INTELIGENTE DE DATOS
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await api.get("/admin/asignaturas");
-      setAsignaturas(response.data);
-
-      // Cargar TODOS los catálogos necesarios
-      const [resP, resG, resT] = await Promise.all([
-        api.get("/admin/planes_estudio"),
-        api.get("/admin/grados"),
-        api.get("/admin/tipos_asignatura"), // <-- RECUPERADO
+      const endpoint = verEliminados
+        ? "/admin/asignaturas/eliminadas"
+        : "/admin/asignaturas";
+      const [dataRes, planesRes, tiposRes, gradosRes] = await Promise.all([
+        api.get(endpoint),
+        api.get("/admin/catalogos/planes"),
+        api.get("/admin/catalogos/tipos-asignatura"),
+        api.get("/admin/catalogos/grados"),
       ]);
-      setCatalogos({
-        planes: resP.data,
-        grados: resG.data,
-        tipos: resT.data,
-      });
-    } catch (error) {
-      console.error(error);
+      setAsignaturas(dataRes.data);
+      setPlanes(planesRes.data);
+      setTipos(tiposRes.data);
+      setGrados(gradosRes.data);
+    } catch (e) {
+      console.error("Error cargando datos:", e);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [verEliminados]);
 
   useEffect(() => {
-    fetchAsignaturas();
-  }, [fetchAsignaturas]);
+    fetchData();
+  }, [fetchData]);
+
+  // 2. FUNCIONES DE AYUDA (Para encontrar nombres sin error SQL)
+  const getNombrePlan = (id) => {
+    const item = planes.find((p) => p.id === id);
+    return item ? item.nombre_plan || item.nombre || "Plan " + id : "Sin Plan";
+  };
+  const getNombreTipo = (id) => {
+    const item = tipos.find((t) => t.id === id);
+    // Busca cualquier propiedad que parezca un nombre
+    return item
+      ? item.nombre_tipo_asignatura ||
+          item.nombre ||
+          item.tipo ||
+          item.descripcion ||
+          "Tipo " + id
+      : "Sin Tipo";
+  };
+  const getNombreGrado = (id) => {
+    const item = grados.find((g) => g.id === id);
+    return item
+      ? item.nombre_grado || item.nombre || "Grado " + id
+      : "Sin Grado";
+  };
+
+  // 3. HANDLERS
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      if (editingItem)
+        await api.put(`/admin/asignaturas/${editingItem.id}`, form);
+      else await api.post("/admin/asignaturas", form);
+      alert(editingItem ? "Actualizado" : "Creado");
+      setModalOpen(false);
+      resetForm();
+      fetchData();
+    } catch (error) {
+      alert(
+        error.response?.data?.message || "Error al guardar. Revisa los campos.",
+      );
+    }
+  };
 
   const handleDelete = async (id) => {
-    if (window.confirm("¿Eliminar asignatura?")) {
+    if (window.confirm("¿Enviar a papelera?")) {
       try {
         await api.delete(`/admin/asignaturas/${id}`);
-        fetchAsignaturas();
-      } catch (error) {
-        alert("Error al eliminar");
+        fetchData();
+      } catch (e) {
+        alert("Error");
+      }
+    }
+  };
+  const handleRestaurar = async (id) => {
+    if (window.confirm("¿Restaurar?")) {
+      try {
+        await api.put(`/admin/asignaturas/${id}/reactivar`);
+        fetchData();
+      } catch (e) {
+        alert("Error");
       }
     }
   };
 
-  const openModal = (asignatura = null) => {
-    setCurrentAsignatura(asignatura);
+  const resetForm = () =>
+    setForm({
+      nombre_asignatura: "",
+      clave_asignatura: "",
+      creditos: "",
+      calificacion_max: "100.00",
+      calificacion_min: "70.00",
+      plan_estudio_id: "",
+      tipo_asignatura_id: "",
+      grado_id: "",
+    });
+
+  const openModal = (item = null) => {
+    setEditingItem(item);
+    if (item) {
+      setForm({
+        nombre_asignatura: item.nombre_asignatura,
+        clave_asignatura: item.clave_asignatura,
+        creditos: item.creditos,
+        calificacion_max: item.calificacion_max,
+        calificacion_min: item.calificacion_min,
+        plan_estudio_id: item.plan_estudio_id,
+        tipo_asignatura_id: item.tipo_asignatura_id,
+        grado_id: item.grado_id,
+      });
+    } else {
+      resetForm();
+    }
     setModalOpen(true);
   };
 
@@ -2715,32 +2805,45 @@ const AsignaturasPage = () => {
   );
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-300">
+    <div className="space-y-8 animate-in fade-in duration-300 max-w-6xl mx-auto">
       {/* HEADER */}
       <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-800 tracking-tight">
-            Materias y Asignaturas
+            {verEliminados ? "Papelera de Materias" : "Catálogo de Asignaturas"}
           </h1>
           <p className="text-gray-500 mt-2 text-lg">
-            Catálogo de materias por plan de estudio.
+            {verEliminados
+              ? "Recupera materias eliminadas."
+              : "Gestiona las materias de cada plan de estudios."}
           </p>
         </div>
-        <button
-          onClick={() => openModal()}
-          className="bg-[#a72a34] text-white px-6 py-3 rounded-xl hover:bg-[#802028] font-bold shadow-lg shadow-red-900/20 flex items-center gap-2 transition-transform active:scale-95"
-        >
-          <Plus size={20} /> Nueva Materia
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={() => setVerEliminados(!verEliminados)}
+            className={`px-5 py-3 rounded-xl font-bold flex items-center gap-2 border-2 ${verEliminados ? "bg-gray-100" : "bg-red-50 text-[#a72a34]"}`}
+          >
+            {verEliminados ? <ArrowLeft size={18} /> : <Trash2 size={18} />}{" "}
+            {verEliminados ? "Volver" : "Papelera"}
+          </button>
+          {!verEliminados && (
+            <button
+              onClick={() => openModal()}
+              className="bg-[#a72a34] text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg hover:bg-[#802028]"
+            >
+              <Plus size={20} /> Nueva Materia
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* BUSCADOR */}
-      <div className="relative max-w-md">
+      {/* SEARCH */}
+      <div className="relative">
         <Search className="absolute left-4 top-3.5 text-gray-400" size={20} />
         <input
           type="text"
-          placeholder="Buscar por nombre o clave..."
-          className="w-full pl-12 pr-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm font-medium"
+          placeholder="Buscar materia o clave..."
+          className="w-full pl-12 pr-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#a72a34]"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
@@ -2748,74 +2851,235 @@ const AsignaturasPage = () => {
 
       {/* GRID */}
       {loading ? (
-        <div className="text-center py-20 text-gray-400">Cargando...</div>
+        <div className="text-center py-20">Cargando...</div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredAsignaturas.map((asignatura) => (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {filteredAsignaturas.length === 0 && (
+            <div className="col-span-full p-10 text-center text-gray-400 italic bg-white rounded-2xl border border-dashed">
+              No se encontraron asignaturas.
+            </div>
+          )}
+          {filteredAsignaturas.map((a) => (
             <div
-              key={asignatura.id}
-              className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-all group flex flex-col h-full"
+              key={a.id}
+              className={`p-6 rounded-2xl border flex flex-col justify-between hover:shadow-md transition-all ${verEliminados ? "bg-gray-50 grayscale opacity-80" : "bg-white"}`}
             >
-              <div className="flex justify-between items-start mb-3">
-                <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs font-bold rounded uppercase tracking-wider">
-                  {asignatura.clave_asignatura || "S/N"}
-                </span>
-                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button
-                    onClick={() => openModal(asignatura)}
-                    className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"
-                  >
-                    <Edit size={16} />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(asignatura.id)}
-                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
-                  >
-                    <Trash2 size={16} />
-                  </button>
+              <div className="flex items-start gap-4 mb-4">
+                <div className="p-3 bg-blue-50 text-blue-600 rounded-xl shrink-0">
+                  <Book size={24} />
                 </div>
-              </div>
-              <div className="flex items-start gap-3 mb-4">
-                <div className="mt-1 text-blue-500">
-                  <Book size={20} />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-gray-800 leading-snug">
-                    {asignatura.nombre_asignatura}
+                <div className="min-w-0 w-full">
+                  <h3 className="font-bold text-gray-800 text-lg leading-tight mb-1 truncate">
+                    {a.nombre_asignatura}
                   </h3>
-                  <div className="text-xs text-gray-400 mt-1">
-                    Calif: {asignatura.calificacion_min} -{" "}
-                    {asignatura.calificacion_max}
+                  <div className="flex flex-wrap gap-2 text-xs mb-3">
+                    <span className="bg-gray-100 px-2 py-1 rounded border font-mono text-gray-600">
+                      {a.clave_asignatura}
+                    </span>
+                    <span className="bg-blue-50 px-2 py-1 rounded text-blue-700 font-bold">
+                      {a.creditos} CR
+                    </span>
+                  </div>
+                  {/* INFO RELACIONADA (Calculada en Frontend) */}
+                  <div className="space-y-1.5 pt-2 border-t border-gray-50">
+                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                      <BookOpen size={14} className="text-gray-400" />{" "}
+                      {getNombrePlan(a.plan_estudio_id)}
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                      <Tag size={14} className="text-gray-400" />{" "}
+                      {getNombreTipo(a.tipo_asignatura_id)}
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                      <GraduationCap size={14} className="text-gray-400" />{" "}
+                      {getNombreGrado(a.grado_id)}
+                    </div>
                   </div>
                 </div>
               </div>
-              <div className="mt-auto pt-4 border-t border-gray-50 text-xs text-gray-500 space-y-1">
-                <p>
-                  <span className="font-bold text-gray-400">PLAN:</span>{" "}
-                  {asignatura.nombre_plan || "General"}
-                </p>
-                <p>
-                  <span className="font-bold text-gray-400">CRÉDITOS:</span>{" "}
-                  {asignatura.creditos || 0}
-                </p>
-                <p>
-                  <span className="font-bold text-gray-400">TIPO:</span>{" "}
-                  {asignatura.nombre_tipo || "-"}
-                </p>
+              <div className="flex justify-end gap-2 pt-4 border-t border-gray-50">
+                {!verEliminados ? (
+                  <>
+                    <button
+                      onClick={() => openModal(a)}
+                      className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"
+                    >
+                      <Edit size={18} />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(a.id)}
+                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => handleRestaurar(a.id)}
+                    className="text-[#a72a34] font-bold text-xs flex items-center gap-1"
+                  >
+                    <RotateCcw size={14} /> Restaurar
+                  </button>
+                )}
               </div>
             </div>
           ))}
         </div>
       )}
 
-      {/* MODAL CORREGIDO */}
+      {/* MODAL */}
       {modalOpen && (
-        <AsignaturaModalClean
-          asignatura={currentAsignatura}
-          onClose={() => setModalOpen(false)}
-          onSave={fetchAsignaturas}
-          catalogos={catalogos} // Pasamos todos los catálogos
-        />
+        <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-50 p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b flex justify-between items-center">
+              <h3 className="font-bold text-xl">
+                {editingItem ? "Editar" : "Nueva"} Materia
+              </h3>
+              <button onClick={() => setModalOpen(false)}>
+                <X size={24} className="text-gray-400" />
+              </button>
+            </div>
+            <form onSubmit={handleSubmit} className="p-6 space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="md:col-span-2">
+                  <label className="label">Nombre Asignatura *</label>
+                  <input
+                    required
+                    className="input-field w-full p-3 border rounded-xl"
+                    value={form.nombre_asignatura}
+                    onChange={(e) =>
+                      setForm({ ...form, nombre_asignatura: e.target.value })
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="label">Clave *</label>
+                  <input
+                    required
+                    className="input-field w-full p-3 border rounded-xl uppercase"
+                    value={form.clave_asignatura}
+                    onChange={(e) =>
+                      setForm({ ...form, clave_asignatura: e.target.value })
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="label">Créditos *</label>
+                  <input
+                    required
+                    type="number"
+                    className="input-field w-full p-3 border rounded-xl"
+                    value={form.creditos}
+                    onChange={(e) =>
+                      setForm({ ...form, creditos: e.target.value })
+                    }
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-gray-50 p-4 rounded-xl">
+                <div>
+                  <label className="label">Plan *</label>
+                  <select
+                    required
+                    className="w-full p-3 border rounded-xl bg-white"
+                    value={form.plan_estudio_id}
+                    onChange={(e) =>
+                      setForm({ ...form, plan_estudio_id: e.target.value })
+                    }
+                  >
+                    <option value="">Seleccione...</option>
+                    {planes.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.nombre_plan || p.nombre || p.descripcion || p.id}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="label">Tipo *</label>
+                  <select
+                    required
+                    className="w-full p-3 border rounded-xl bg-white"
+                    value={form.tipo_asignatura_id}
+                    onChange={(e) =>
+                      setForm({ ...form, tipo_asignatura_id: e.target.value })
+                    }
+                  >
+                    <option value="">Seleccione...</option>
+                    {tipos.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.nombre_tipo_asignatura ||
+                          t.nombre ||
+                          t.tipo ||
+                          t.descripcion ||
+                          t.id}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="label">Grado *</label>
+                  <select
+                    required
+                    className="w-full p-3 border rounded-xl bg-white"
+                    value={form.grado_id}
+                    onChange={(e) =>
+                      setForm({ ...form, grado_id: e.target.value })
+                    }
+                  >
+                    <option value="">Seleccione...</option>
+                    {grados.map((g) => (
+                      <option key={g.id} value={g.id}>
+                        {g.nombre_grado || g.nombre || g.grado || g.id}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label">Mínima</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    className="w-full p-3 border rounded-xl"
+                    value={form.calificacion_min}
+                    onChange={(e) =>
+                      setForm({ ...form, calificacion_min: e.target.value })
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="label">Máxima</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    className="w-full p-3 border rounded-xl"
+                    value={form.calificacion_max}
+                    onChange={(e) =>
+                      setForm({ ...form, calificacion_max: e.target.value })
+                    }
+                  />
+                </div>
+              </div>
+              <div className="flex gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setModalOpen(false)}
+                  className="btn-secondary flex-1 py-3 rounded-xl border"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 bg-[#a72a34] text-white py-3 rounded-xl font-bold"
+                >
+                  Guardar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -3751,196 +4015,666 @@ const GrupoModal = ({ isOpen, onClose, grupoToEdit, onSuccess, catalogos }) => {
   );
 };
 
-// --- COMPONENTE MIGRACIÓN (DISEÑO CLEAN DASHBOARD) ---
-const MigracionPage = () => {
+// --- COMPONENTE DETALLE FINANZAS ALUMNO (ADMIN VIEW) ---
+const DetalleFinanzasAlumnoPage = () => {
+  const { id } = useParams(); // ID del alumno
+  const [movimientos, setMovimientos] = useState([]);
+  const [alumno, setAlumno] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [todosLosGrupos, setTodosLosGrupos] = useState([]);
-  const [grados, setGrados] = useState([]);
-  const [ciclos, setCiclos] = useState([]);
-  const [origenId, setOrigenId] = useState("");
-  const [form, setForm] = useState({
-    nombreNuevo: "",
-    gradoNuevoId: "",
-    cicloNuevoId: "",
-    modalidad: "Presencial",
+
+  // Modals
+  const [cargoModalOpen, setCargoModalOpen] = useState(false);
+  const [conceptos, setConceptos] = useState([]);
+
+  // Formulario Nuevo Cargo
+  const [formCargo, setFormCargo] = useState({
+    concepto_id: "",
+    fecha_vencimiento: new Date().toISOString().split("T")[0],
   });
 
-  useEffect(() => {
-    const cargarDatos = async () => {
-      try {
-        const [gRes, gradosRes, ciclosRes] = await Promise.all([
-          api.get("/admin/grupos"),
-          api.get("/admin/grados"),
-          api.get("/admin/ciclos"),
-        ]);
-        const gruposOrdenados = gRes.data.sort((a, b) =>
-          a.estatus === "activo" ? -1 : 1,
-        );
-        setTodosLosGrupos(gruposOrdenados);
-        setGrados(gradosRes.data);
-        setCiclos(ciclosRes.data);
-        setLoading(false);
-      } catch (error) {
-        console.error(error);
+  // Cargar datos
+  const fetchData = useCallback(async () => {
+    try {
+      const { data } = await api.get(`/admin/alumnos/${id}/finanzas`);
+      setMovimientos(data);
+      if (data.length > 0) {
+        setAlumno({
+          nombre: `${data[0].nombre} ${data[0].apellido_paterno}`,
+          matricula: data[0].matricula,
+        });
       }
-    };
-    cargarDatos();
-  }, []);
+      // Cargar catálogo de conceptos para el select
+      const resConceptos = await api.get("/admin/conceptos_pago");
+      setConceptos(resConceptos.data);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  }, [id]);
 
-  const handleSelectOrigen = (id) => {
-    setOrigenId(id);
-    const grupo = todosLosGrupos.find((g) => g.id === parseInt(id));
-    if (grupo) {
-      setForm((prev) => ({
-        ...prev,
-        nombreNuevo: grupo.nombre_grupo + " (Siguiente)",
-        modalidad: grupo.modalidad,
-      }));
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  // Handlers
+  const handleRegistrarPago = async (adeudoId) => {
+    if (
+      window.confirm("¿Confirmar recepción del pago en efectivo/transferencia?")
+    ) {
+      try {
+        await api.put(`/admin/finanzas/pagar/${adeudoId}`);
+        alert("Pago registrado correctamente.");
+        fetchData();
+      } catch (e) {
+        alert("Error al registrar pago.");
+      }
     }
   };
 
-  const handleMigrar = async (e) => {
+  const handleCrearCargo = async (e) => {
     e.preventDefault();
-    if (!origenId || !form.nombreNuevo) return alert("Llena todos los campos");
-    if (window.confirm("¿Seguro de migrar?")) {
+    try {
+      await api.post("/admin/finanzas/cargo", { ...formCargo, alumno_id: id });
+      alert("Cargo asignado.");
+      setCargoModalOpen(false);
+      fetchData();
+    } catch (e) {
+      alert("Error al asignar cargo.");
+    }
+  };
+
+  const handleEliminarCargo = async (adeudoId) => {
+    if (window.confirm("¿Eliminar este cargo incorrecto?")) {
       try {
-        await api.post("/admin/migracion/ejecutar", {
-          grupoOrigenId: origenId,
-          ...form,
-        });
-        alert("¡Migración completada!");
-        setOrigenId("");
-        // Recargar...
-      } catch (error) {
-        alert("Error");
+        await api.delete(`/admin/finanzas/cargo/${adeudoId}`);
+        fetchData();
+      } catch (e) {
+        alert("Error al eliminar.");
       }
     }
+  };
+
+  // Cálculos
+  const totalPendiente = movimientos
+    .filter(
+      (m) => m.estatus_pago === "pendiente" || m.estatus_pago === "vencido",
+    )
+    .reduce((acc, curr) => acc + parseFloat(curr.monto_a_pagar), 0);
+
+  const formatMoney = (amount) =>
+    new Intl.NumberFormat("es-MX", {
+      style: "currency",
+      currency: "MXN",
+    }).format(amount);
+  const formatDate = (date) =>
+    date ? new Date(date).toLocaleDateString("es-MX") : "-";
+
+  return (
+    <div className="space-y-8 animate-in fade-in duration-300 max-w-7xl mx-auto">
+      {/* HEADER */}
+      <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-center gap-6">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-800 tracking-tight flex items-center gap-3">
+            <div className="p-3 bg-[#a72a34] text-white rounded-xl shadow-lg shadow-red-900/20">
+              <DollarSign size={28} />
+            </div>
+            Finanzas del Alumno
+          </h1>
+          <p className="text-gray-500 mt-2 text-lg ml-16 flex items-center gap-2">
+            <Users size={18} /> {alumno ? alumno.nombre : "Cargando..."}
+            <span className="bg-gray-100 px-2 py-0.5 rounded text-xs font-mono border text-gray-600">
+              {alumno?.matricula}
+            </span>
+          </p>
+        </div>
+        <button
+          onClick={() => setCargoModalOpen(true)}
+          className="bg-[#a72a34] text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-[#802028] shadow-lg transition-all"
+        >
+          <Plus size={20} /> Nuevo Cargo
+        </button>
+      </div>
+
+      {/* TARJETAS RESUMEN */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 relative overflow-hidden">
+          <div className="absolute right-0 top-0 w-20 h-20 bg-red-50 rounded-bl-full -mr-4 -mt-4"></div>
+          <p className="text-gray-500 font-bold uppercase text-xs tracking-wider">
+            Deuda Total
+          </p>
+          <h2 className="text-3xl font-bold text-[#a72a34] mt-2">
+            {formatMoney(totalPendiente)}
+          </h2>
+          <p className="text-xs text-red-400 mt-1 font-medium">
+            Pendiente de cobro
+          </p>
+        </div>
+        {/* Aquí podrías agregar más tarjetas como "Total Pagado" o "Próximo Vencimiento" */}
+      </div>
+
+      {/* LISTA DE MOVIMIENTOS */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="p-6 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
+          <h3 className="font-bold text-gray-700 flex items-center gap-2">
+            <FileText size={20} className="text-gray-400" /> Historial de
+            Movimientos
+          </h3>
+        </div>
+
+        {loading ? (
+          <div className="p-10 text-center text-gray-400">Cargando...</div>
+        ) : (
+          <div className="divide-y divide-gray-100">
+            {movimientos.length === 0 && (
+              <p className="p-8 text-center text-gray-400">
+                Sin movimientos registrados.
+              </p>
+            )}
+
+            {movimientos.map((mov) => (
+              <div
+                key={mov.id}
+                className="p-6 hover:bg-gray-50 transition-colors flex flex-col md:flex-row items-center justify-between gap-4 group"
+              >
+                {/* INFO IZQUIERDA */}
+                <div className="flex items-center gap-4 w-full md:w-auto">
+                  <div
+                    className={`
+                    w-12 h-12 rounded-xl flex items-center justify-center shrink-0 border
+                    ${mov.estatus_pago === "pagado" ? "bg-green-50 border-green-100 text-green-600" : "bg-red-50 border-red-100 text-[#a72a34]"}
+                  `}
+                  >
+                    {mov.estatus_pago === "pagado" ? (
+                      <Check size={24} />
+                    ) : (
+                      <Clock size={24} />
+                    )}
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-gray-800">
+                      {mov.nombre_concepto}
+                    </h4>
+                    <div className="flex gap-4 text-sm text-gray-500 mt-1">
+                      <span className="flex items-center gap-1">
+                        <Calendar size={14} /> Vence:{" "}
+                        {formatDate(mov.fecha_vencimiento)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* INFO DERECHA Y ACCIONES */}
+                <div className="flex items-center gap-6 w-full md:w-auto justify-between md:justify-end">
+                  <div className="text-right">
+                    <span className="block font-bold text-xl text-gray-800">
+                      {formatMoney(mov.monto_a_pagar)}
+                    </span>
+                    <span
+                      className={`
+                      text-xs font-bold uppercase px-2 py-0.5 rounded
+                      ${mov.estatus_pago === "pagado" ? "bg-green-100 text-green-700" : "bg-red-100 text-[#a72a34]"}
+                    `}
+                    >
+                      {mov.estatus_pago}
+                    </span>
+                  </div>
+
+                  {/* BOTONES DE ACCIÓN */}
+                  <div className="flex gap-2">
+                    {mov.estatus_pago !== "pagado" && (
+                      <button
+                        onClick={() => handleRegistrarPago(mov.id)}
+                        className="bg-green-600 text-white px-4 py-2 rounded-lg font-bold text-sm shadow hover:bg-green-700 transition-colors flex items-center gap-2"
+                        title="Registrar Pago Manual"
+                      >
+                        <DollarSign size={16} /> Cobrar
+                      </button>
+                    )}
+
+                    {/* Botón Eliminar (Solo visible si no está pagado o si eres superadmin) */}
+                    <button
+                      onClick={() => handleEliminarCargo(mov.id)}
+                      className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                      title="Eliminar cargo"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* MODAL NUEVO CARGO */}
+      {cargoModalOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex justify-center items-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+            <div className="p-6 border-b flex justify-between items-center bg-gray-50 rounded-t-2xl">
+              <h3 className="font-bold text-lg text-gray-800">
+                Asignar Nuevo Cargo
+              </h3>
+              <button onClick={() => setCargoModalOpen(false)}>
+                <X size={24} className="text-gray-400" />
+              </button>
+            </div>
+            <form onSubmit={handleCrearCargo} className="p-6 space-y-4">
+              <div>
+                <label className="label">Concepto a Cobrar</label>
+                <select
+                  required
+                  className="w-full p-3 border rounded-xl bg-white focus:ring-[#a72a34]"
+                  value={formCargo.concepto_id}
+                  onChange={(e) =>
+                    setFormCargo({ ...formCargo, concepto_id: e.target.value })
+                  }
+                >
+                  <option value="">Seleccione...</option>
+                  {conceptos.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.nombre_concepto} - ${c.monto_default}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="label">Fecha Límite de Pago</label>
+                <input
+                  type="date"
+                  required
+                  className="w-full p-3 border rounded-xl"
+                  value={formCargo.fecha_vencimiento}
+                  onChange={(e) =>
+                    setFormCargo({
+                      ...formCargo,
+                      fecha_vencimiento: e.target.value,
+                    })
+                  }
+                />
+              </div>
+              <button
+                type="submit"
+                className="w-full bg-[#a72a34] text-white py-3 rounded-xl font-bold hover:bg-[#802028] shadow-lg mt-2"
+              >
+                Guardar Cargo
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// --- COMPONENTE MIGRACIÓN DE GRUPOS (DISEÑO FINAL MEJORADO) ---
+const MigracionPage = () => {
+  const [loading, setLoading] = useState(true);
+  const [gruposDisponibles, setGruposDisponibles] = useState([]);
+
+  // Selectores
+  const [origenId, setOrigenId] = useState("");
+  const [destinoId, setDestinoId] = useState("");
+
+  // Datos
+  const [alumnosOrigen, setAlumnosOrigen] = useState([]);
+  const [seleccionados, setSeleccionados] = useState([]);
+  const [procesando, setProcesando] = useState(false);
+
+  // 1. Cargar Grupos
+  useEffect(() => {
+    const fetchGrupos = async () => {
+      try {
+        const { data } = await api.get("/admin/migracion-grupos/estructura");
+        setGruposDisponibles(data);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchGrupos();
+  }, []);
+
+  // 2. Cargar Alumnos cuando cambia Origen
+  useEffect(() => {
+    if (!origenId) {
+      setAlumnosOrigen([]);
+      setSeleccionados([]);
+      return;
+    }
+    const fetchAlumnos = async () => {
+      try {
+        const { data } = await api.get(
+          `/admin/migracion-grupos/alumnos/${origenId}`,
+        );
+        setAlumnosOrigen(data);
+        setSeleccionados(data.map((a) => a.id));
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    fetchAlumnos();
+  }, [origenId]);
+
+  const toggleAlumno = (id) => {
+    if (seleccionados.includes(id)) {
+      setSeleccionados(seleccionados.filter((sid) => sid !== id));
+    } else {
+      setSeleccionados([...seleccionados, id]);
+    }
+  };
+
+  const toggleAll = () => {
+    if (seleccionados.length === alumnosOrigen.length) {
+      setSeleccionados([]);
+    } else {
+      setSeleccionados(alumnosOrigen.map((a) => a.id));
+    }
+  };
+
+  const handleMigrar = async () => {
+    if (!origenId || !destinoId)
+      return alert("Selecciona grupo origen y destino");
+    if (origenId === destinoId)
+      return alert("El grupo origen y destino no pueden ser el mismo");
+    if (seleccionados.length === 0)
+      return alert("Selecciona al menos un alumno");
+
+    if (
+      !window.confirm(`¿Mover ${seleccionados.length} alumnos al nuevo grupo?`)
+    )
+      return;
+
+    setProcesando(true);
+    try {
+      // AQUÍ ESTÁ EL CAMBIO IMPORTANTE: Enviamos grupoOrigenId
+      await api.post("/admin/migracion-grupos/ejecutar", {
+        alumnosIds: seleccionados,
+        nuevoGrupoId: destinoId,
+        grupoOrigenId: origenId, // <--- AGREGADO
+      });
+      alert("¡Migración exitosa!");
+      setOrigenId("");
+      setDestinoId("");
+      setAlumnosOrigen([]);
+      setSeleccionados([]);
+    } catch (error) {
+      alert(
+        "Error al migrar: " +
+          (error.response?.data?.message || "Error interno"),
+      );
+    } finally {
+      setProcesando(false);
+    }
+  };
+
+  const renderGrupoOption = (g) => {
+    return `${g.nombre_ciclo} - ${g.nombre_carrera} - ${g.nombre_grado} "${g.nombre_grupo}"`;
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-300">
-      {/* HEADER */}
-      <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
+    <div className="space-y-8 animate-in fade-in duration-300 max-w-7xl mx-auto">
+      {/* HEADER ROJO */}
+      <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-center gap-6">
         <div>
-          <h1 className="text-3xl font-bold text-gray-800 tracking-tight">
+          <h1 className="text-3xl font-bold text-gray-800 tracking-tight flex items-center gap-3">
+            <div className="p-3 bg-[#a72a34] text-white rounded-xl shadow-lg shadow-red-900/20">
+              <ArrowRightLeft size={28} />
+            </div>
             Migración de Grupos
           </h1>
-          <p className="text-gray-500 mt-2 text-lg">
-            Herramienta para avanzar grupos al siguiente ciclo.
+          <p className="text-gray-500 mt-2 text-lg ml-16">
+            Avance de semestre y reinscripción masiva de alumnos.
           </p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        {/* COLUMNA ORIGEN */}
-        <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
-          <div className="flex items-center gap-3 mb-6 border-b border-gray-100 pb-4">
-            <div className="bg-purple-100 text-purple-700 w-8 h-8 rounded-full flex items-center justify-center font-bold">
-              1
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* COLUMNA IZQUIERDA: ORIGEN */}
+        <div className="lg:col-span-7 space-y-6">
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+            <label className="text-sm font-bold text-[#a72a34] uppercase mb-3 flex items-center gap-2">
+              <LogOut size={16} /> Paso 1: Grupo Actual (Salida)
+            </label>
+            <div className="relative">
+              <select
+                className="w-full p-4 pl-4 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-[#a72a34] outline-none transition-all font-medium text-gray-700 appearance-none cursor-pointer"
+                value={origenId}
+                onChange={(e) => setOrigenId(e.target.value)}
+              >
+                <option value="">-- Seleccionar Origen --</option>
+                {gruposDisponibles.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {renderGrupoOption(g)}
+                  </option>
+                ))}
+              </select>
+              <div className="absolute right-4 top-4 text-gray-400 pointer-events-none">
+                <Group size={20} />
+              </div>
             </div>
-            <h3 className="font-bold text-lg text-gray-800">
-              Selecciona Grupo Origen
-            </h3>
           </div>
 
-          <div className="space-y-4">
-            <label className="block text-sm font-bold text-gray-500 uppercase">
-              Grupo Actual
-            </label>
-            <select
-              className="w-full p-4 border rounded-xl bg-gray-50 font-medium focus:ring-2 focus:ring-purple-500 outline-none"
-              value={origenId}
-              onChange={(e) => handleSelectOrigen(e.target.value)}
-            >
-              <option value="">-- Seleccionar --</option>
-              {todosLosGrupos.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.nombre_grupo} {g.estatus === "activo" ? "🟢" : "🔴"}
-                </option>
-              ))}
-            </select>
-            {origenId && (
-              <div className="p-4 bg-purple-50 text-purple-800 text-sm rounded-xl font-medium">
-                Se copiarán los alumnos inscritos de este grupo.
+          {origenId && (
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col h-[500px]">
+              <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                <div className="flex items-center gap-2">
+                  <Users size={18} className="text-gray-400" />
+                  <h3 className="font-bold text-gray-700">
+                    Alumnos Disponibles
+                  </h3>
+                  <span className="bg-[#a72a34] text-white px-2 py-0.5 rounded text-xs font-bold shadow-sm">
+                    {alumnosOrigen.length}
+                  </span>
+                </div>
+                <button
+                  onClick={toggleAll}
+                  className="text-sm font-bold text-[#a72a34] hover:bg-red-50 px-3 py-1.5 rounded-lg transition-colors"
+                >
+                  {seleccionados.length === alumnosOrigen.length
+                    ? "Deseleccionar todos"
+                    : "Seleccionar todos"}
+                </button>
               </div>
-            )}
-          </div>
+
+              <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
+                {alumnosOrigen.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center text-gray-400 italic">
+                    <p>No hay alumnos en este grupo.</p>
+                  </div>
+                ) : (
+                  alumnosOrigen.map((alumno) => (
+                    <label
+                      key={alumno.id}
+                      className={`
+                        group flex items-center gap-4 p-4 rounded-xl border cursor-pointer transition-all duration-200
+                        ${
+                          seleccionados.includes(alumno.id)
+                            ? "bg-[#a72a34]/5 border-[#a72a34] shadow-sm"
+                            : "bg-white border-gray-100 hover:border-[#a72a34]/30 hover:shadow-sm"
+                        }
+                      `}
+                    >
+                      <div
+                        className={`
+                        w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors
+                        ${
+                          seleccionados.includes(alumno.id)
+                            ? "bg-[#a72a34] border-[#a72a34]"
+                            : "border-gray-300 bg-white group-hover:border-[#a72a34]"
+                        }
+                      `}
+                      >
+                        {seleccionados.includes(alumno.id) && (
+                          <Check size={14} className="text-white" />
+                        )}
+                      </div>
+                      <input
+                        type="checkbox"
+                        className="hidden"
+                        checked={seleccionados.includes(alumno.id)}
+                        onChange={() => toggleAlumno(alumno.id)}
+                      />
+                      <div className="flex-1">
+                        <p
+                          className={`font-bold text-base ${
+                            seleccionados.includes(alumno.id)
+                              ? "text-[#a72a34]"
+                              : "text-gray-700"
+                          }`}
+                        >
+                          {alumno.apellido_paterno} {alumno.apellido_materno}{" "}
+                          {alumno.nombre}
+                        </p>
+                        <p className="text-xs text-gray-400 font-mono mt-0.5 flex items-center gap-1">
+                          <Award size={12} />{" "}
+                          {alumno.matricula || "Sin Matrícula"}
+                        </p>
+                      </div>
+                    </label>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* COLUMNA DESTINO */}
-        <div
-          className={`bg-white p-8 rounded-2xl shadow-sm border border-gray-100 transition-opacity ${!origenId ? "opacity-50 pointer-events-none" : "opacity-100"}`}
-        >
-          <div className="flex items-center gap-3 mb-6 border-b border-gray-100 pb-4">
-            <div className="bg-green-100 text-green-700 w-8 h-8 rounded-full flex items-center justify-center font-bold">
-              2
+        {/* COLUMNA DERECHA: DESTINO Y RESUMEN VISUAL */}
+        <div className="lg:col-span-5 space-y-6">
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-20 h-20 bg-[#a72a34]/5 rounded-bl-full -mr-4 -mt-4 pointer-events-none"></div>
+            <label className="text-sm font-bold text-[#a72a34] uppercase mb-3 flex items-center gap-2 relative z-10">
+              <RotateCcw size={16} className="rotate-180" /> Paso 2: Grupo
+              Destino (Entrada)
+            </label>
+            <div className="relative z-10">
+              <select
+                className="w-full p-4 pl-4 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-[#a72a34] outline-none transition-all font-medium text-gray-700 appearance-none cursor-pointer"
+                value={destinoId}
+                onChange={(e) => setDestinoId(e.target.value)}
+              >
+                <option value="">-- Seleccionar Destino --</option>
+                {gruposDisponibles.map((g) => (
+                  <option key={g.id} value={g.id} disabled={g.id == origenId}>
+                    {renderGrupoOption(g)}
+                  </option>
+                ))}
+              </select>
+              <div className="absolute right-4 top-4 text-gray-400 pointer-events-none">
+                <Building size={20} />
+              </div>
             </div>
-            <h3 className="font-bold text-lg text-gray-800">
-              Configura Nuevo Grupo
-            </h3>
           </div>
 
-          <form onSubmit={handleMigrar} className="space-y-5">
-            <div>
-              <label className="block text-sm font-bold text-gray-500 uppercase mb-2">
-                Nombre Nuevo
-              </label>
-              <input
-                type="text"
-                className="w-full p-3 border rounded-xl font-medium"
-                value={form.nombreNuevo}
-                onChange={(e) =>
-                  setForm({ ...form, nombreNuevo: e.target.value })
-                }
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-bold text-gray-500 uppercase mb-2">
-                  Nuevo Grado
-                </label>
-                <select
-                  className="w-full p-3 border rounded-xl bg-white"
-                  value={form.gradoNuevoId}
-                  onChange={(e) =>
-                    setForm({ ...form, gradoNuevoId: e.target.value })
-                  }
-                >
-                  <option value="">-- Grado --</option>
-                  {grados.map((g) => (
-                    <option key={g.id} value={g.id}>
-                      {g.nombre_grado}
-                    </option>
-                  ))}
-                </select>
+          {/* TARJETA DE CONFIRMACIÓN VISUAL */}
+          <div className="bg-white p-8 rounded-3xl shadow-lg border border-gray-100 flex flex-col items-center h-auto lg:min-h-[400px] relative">
+            <h3 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
+              <ClipboardCheck size={20} className="text-[#a72a34]" />
+              Confirmación de Movimiento
+            </h3>
+
+            {/* COMPARATIVA VISUAL */}
+            <div className="w-full grid grid-cols-2 gap-4 mb-8">
+              {/* CAJA ORIGEN */}
+              <div className="bg-red-50 p-4 rounded-xl border border-red-100 text-center">
+                <p className="text-xs font-bold text-[#a72a34] uppercase mb-2">
+                  Sale de:
+                </p>
+                {origenId ? (
+                  (() => {
+                    const g = gruposDisponibles.find((x) => x.id == origenId);
+                    return g ? (
+                      <div className="text-sm">
+                        <div className="font-bold text-gray-800">
+                          {g.nombre_grado} "{g.nombre_grupo}"
+                        </div>
+                        <div className="text-gray-500 text-xs mt-1 leading-tight">
+                          {g.nombre_carrera}
+                        </div>
+                        <div className="text-gray-400 text-xs mt-1">
+                          {g.nombre_ciclo}
+                        </div>
+                      </div>
+                    ) : (
+                      "Cargando..."
+                    );
+                  })()
+                ) : (
+                  <span className="text-gray-400 italic text-sm">--</span>
+                )}
               </div>
-              <div>
-                <label className="block text-sm font-bold text-gray-500 uppercase mb-2">
-                  Nuevo Ciclo
-                </label>
-                <select
-                  className="w-full p-3 border rounded-xl bg-white"
-                  value={form.cicloNuevoId}
-                  onChange={(e) =>
-                    setForm({ ...form, cicloNuevoId: e.target.value })
-                  }
-                >
-                  <option value="">-- Ciclo --</option>
-                  {ciclos.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.nombre_ciclo}
-                    </option>
-                  ))}
-                </select>
+
+              {/* FLECHA EN MEDIO */}
+              <div className="absolute top-[130px] left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10">
+                <div className="bg-white p-2 rounded-full shadow-md border border-gray-100">
+                  <ArrowRightLeft size={16} className="text-gray-400" />
+                </div>
+              </div>
+
+              {/* CAJA DESTINO */}
+              <div className="bg-green-50 p-4 rounded-xl border border-green-100 text-center">
+                <p className="text-xs font-bold text-green-700 uppercase mb-2">
+                  Entra a:
+                </p>
+                {destinoId ? (
+                  (() => {
+                    const g = gruposDisponibles.find((x) => x.id == destinoId);
+                    return g ? (
+                      <div className="text-sm">
+                        <div className="font-bold text-gray-800">
+                          {g.nombre_grado} "{g.nombre_grupo}"
+                        </div>
+                        <div className="text-gray-500 text-xs mt-1 leading-tight">
+                          {g.nombre_carrera}
+                        </div>
+                        <div className="text-gray-400 text-xs mt-1">
+                          {g.nombre_ciclo}
+                        </div>
+                      </div>
+                    ) : (
+                      "Cargando..."
+                    );
+                  })()
+                ) : (
+                  <span className="text-gray-400 italic text-sm">--</span>
+                )}
               </div>
             </div>
+
+            {/* CONTEO */}
+            <div className="bg-gray-50 w-full p-4 rounded-xl mb-6 flex justify-between items-center border border-gray-100">
+              <span className="text-gray-600 font-medium text-sm">
+                Alumnos a mover:
+              </span>
+              <span className="text-2xl font-bold text-[#a72a34]">
+                {seleccionados.length}
+              </span>
+            </div>
+
+            {/* BOTÓN DE ACCIÓN */}
             <button
-              type="submit"
-              className="w-full bg-gray-900 text-white py-4 rounded-xl font-bold hover:bg-black shadow-lg flex justify-center items-center gap-2 mt-4 transition-transform active:scale-95"
+              onClick={handleMigrar}
+              disabled={procesando || seleccionados.length === 0 || !destinoId}
+              className={`
+                w-full py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-3 transition-all duration-300 transform
+                ${
+                  procesando || seleccionados.length === 0 || !destinoId
+                    ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                    : "bg-[#a72a34] text-white hover:bg-[#802028] shadow-lg shadow-red-900/20 hover:shadow-xl hover:-translate-y-1 active:scale-95"
+                }
+              `}
             >
-              <GitBranch size={20} /> Ejecutar Migración
+              {procesando ? (
+                "Procesando..."
+              ) : (
+                <>
+                  Confirmar Transferencia <CheckCircle size={22} />
+                </>
+              )}
             </button>
-          </form>
+          </div>
         </div>
       </div>
     </div>
@@ -6621,282 +7355,244 @@ const SedesModal = ({ sede, onClose, onSave }) => {
 };
 
 // --- COMPONENTE CONCEPTOS DE PAGO (NOMBRE SINGULAR PARA CORREGIR ERROR) ---
+// --- COMPONENTE CONCEPTOS DE PAGO (ADMIN DASHBOARD ROJO) ---
 const ConceptosPagoPage = () => {
   const [conceptos, setConceptos] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [verEliminados, setVerEliminados] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
-
-  // Estado para el Modal
   const [modalOpen, setModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
-  const [form, setForm] = useState({ nombre_concepto: "", monto: "" });
 
-  // 1. CARGA DE DATOS
+  const [form, setForm] = useState({
+    nombre_concepto: "",
+    monto_default: "",
+    tipo: "UNICO", // o RECURRENTE
+    es_concepto_inscripcion: false,
+  });
+
+  // Cargar datos
   const fetchConceptos = useCallback(async () => {
-    setLoading(true);
     try {
-      // Rutas corregidas (backend usa guion medio)
-      const endpoint = verEliminados
-        ? "/admin/conceptos-pagos/eliminados"
-        : "/admin/conceptos-pagos";
-      const { data } = await api.get(endpoint);
+      // OJO: Aquí debe coincidir con la ruta que acabamos de crear
+      const { data } = await api.get("/admin/conceptos_pago");
       setConceptos(data);
     } catch (e) {
       console.error(e);
     } finally {
       setLoading(false);
     }
-  }, [verEliminados]);
+  }, []);
 
   useEffect(() => {
     fetchConceptos();
   }, [fetchConceptos]);
 
-  // 2. GUARDAR
+  // Handlers
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
       if (editingItem) {
-        await api.put(`/admin/conceptos-pagos/${editingItem.id}`, form);
-        alert("Concepto actualizado correctamente.");
+        await api.put(`/admin/conceptos_pago/${editingItem.id}`, form);
       } else {
-        await api.post("/admin/conceptos-pagos", form);
-        alert("Concepto creado correctamente.");
+        await api.post("/admin/conceptos_pago", form);
       }
+      alert(editingItem ? "Actualizado" : "Creado");
       setModalOpen(false);
-      setForm({ nombre_concepto: "", monto: "" });
-      setEditingItem(null);
+      resetForm();
       fetchConceptos();
     } catch (error) {
-      alert(error.response?.data?.message || "Error al guardar");
+      alert("Error al guardar");
     }
   };
 
-  // 3. ELIMINAR (SOFT DELETE)
   const handleDelete = async (id) => {
-    if (window.confirm("¿Enviar a la papelera?")) {
+    if (window.confirm("¿Eliminar este concepto?")) {
       try {
-        await api.delete(`/admin/conceptos-pagos/${id}`);
+        await api.delete(`/admin/conceptos_pago/${id}`);
         fetchConceptos();
       } catch (e) {
-        alert("Error al eliminar");
+        alert("No se puede eliminar, tal vez ya tiene adeudos ligados.");
       }
     }
   };
 
-  // 4. RESTAURAR
-  const handleRestaurar = async (id) => {
-    if (window.confirm("¿Restaurar concepto?")) {
-      try {
-        await api.put(`/admin/conceptos-pagos/${id}/reactivar`);
-        fetchConceptos();
-      } catch (e) {
-        alert("Error al restaurar");
-      }
-    }
-  };
+  const resetForm = () =>
+    setForm({
+      nombre_concepto: "",
+      monto_default: "",
+      tipo: "UNICO",
+      es_concepto_inscripcion: false,
+    });
 
   const openModal = (item = null) => {
     setEditingItem(item);
-    setForm({
-      nombre_concepto: item ? item.nombre_concepto : "",
-      monto: item ? item.monto : "",
-    });
+    if (item) {
+      setForm({
+        nombre_concepto: item.nombre_concepto,
+        monto_default: item.monto_default,
+        tipo: item.tipo,
+        es_concepto_inscripcion: item.es_concepto_inscripcion === 1,
+      });
+    } else {
+      resetForm();
+    }
     setModalOpen(true);
   };
 
-  const filteredConceptos = conceptos.filter((c) =>
-    c.nombre_concepto.toLowerCase().includes(searchTerm.toLowerCase()),
-  );
-
-  const formatMoney = (amount) => {
-    return new Intl.NumberFormat("es-MX", {
-      style: "currency",
-      currency: "MXN",
-    }).format(amount || 0);
-  };
-
   return (
-    <div className="space-y-8 animate-in fade-in duration-300 max-w-5xl mx-auto">
+    <div className="space-y-8 animate-in fade-in duration-300 max-w-6xl mx-auto">
       {/* HEADER */}
-      <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
+      <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-800 tracking-tight">
-            {verEliminados ? "Papelera de Conceptos" : "Conceptos de Pago"}
+          <h1 className="text-3xl font-bold text-gray-800 flex items-center gap-3">
+            <div className="p-3 bg-[#a72a34] text-white rounded-xl shadow-lg shadow-red-900/20">
+              <DollarSign size={28} />
+            </div>
+            Catálogo de Pagos
           </h1>
-          <p className="text-gray-500 mt-2 text-lg">
-            {verEliminados
-              ? "Conceptos desactivados."
-              : "Catálogo de precios y servicios."}
+          <p className="text-gray-500 mt-2 text-lg ml-16">
+            Define los costos de inscripción, colegiaturas y servicios.
           </p>
         </div>
+        <button
+          onClick={() => openModal()}
+          className="bg-[#a72a34] text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-[#802028] shadow-lg transition-all"
+        >
+          <Plus size={20} /> Nuevo Concepto
+        </button>
+      </div>
 
-        <div className="flex gap-3 items-center">
-          <button
-            onClick={() => setVerEliminados(!verEliminados)}
-            className={`px-5 py-3 rounded-xl font-bold flex items-center gap-2 border-2 transition-colors ${verEliminados ? "bg-gray-100 border-gray-200 text-gray-600" : "bg-red-50 border-red-50 text-[#a72a34]"}`}
+      {/* GRID */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {conceptos.map((c) => (
+          <div
+            key={c.id}
+            className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all flex flex-col justify-between group"
           >
-            {verEliminados ? <ArrowLeft size={18} /> : <Trash2 size={18} />}
-            {verEliminados ? "Volver" : "Papelera"}
-          </button>
-
-          {!verEliminados && (
-            <button
-              onClick={() => openModal()}
-              className="bg-[#a72a34] text-white px-6 py-3 rounded-xl hover:bg-[#802028] font-bold flex items-center gap-2 shadow-lg shadow-red-900/20 transition-transform active:scale-95"
-            >
-              <Plus size={20} /> Nuevo Concepto
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* BUSCADOR */}
-      <div className="relative">
-        <Search className="absolute left-4 top-3.5 text-gray-400" size={20} />
-        <input
-          type="text"
-          placeholder="Buscar concepto..."
-          className="w-full pl-12 pr-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#a72a34] bg-white shadow-sm font-medium"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
-      </div>
-
-      {/* GRID DE TARJETAS */}
-      {loading ? (
-        <div className="text-center py-20 text-gray-400">Cargando...</div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {filteredConceptos.length === 0 && (
-            <div className="col-span-full p-10 text-center text-gray-400 italic bg-white rounded-2xl border border-dashed border-gray-200">
-              No se encontraron conceptos.
-            </div>
-          )}
-
-          {filteredConceptos.map((c) => (
-            <div
-              key={c.id}
-              className={`p-6 rounded-2xl border flex justify-between items-center transition-all group ${verEliminados ? "bg-gray-50 border-gray-200 grayscale opacity-80" : "bg-white border-gray-100 hover:shadow-md hover:border-[#a72a34]/30"}`}
-            >
-              <div className="flex items-center gap-4 overflow-hidden">
+            <div>
+              <div className="flex justify-between items-start mb-4">
                 <div
-                  className={`p-4 rounded-xl flex-shrink-0 ${verEliminados ? "bg-gray-200 text-gray-500" : "bg-green-50 text-green-600"}`}
+                  className={`p-2 rounded-lg ${c.tipo === "RECURRENTE" ? "bg-blue-50 text-blue-600" : "bg-orange-50 text-orange-600"}`}
                 >
-                  {/* Asegúrate de tener importado DollarSign arriba */}
-                  <DollarSign size={28} />
+                  {c.tipo === "RECURRENTE" ? (
+                    <RotateCcw size={20} />
+                  ) : (
+                    <FileText size={20} />
+                  )}
                 </div>
-                <div className="flex flex-col min-w-0">
-                  <h3 className="font-bold text-gray-800 text-lg truncate pr-2">
-                    {c.nombre_concepto}
-                  </h3>
-                  <span className="text-2xl font-extrabold text-gray-900 tracking-tight">
-                    {formatMoney(c.monto)}
+                <div className="text-right">
+                  <span className="block text-2xl font-bold text-gray-800">
+                    ${c.monto_default}
                   </span>
+                  <span className="text-xs text-gray-400">MXN</span>
                 </div>
               </div>
-
-              <div className="flex items-center gap-2 flex-shrink-0">
-                {!verEliminados ? (
-                  <>
-                    <button
-                      onClick={() => openModal(c)}
-                      className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                    >
-                      <Edit size={20} />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(c.id)}
-                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                    >
-                      <Trash2 size={20} />
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    onClick={() => handleRestaurar(c.id)}
-                    className="flex items-center gap-2 px-3 py-2 bg-white border border-[#a72a34] text-[#a72a34] rounded-lg font-bold text-sm hover:bg-[#a72a34] hover:text-white transition-all shadow-sm"
-                  >
-                    <RotateCcw size={16} /> Restaurar
-                  </button>
+              <h3 className="font-bold text-gray-800 text-lg mb-1">
+                {c.nombre_concepto}
+              </h3>
+              <div className="flex gap-2 mt-2">
+                <span className="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500 font-medium">
+                  {c.tipo}
+                </span>
+                {c.es_concepto_inscripcion === 1 && (
+                  <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded font-bold flex items-center gap-1">
+                    <CheckCircle size={10} /> Inscripción
+                  </span>
                 )}
               </div>
             </div>
-          ))}
-        </div>
-      )}
+
+            <div className="border-t mt-6 pt-4 flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button
+                onClick={() => openModal(c)}
+                className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"
+              >
+                <Edit size={18} />
+              </button>
+              <button
+                onClick={() => handleDelete(c.id)}
+                className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+              >
+                <Trash2 size={18} />
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
 
       {/* MODAL */}
       {modalOpen && (
-        <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-50 p-4 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all scale-100">
-            <div className="bg-white p-6 border-b flex justify-between items-center">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex justify-center items-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div className="p-6 border-b flex justify-between items-center bg-gray-50">
               <h3 className="font-bold text-xl text-gray-800">
-                {editingItem ? "Editar Concepto" : "Nuevo Concepto"}
+                {editingItem ? "Editar" : "Nuevo"} Concepto
               </h3>
-              <button
-                onClick={() => setModalOpen(false)}
-                className="text-gray-400 hover:bg-gray-100 p-2 rounded-full"
-              >
-                <X size={24} />
+              <button onClick={() => setModalOpen(false)}>
+                <X size={24} className="text-gray-400" />
               </button>
             </div>
-
-            <form onSubmit={handleSubmit} className="p-6 space-y-6">
+            <form onSubmit={handleSubmit} className="p-6 space-y-4">
               <div>
-                <label className="block text-xs font-bold text-gray-400 uppercase mb-2">
-                  Nombre del Servicio
-                </label>
+                <label className="label">Nombre del Concepto</label>
                 <input
                   required
-                  autoFocus
-                  placeholder="Ej: Inscripción, Colegiatura..."
-                  className="w-full p-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#a72a34] outline-none font-medium text-gray-800"
+                  className="input-field w-full p-3 border rounded-xl focus:ring-[#a72a34]"
                   value={form.nombre_concepto}
                   onChange={(e) =>
                     setForm({ ...form, nombre_concepto: e.target.value })
                   }
+                  placeholder="Ej. Mensualidad Enero"
                 />
               </div>
-
               <div>
-                <label className="block text-xs font-bold text-gray-400 uppercase mb-2">
-                  Precio (MXN)
-                </label>
-                <div className="relative">
-                  <span className="absolute left-4 top-4 text-gray-400 font-bold">
-                    $
-                  </span>
-                  <input
-                    required
-                    type="number"
-                    step="0.01"
-                    placeholder="0.00"
-                    className="w-full pl-8 pr-4 py-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#a72a34] outline-none font-medium text-gray-800"
-                    value={form.monto}
-                    onChange={(e) =>
-                      setForm({ ...form, monto: e.target.value })
-                    }
-                  />
-                </div>
+                <label className="label">Costo Estándar ($)</label>
+                <input
+                  required
+                  type="number"
+                  step="0.01"
+                  className="input-field w-full p-3 border rounded-xl"
+                  value={form.monto_default}
+                  onChange={(e) =>
+                    setForm({ ...form, monto_default: e.target.value })
+                  }
+                />
+              </div>
+              <div>
+                <label className="label">Tipo de Cobro</label>
+                <select
+                  className="w-full p-3 border rounded-xl bg-white"
+                  value={form.tipo}
+                  onChange={(e) => setForm({ ...form, tipo: e.target.value })}
+                >
+                  <option value="UNICO">Pago Único (Ej. Constancia)</option>
+                  <option value="RECURRENTE">
+                    Recurrente (Ej. Colegiatura)
+                  </option>
+                </select>
+              </div>
+              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100">
+                <input
+                  type="checkbox"
+                  className="w-5 h-5 text-[#a72a34] rounded focus:ring-0"
+                  checked={form.es_concepto_inscripcion}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      es_concepto_inscripcion: e.target.checked,
+                    })
+                  }
+                />
+                <span className="text-sm font-medium text-gray-700">
+                  ¿Es costo de inscripción?
+                </span>
               </div>
 
-              <div className="flex gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setModalOpen(false)}
-                  className="flex-1 py-3 text-gray-500 font-bold hover:bg-gray-100 rounded-xl transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 bg-[#a72a34] text-white py-3 rounded-xl font-bold hover:bg-[#802028] shadow-lg transition-transform active:scale-95"
-                >
-                  Guardar
-                </button>
-              </div>
+              <button
+                type="submit"
+                className="w-full bg-[#a72a34] text-white py-3 rounded-xl font-bold mt-2 hover:bg-[#802028] shadow-lg"
+              >
+                Guardar Concepto
+              </button>
             </form>
           </div>
         </div>
@@ -7649,134 +8345,216 @@ const DetalleFinancieroAlumnoPage = () => {
 // --- FIN COMPONENTE: DetalleFinancieroAlumnoPage (Admin) ---
 
 // --- INICIA NUEVO COMPONENTE: MisPagosPage (Alumno) ---
+// --- COMPONENTE FINANZAS ALUMNO (DASHBOARD ROJO) ---
 const MisPagosPage = () => {
-  const [adeudos, setAdeudos] = useState([]);
+  const [movimientos, setMovimientos] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // Estadísticas calculadas
+  const [totalPendiente, setTotalPendiente] = useState(0);
+  const [totalPagado, setTotalPagado] = useState(0);
+
   useEffect(() => {
-    const fetchAdeudos = async () => {
+    const fetchFinanzas = async () => {
       try {
-        const { data } = await api.get("/alumno/mis-adeudos");
-        setAdeudos(data);
+        const { data } = await api.get("/alumno/finanzas/resumen");
+        setMovimientos(data);
+
+        // Calcular totales
+        const pendiente = data
+          .filter(
+            (m) =>
+              m.estatus_pago === "pendiente" || m.estatus_pago === "vencido",
+          )
+          .reduce((acc, curr) => acc + parseFloat(curr.monto_a_pagar), 0);
+
+        const pagado = data
+          .filter((m) => m.estatus_pago === "pagado")
+          .reduce((acc, curr) => acc + parseFloat(curr.monto_a_pagar), 0);
+
+        setTotalPendiente(pendiente);
+        setTotalPagado(pagado);
       } catch (error) {
-        console.error("Error al cargar mis adeudos", error);
+        console.error("Error cargando pagos:", error);
       } finally {
         setLoading(false);
       }
     };
-    fetchAdeudos();
+    fetchFinanzas();
   }, []);
 
-  const getEstatusBadge = (estatus) => {
-    switch (estatus) {
-      case "pagado":
-        return "bg-green-100 text-green-800";
-      case "pendiente":
-        return "bg-yellow-100 text-yellow-800";
-      case "vencido":
-        return "bg-red-100 text-red-800";
-      default:
-        return "bg-gray-100 text-gray-800";
-    }
+  // Formateador de dinero
+  const formatMoney = (amount) => {
+    return new Intl.NumberFormat("es-MX", {
+      style: "currency",
+      currency: "MXN",
+    }).format(amount);
   };
 
-  // Helper para formatear fechas DATE (YYYY-MM-DD) de forma segura
-  const renderFecha = (fechaString) => {
-    if (!fechaString || fechaString.startsWith("0000-")) {
-      return "N/A";
-    }
-    const parts = fechaString.split("T")[0].split("-");
-    if (parts.length !== 3) {
-      return "Fecha Inválida";
-    }
-    const date = new Date(parts[0], parts[1] - 1, parts[2]);
-    if (isNaN(date.getTime())) {
-      return "Fecha Inválida";
-    }
-    return date.toLocaleDateString();
+  // Formateador de fecha
+  const formatDate = (dateString) => {
+    if (!dateString) return "-";
+    return new Date(dateString).toLocaleDateString("es-MX", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
   };
-  // Helper para formatear fechas DATETIME (con hora)
-  const renderFechaHora = (fechaString) => {
-    if (!fechaString || fechaString.startsWith("0000-")) {
-      return "N/A";
-    }
-    // Los DATETIME/TIMESTAMP de MySQL (ej. '2025-10-27T18:00:00Z')
-    // SÍ son bien interpretados por new Date()
-    const date = new Date(fechaString);
-    if (isNaN(date.getTime())) {
-      return "Fecha Inválida";
-    }
-    return date.toLocaleString(); // .toLocaleString() incluye fecha y hora
-  };
-
-  if (loading) return <p>Cargando tu estado de cuenta...</p>;
-
-  const totalAdeudado = adeudos
-    .filter(
-      (a) => a.estatus_pago === "pendiente" || a.estatus_pago === "vencido",
-    )
-    .reduce((sum, a) => sum + parseFloat(a.monto_a_pagar), 0);
 
   return (
-    <div>
-      <h2 className="text-3xl font-bold text-gray-800 mb-6">
-        Mi Estado de Cuenta
-      </h2>
-
-      <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-md">
-        <p className="font-bold">Total Adeudado (Pendiente y Vencido):</p>
-        <p className="text-2xl font-bold">${totalAdeudado.toFixed(2)}</p>
-        <p className="text-sm mt-1">
-          Por favor, acude a caja para regularizar tu situación.
-        </p>
+    <div className="space-y-8 animate-in fade-in duration-300 max-w-7xl mx-auto">
+      {/* HEADER */}
+      <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-center gap-6">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-800 tracking-tight flex items-center gap-3">
+            <div className="p-3 bg-[#a72a34] text-white rounded-xl shadow-lg shadow-red-900/20">
+              <DollarSign size={28} />
+            </div>
+            Estado de Cuenta
+          </h1>
+          <p className="text-gray-500 mt-2 text-lg ml-16">
+            Consulta tu historial de pagos y adeudos pendientes.
+          </p>
+        </div>
       </div>
 
-      <div className="bg-white p-6 rounded-lg shadow">
-        <h3 className="text-xl font-bold mb-4">Historial de Pagos</h3>
-        <table className="w-full table-auto text-sm">
-          <thead className="text-left bg-gray-50">
-            <tr>
-              <th className="px-4 py-2">Concepto</th>
-              <th className="px-4 py-2">Monto</th>
-              <th className="px-4 py-2">Vencimiento</th>
-              <th className="px-4 py-2">Estatus</th>
-              <th className="px-4 py-2">Fecha de Pago</th>
-            </tr>
-          </thead>
-          <tbody>
-            {adeudos.map((a) => (
-              <tr key={a.id} className="border-b">
-                <td className="px-4 py-2">{a.nombre_concepto}</td>
-                <td className="px-4 py-2">${a.monto_a_pagar}</td>
-                <td className="px-4 py-2">
-                  {renderFecha(a.fecha_vencimiento)}
-                  {renderFechaHora(a.fecha_pago)}
-                </td>
-                <td className="px-4 py-2">
-                  <span
-                    className={`px-3 py-1 rounded-full text-xs font-semibold ${getEstatusBadge(
-                      a.estatus_pago,
-                    )}`}
+      {/* TARJETAS DE RESUMEN */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Tarjeta Pendiente */}
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-24 h-24 bg-red-50 rounded-bl-full -mr-4 -mt-4 z-0"></div>
+          <div className="z-10">
+            <p className="text-gray-500 font-medium mb-1 uppercase text-sm tracking-wider">
+              Saldo Pendiente
+            </p>
+            <h2 className="text-4xl font-bold text-[#a72a34]">
+              {formatMoney(totalPendiente)}
+            </h2>
+            <p className="text-xs text-red-400 mt-2 font-medium flex items-center gap-1">
+              {totalPendiente > 0 ? (
+                <>
+                  <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>{" "}
+                  Requiere atención
+                </>
+              ) : (
+                "Estás al corriente"
+              )}
+            </p>
+          </div>
+          <div className="z-10 p-4 bg-red-50 rounded-full text-[#a72a34]">
+            <AlertCircle size={32} />
+          </div>
+        </div>
+
+        {/* Tarjeta Pagado */}
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-24 h-24 bg-green-50 rounded-bl-full -mr-4 -mt-4 z-0"></div>
+          <div className="z-10">
+            <p className="text-gray-500 font-medium mb-1 uppercase text-sm tracking-wider">
+              Total Pagado
+            </p>
+            <h2 className="text-4xl font-bold text-green-600">
+              {formatMoney(totalPagado)}
+            </h2>
+            <p className="text-xs text-green-400 mt-2 font-medium">
+              Histórico acumulado
+            </p>
+          </div>
+          <div className="z-10 p-4 bg-green-50 rounded-full text-green-600">
+            <CheckCircle size={32} />
+          </div>
+        </div>
+      </div>
+
+      {/* LISTA DE MOVIMIENTOS */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="p-6 border-b border-gray-100 bg-gray-50/50">
+          <h3 className="font-bold text-gray-700 text-lg flex items-center gap-2">
+            <FileText size={20} className="text-gray-400" /> Movimientos
+          </h3>
+        </div>
+
+        {loading ? (
+          <div className="p-10 text-center text-gray-400">
+            Cargando información financiera...
+          </div>
+        ) : movimientos.length === 0 ? (
+          <div className="p-16 text-center">
+            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4 text-gray-400">
+              <DollarSign size={32} />
+            </div>
+            <p className="text-gray-500 text-lg">
+              No hay registros de pagos o adeudos.
+            </p>
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-100">
+            {movimientos.map((mov) => (
+              <div
+                key={mov.id}
+                className="p-6 hover:bg-gray-50 transition-colors flex flex-col md:flex-row items-start md:items-center justify-between gap-4"
+              >
+                {/* IZQUIERDA: CONCEPTO Y FECHAS */}
+                <div className="flex items-start gap-4">
+                  <div
+                    className={`
+                    w-12 h-12 rounded-xl flex items-center justify-center shrink-0 border
+                    ${mov.estatus_pago === "pagado" ? "bg-green-50 border-green-100 text-green-600" : "bg-red-50 border-red-100 text-[#a72a34]"}
+                  `}
                   >
-                    {a.estatus_pago}
-                  </span>
-                </td>
-                <td className="px-4 py-2">
-                  {a.fecha_pago
-                    ? new Date(a.fecha_pago).toLocaleString()
-                    : "N/A"}
-                </td>
-              </tr>
+                    {mov.estatus_pago === "pagado" ? (
+                      <Check size={24} />
+                    ) : (
+                      <Clock size={24} />
+                    )}
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-gray-800 text-lg">
+                      {mov.nombre_concepto}
+                    </h4>
+                    <div className="flex flex-col sm:flex-row sm:gap-4 text-sm mt-1 text-gray-500">
+                      <span className="flex items-center gap-1">
+                        <Calendar size={14} /> Vence:{" "}
+                        {formatDate(mov.fecha_vencimiento)}
+                      </span>
+                      {mov.fecha_pago && (
+                        <span className="flex items-center gap-1 text-green-600">
+                          <CheckCircle size={14} /> Pagado el:{" "}
+                          {formatDate(mov.fecha_pago)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* DERECHA: MONTO Y ESTATUS */}
+                <div className="text-right w-full md:w-auto">
+                  <div className="font-bold text-2xl text-gray-800">
+                    {formatMoney(mov.monto_a_pagar)}
+                  </div>
+                  <div
+                    className={`
+                    inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide mt-1
+                    ${
+                      mov.estatus_pago === "pagado"
+                        ? "bg-green-100 text-green-700"
+                        : mov.estatus_pago === "vencido"
+                          ? "bg-red-100 text-red-700"
+                          : "bg-yellow-100 text-yellow-700"
+                    }
+                  `}
+                  >
+                    {mov.estatus_pago === "pagado"
+                      ? "Pagado"
+                      : mov.estatus_pago === "vencido"
+                        ? "Vencido"
+                        : "Pendiente"}
+                  </div>
+                </div>
+              </div>
             ))}
-            {adeudos.length === 0 && (
-              <tr>
-                <td colSpan="5" className="text-center text-gray-500 py-6">
-                  ¡Felicidades! No tienes adeudos registrados.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -8280,166 +9058,324 @@ const GestionSolicitudesPage = () => {
   );
 };
 
-// --- NUEVA PÁGINA DE MIGRACIÓN ---
+// --- COMPONENTE MIGRACIÓN DE GRUPOS (DISEÑO ROJO FINAL) ---
 const MigracionGruposPage = () => {
-  const [grupos, setGrupos] = useState([]);
-  const [sourceGroupId, setSourceGroupId] = useState("");
-  const [destinationGroupId, setDestinationGroupId] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState({ type: "", text: "" });
+  const [loading, setLoading] = useState(true);
+  const [gruposDisponibles, setGruposDisponibles] = useState([]);
 
-  // 1. Cargar todos los grupos al iniciar
+  // Selectores
+  const [origenId, setOrigenId] = useState("");
+  const [destinoId, setDestinoId] = useState("");
+
+  // Datos
+  const [alumnosOrigen, setAlumnosOrigen] = useState([]);
+  const [seleccionados, setSeleccionados] = useState([]);
+  const [procesando, setProcesando] = useState(false);
+
   useEffect(() => {
     const fetchGrupos = async () => {
       try {
-        const { data } = await api.get("/admin/grupos");
-        setGrupos(data);
-      } catch (error) {
-        console.error("Error al cargar grupos", error);
-        setMessage({
-          type: "error",
-          text: "No se pudieron cargar los grupos.",
-        });
+        const { data } = await api.get("/admin/migracion-grupos/estructura");
+        setGruposDisponibles(data);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
       }
     };
     fetchGrupos();
   }, []);
 
-  // 2. Filtrar grupos en listas separadas (memoizado para eficiencia)
-  const inactivos = useMemo(
-    () => grupos.filter((g) => g.estatus === "inactivo"),
-    [grupos],
-  );
-  const activos = useMemo(
-    () => grupos.filter((g) => g.estatus === "activo"),
-    [grupos],
-  );
-
-  // 3. Manejar el envío del formulario
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setMessage({ type: "", text: "" });
-
-    if (!sourceGroupId || !destinationGroupId) {
-      setMessage({
-        type: "error",
-        text: "Debes seleccionar un grupo de origen y uno de destino.",
-      });
+  useEffect(() => {
+    if (!origenId) {
+      setAlumnosOrigen([]);
+      setSeleccionados([]);
       return;
     }
-
-    if (
-      window.confirm(
-        "¿Estás seguro de que quieres migrar a TODOS los alumnos de este grupo? Esta acción es irreversible.",
-      )
-    ) {
-      setLoading(true);
+    const fetchAlumnos = async () => {
       try {
-        const { data } = await api.post("/admin/migrar-grupo", {
-          sourceGroupId,
-          destinationGroupId,
-        });
-        setMessage({ type: "success", text: data.message });
-        // Limpiar selección después de éxito
-        setSourceGroupId("");
-        setDestinationGroupId("");
-      } catch (error) {
-        setMessage({
-          type: "error",
-          text: error.response?.data?.message || "Error al migrar.",
-        });
-      } finally {
-        setLoading(false);
+        const { data } = await api.get(
+          `/admin/migracion-grupos/alumnos/${origenId}`,
+        );
+        setAlumnosOrigen(data);
+        setSeleccionados(data.map((a) => a.id));
+      } catch (e) {
+        console.error(e);
       }
+    };
+    fetchAlumnos();
+  }, [origenId]);
+
+  const toggleAlumno = (id) => {
+    if (seleccionados.includes(id)) {
+      setSeleccionados(seleccionados.filter((sid) => sid !== id));
+    } else {
+      setSeleccionados([...seleccionados, id]);
     }
   };
 
+  const toggleAll = () => {
+    if (seleccionados.length === alumnosOrigen.length) {
+      setSeleccionados([]);
+    } else {
+      setSeleccionados(alumnosOrigen.map((a) => a.id));
+    }
+  };
+
+  const handleMigrar = async () => {
+    if (!origenId || !destinoId)
+      return alert("Selecciona grupo origen y destino");
+    if (origenId === destinoId)
+      return alert("El grupo origen y destino no pueden ser el mismo");
+    if (seleccionados.length === 0)
+      return alert("Selecciona al menos un alumno");
+
+    if (
+      !window.confirm(`¿Mover ${seleccionados.length} alumnos al nuevo grupo?`)
+    )
+      return;
+
+    setProcesando(true);
+    try {
+      await api.post("/admin/migracion-grupos/ejecutar", {
+        alumnosIds: seleccionados,
+        nuevoGrupoId: destinoId,
+      });
+      alert("¡Migración exitosa!");
+      setOrigenId("");
+      setDestinoId("");
+      setAlumnosOrigen([]);
+      setSeleccionados([]);
+    } catch (error) {
+      alert(
+        "Error al migrar: " +
+          (error.response?.data?.message || "Error interno"),
+      );
+    } finally {
+      setProcesando(false);
+    }
+  };
+
+  const renderGrupoOption = (g) => {
+    return `${g.nombre_ciclo} - ${g.nombre_carrera} - ${g.nombre_grado} "${g.nombre_grupo}"`;
+  };
+
   return (
-    <div className="bg-white p-6 rounded-lg shadow max-w-4xl mx-auto">
-      <h2 className="text-3xl font-bold text-gray-800 mb-6">
-        Herramienta de Migración de Grupos
-      </h2>
-      <p className="mb-8 text-gray-700">
-        Esta herramienta moverá a **todos** los alumnos de un grupo cerrado
-        (inactivo) a un nuevo grupo (activo). Asegúrate de que el grupo de
-        destino sea el correcto (ej. el siguiente grado o semestre).
-      </p>
+    <div className="space-y-8 animate-in fade-in duration-300 max-w-7xl mx-auto">
+      {/* HEADER ROJO */}
+      <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-center gap-6">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-800 tracking-tight flex items-center gap-3">
+            <div className="p-3 bg-[#a72a34] text-white rounded-xl shadow-lg shadow-red-900/20">
+              <ArrowRightLeft size={28} />
+            </div>
+            Migración de Grupos
+          </h1>
+          <p className="text-gray-500 mt-2 text-lg ml-16">
+            Avance de semestre y reinscripción masiva.
+          </p>
+        </div>
+      </div>
 
-      <form onSubmit={handleSubmit}>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-6">
-          {/* --- COLUMNA DE ORIGEN --- */}
-          <div>
-            <h3 className="text-xl font-semibold mb-3 text-red-700">
-              <span className="text-2xl mr-2">①</span> Grupo de Origen (Cerrado)
-            </h3>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Seleccionar grupo inactivo:
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* COLUMNA IZQUIERDA: ORIGEN */}
+        <div className="lg:col-span-7 space-y-6">
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+            <label className="text-sm font-bold text-[#a72a34] uppercase mb-3 flex items-center gap-2">
+              <LogOut size={16} /> Paso 1: Grupo Actual
             </label>
-            <select
-              value={sourceGroupId}
-              onChange={(e) => setSourceGroupId(e.target.value)}
-              className="w-full px-3 py-2 border rounded-md focus:ring-principal focus:border-principal"
-            >
-              <option value="">-- Grupos Inactivos --</option>
-              {inactivos.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.nombre_grupo} ({g.nombre_plan} - {g.nombre_grado})
-                </option>
-              ))}
-            </select>
+            <div className="relative">
+              <select
+                className="w-full p-4 pl-4 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-[#a72a34] outline-none transition-all font-medium text-gray-700 appearance-none cursor-pointer"
+                value={origenId}
+                onChange={(e) => setOrigenId(e.target.value)}
+              >
+                <option value="">-- Seleccionar Origen --</option>
+                {gruposDisponibles.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {renderGrupoOption(g)}
+                  </option>
+                ))}
+              </select>
+              <div className="absolute right-4 top-4 text-gray-400 pointer-events-none">
+                <Group size={20} />
+              </div>
+            </div>
           </div>
 
-          {/* --- COLUMNA DE DESTINO --- */}
-          <div>
-            <h3 className="text-xl font-semibold mb-3 text-green-700">
-              <span className="text-2xl mr-2">②</span> Grupo de Destino (Nuevo)
-            </h3>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Seleccionar grupo activo:
-            </label>
-            <select
-              value={destinationGroupId}
-              onChange={(e) => setDestinationGroupId(e.target.value)}
-              className="w-full px-3 py-2 border rounded-md focus:ring-principal focus:border-principal"
-            >
-              <option value="">-- Grupos Activos --</option>
-              {activos.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.nombre_grupo} ({g.nombre_plan} - {g.nombre_grado})
-                </option>
-              ))}
-            </select>
-          </div>
+          {origenId && (
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col h-[500px]">
+              <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                <div className="flex items-center gap-2">
+                  <Users size={18} className="text-gray-400" />
+                  <h3 className="font-bold text-gray-700">
+                    Alumnos Disponibles
+                  </h3>
+                  <span className="bg-[#a72a34] text-white px-2 py-0.5 rounded text-xs font-bold shadow-sm">
+                    {alumnosOrigen.length}
+                  </span>
+                </div>
+                <button
+                  onClick={toggleAll}
+                  className="text-sm font-bold text-[#a72a34] hover:bg-red-50 px-3 py-1.5 rounded-lg transition-colors"
+                >
+                  {seleccionados.length === alumnosOrigen.length
+                    ? "Deseleccionar todos"
+                    : "Seleccionar todos"}
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
+                {alumnosOrigen.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center text-gray-400 italic">
+                    <p>No hay alumnos en este grupo.</p>
+                  </div>
+                ) : (
+                  alumnosOrigen.map((alumno) => (
+                    <label
+                      key={alumno.id}
+                      className={`
+                        group flex items-center gap-4 p-4 rounded-xl border cursor-pointer transition-all duration-200
+                        ${
+                          seleccionados.includes(alumno.id)
+                            ? "bg-[#a72a34]/5 border-[#a72a34] shadow-sm"
+                            : "bg-white border-gray-100 hover:border-[#a72a34]/30 hover:shadow-sm"
+                        }
+                      `}
+                    >
+                      <div
+                        className={`
+                        w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors
+                        ${
+                          seleccionados.includes(alumno.id)
+                            ? "bg-[#a72a34] border-[#a72a34]"
+                            : "border-gray-300 bg-white group-hover:border-[#a72a34]"
+                        }
+                      `}
+                      >
+                        {seleccionados.includes(alumno.id) && (
+                          <Check size={14} className="text-white" />
+                        )}
+                      </div>
+                      <input
+                        type="checkbox"
+                        className="hidden"
+                        checked={seleccionados.includes(alumno.id)}
+                        onChange={() => toggleAlumno(alumno.id)}
+                      />
+                      <div className="flex-1">
+                        <p
+                          className={`font-bold text-base ${
+                            seleccionados.includes(alumno.id)
+                              ? "text-[#a72a34]"
+                              : "text-gray-700"
+                          }`}
+                        >
+                          {alumno.apellido_paterno} {alumno.apellido_materno}{" "}
+                          {alumno.nombre}
+                        </p>
+                        <p className="text-xs text-gray-400 font-mono mt-0.5 flex items-center gap-1">
+                          <Award size={12} />{" "}
+                          {alumno.matricula || "Sin Matrícula"}
+                        </p>
+                      </div>
+                    </label>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* --- MENSAJES DE ESTADO --- */}
-        {message.text && (
-          <div
-            className={`p-3 rounded-md mb-6 ${
-              message.type === "error"
-                ? "bg-red-100 text-red-800"
-                : "bg-green-100 text-green-800"
-            }`}
-          >
-            {message.text}
+        {/* COLUMNA DERECHA: DESTINO */}
+        <div className="lg:col-span-5 space-y-6">
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-20 h-20 bg-[#a72a34]/5 rounded-bl-full -mr-4 -mt-4 pointer-events-none"></div>
+            <label className="text-sm font-bold text-[#a72a34] uppercase mb-3 flex items-center gap-2 relative z-10">
+              <RotateCcw size={16} className="rotate-180" /> Paso 2: Grupo
+              Destino
+            </label>
+            <div className="relative z-10">
+              <select
+                className="w-full p-4 pl-4 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-[#a72a34] outline-none transition-all font-medium text-gray-700 appearance-none cursor-pointer"
+                value={destinoId}
+                onChange={(e) => setDestinoId(e.target.value)}
+              >
+                <option value="">-- Seleccionar Destino --</option>
+                {gruposDisponibles.map((g) => (
+                  <option key={g.id} value={g.id} disabled={g.id == origenId}>
+                    {renderGrupoOption(g)}
+                  </option>
+                ))}
+              </select>
+              <div className="absolute right-4 top-4 text-gray-400 pointer-events-none">
+                <Building size={20} />
+              </div>
+            </div>
           </div>
-        )}
 
-        <div className="flex justify-end pt-4 border-t">
-          <button
-            type="submit"
-            disabled={loading || !sourceGroupId || !destinationGroupId}
-            className="flex items-center justify-center px-6 py-3 font-semibold text-white bg-principal rounded-md hover:opacity-90 disabled:bg-gray-400"
-          >
-            <ArrowRightLeft size={18} className="mr-2" />
-            {loading ? "Migrando..." : "Iniciar Migración"}
-          </button>
+          <div className="bg-white p-8 rounded-3xl shadow-lg border border-gray-100 flex flex-col items-center text-center h-auto lg:min-h-[400px] justify-center relative">
+            <div
+              className={`
+               w-24 h-24 rounded-full flex items-center justify-center mb-6 transition-all duration-500
+               ${
+                 seleccionados.length > 0 && destinoId
+                   ? "bg-[#a72a34] text-white shadow-xl shadow-red-900/30 scale-110"
+                   : "bg-gray-100 text-gray-300"
+               }
+             `}
+            >
+              {procesando ? (
+                <RotateCcw className="animate-spin" size={32} />
+              ) : (
+                <ArrowRightLeft size={32} />
+              )}
+            </div>
+
+            <h3 className="text-2xl font-bold text-gray-800 mb-2">Resumen</h3>
+            <div className="space-y-4 w-full max-w-xs mx-auto mb-8">
+              <div className="flex justify-between items-center text-sm p-3 bg-gray-50 rounded-lg">
+                <span className="text-gray-500">Alumnos a mover:</span>
+                <span className="font-bold text-[#a72a34] text-lg">
+                  {seleccionados.length}
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-sm p-3 bg-gray-50 rounded-lg">
+                <span className="text-gray-500">Destino:</span>
+                <span
+                  className={`font-bold ${destinoId ? "text-[#a72a34]" : "text-gray-400"}`}
+                >
+                  {destinoId ? "Seleccionado" : "Pendiente"}
+                </span>
+              </div>
+            </div>
+
+            <button
+              onClick={handleMigrar}
+              disabled={procesando || seleccionados.length === 0 || !destinoId}
+              className={`
+                 w-full py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-3 transition-all duration-300 transform
+                 ${
+                   procesando || seleccionados.length === 0 || !destinoId
+                     ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                     : "bg-[#a72a34] text-white hover:bg-[#802028] shadow-lg shadow-red-900/20 hover:shadow-xl hover:-translate-y-1 active:scale-95"
+                 }
+               `}
+            >
+              {procesando ? (
+                "Procesando..."
+              ) : (
+                <>
+                  Confirmar Migración <CheckCircle size={22} />
+                </>
+              )}
+            </button>
+          </div>
         </div>
-      </form>
+      </div>
     </div>
   );
 };
-// --- FIN DE PÁGINA DE MIGRACIÓN ---
 
 // --- NUEVO MODAL PARA TRANSFERIR UN ALUMNO ---
 const TransferirAlumnoModal = ({
@@ -12104,10 +13040,15 @@ function App() {
               {/* --- INICIO NUEVAS RUTAS FINANZAS (ADMIN) --- */}
               <Route path="/conceptos-pago" element={<ConceptosPagoPage />} />
               <Route path="/admin/finanzas" element={<CajaPage />} />
-              <Route
+              {/* <Route
                 path="/admin/finanzas/alumno/:id"
                 element={<DetalleFinancieroAlumnoPage />}
+              /> */}
+              <Route
+                path="/admin/finanzas/alumno/:id"
+                element={<DetalleFinanzasAlumnoPage />}
               />
+
               {/* --- FIN NUEVAS RUTAS FINANZAS (ADMIN) --- */}
               {/* --- INICIO NUEVA RUTA SOLICITUDES (ADMIN) --- */}
               <Route
