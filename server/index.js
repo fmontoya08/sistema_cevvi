@@ -1659,20 +1659,20 @@ createCatalogCrudRoutes(adminRouter, "tipos_asignatura", ["tipo"]);
 createCatalogCrudRoutes(adminRouter, "tipos_asignatura", ["tipo"]);
 // createCatalogCrudRoutes(adminRouter, "grados", ["nombre_grado"]);
 // createCatalogCrudRoutes(adminRouter, "ciclos", ["nombre_ciclo"]);
-createCatalogCrudRoutes(adminRouter, "sedes", ["nombre_sede", "direccion"]);
+// createCatalogCrudRoutes(adminRouter, "sedes", ["nombre_sede", "direccion"]);
 // createCatalogCrudRoutes(adminRouter, "carreras", ["nombre_carrera"]);
 
 // ... (después del createCatalogCrudRoutes de "sedes")
 
 // --- INICIO: CRUD PARA CONCEPTOS DE PAGO ---
 // Usamos el genérico porque es un catálogo simple
-createCatalogCrudRoutes(adminRouter, "conceptos_pago", [
-  "nombre_concepto",
-  "monto_default",
-  "tipo",
-  "es_concepto_inscripcion",
-]);
-// --- FIN: CRUD PARA CONCEPTOS DE PAGO ---
+// createCatalogCrudRoutes(adminRouter, "conceptos_pago", [
+//   "nombre_concepto",
+//   "monto_default",
+//   "tipo",
+//   "es_concepto_inscripcion",
+// ]);
+// // --- FIN: CRUD PARA CONCEPTOS DE PAGO ---
 // --- GESTIÓN DE CICLO ACTUAL ---
 
 // --- RUTAS ESPECÍFICAS PARA CICLOS (SOFT DELETE) ---
@@ -1681,6 +1681,167 @@ createCatalogCrudRoutes(adminRouter, "conceptos_pago", [
 
 // --- RUTAS ESPECÍFICAS PARA GRADOS (SOFT DELETE) ---
 // --- RUTAS CARRERAS (CORREGIDO: ELIMINAR LA LÍNEA createCatalogCrudRoutes DE CARRERAS) ---
+
+// --- RUTAS SEDES (DISEÑO NUEVO + SOFT DELETE) ---
+// --- RUTAS SEDES (CORREGIDO: FILTROS + SOFT DELETE) ---
+
+// --- RUTAS CONCEPTOS DE PAGO (DISEÑO TARJETAS + SOFT DELETE) ---
+
+// --- RUTAS CONCEPTOS DE PAGO (CORREGIDO: TABLA SINGULAR 'conceptos_pago') ---
+
+// 1. GET: Activos
+adminRouter.get("/conceptos-pagos", async (req, res) => {
+  try {
+    // CORREGIDO: FROM conceptos_pago
+    const [rows] = await db.query(
+      "SELECT * FROM conceptos_pago WHERE activo = 1 ORDER BY nombre_concepto ASC",
+    );
+    res.json(rows);
+  } catch (error) {
+    console.error(error); // Para ver el error real en consola
+    res.status(500).send({ message: "Error al obtener conceptos" });
+  }
+});
+
+// 2. GET: Papelera
+adminRouter.get("/conceptos-pagos/eliminados", async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      "SELECT * FROM conceptos_pago WHERE activo = 0 ORDER BY nombre_concepto ASC",
+    );
+    res.json(rows);
+  } catch (error) {
+    res.status(500).send({ message: "Error al obtener papelera" });
+  }
+});
+
+// 3. POST: Crear
+adminRouter.post("/conceptos-pagos", async (req, res) => {
+  const { nombre_concepto, monto } = req.body;
+  try {
+    await db.query(
+      "INSERT INTO conceptos_pago (nombre_concepto, monto, activo) VALUES (?, ?, 1)",
+      [nombre_concepto, monto || 0],
+    );
+    res.status(201).send({ message: "Concepto creado exitosamente" });
+  } catch (error) {
+    if (error.code === "ER_DUP_ENTRY")
+      return res.status(400).send({ message: "Ese concepto ya existe." });
+    res.status(500).send({ message: "Error al crear concepto" });
+  }
+});
+
+// 4. PUT: Editar
+adminRouter.put("/conceptos-pagos/:id", async (req, res) => {
+  const { nombre_concepto, monto } = req.body;
+  try {
+    await db.query(
+      "UPDATE conceptos_pago SET nombre_concepto = ?, monto = ? WHERE id = ?",
+      [nombre_concepto, monto || 0, req.params.id],
+    );
+    res.send({ message: "Concepto actualizado" });
+  } catch (error) {
+    res.status(500).send({ message: "Error al actualizar" });
+  }
+});
+
+// 5. DELETE: Soft Delete
+adminRouter.delete("/conceptos-pagos/:id", async (req, res) => {
+  try {
+    await db.query("UPDATE conceptos_pago SET activo = 0 WHERE id = ?", [
+      req.params.id,
+    ]);
+    res.send({ message: "Concepto enviado a la papelera" });
+  } catch (error) {
+    res.status(500).send({ message: "Error al eliminar" });
+  }
+});
+
+// 6. PUT: Restaurar
+adminRouter.put("/conceptos-pagos/:id/reactivar", async (req, res) => {
+  try {
+    await db.query("UPDATE conceptos_pago SET activo = 1 WHERE id = ?", [
+      req.params.id,
+    ]);
+    res.send({ message: "Concepto restaurado correctamente" });
+  } catch (error) {
+    res.status(500).send({ message: "Error al restaurar" });
+  }
+});
+
+// 1. GET: Sedes Activas (Solo activo = 1)
+adminRouter.get("/sedes", async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      "SELECT * FROM sedes WHERE activo = 1 ORDER BY nombre_sede ASC",
+    );
+    res.json(rows);
+  } catch (error) {
+    res.status(500).send({ message: "Error al obtener sedes" });
+  }
+});
+
+// 2. GET: Papelera (Solo activo = 0)
+adminRouter.get("/sedes/eliminadas", async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      "SELECT * FROM sedes WHERE activo = 0 ORDER BY nombre_sede ASC",
+    );
+    res.json(rows);
+  } catch (error) {
+    res.status(500).send({ message: "Error al obtener papelera" });
+  }
+});
+
+// 3. POST: Crear Sede
+adminRouter.post("/sedes", async (req, res) => {
+  const { nombre_sede } = req.body;
+  try {
+    await db.query("INSERT INTO sedes (nombre_sede, activo) VALUES (?, 1)", [
+      nombre_sede,
+    ]);
+    res.status(201).send({ message: "Sede creada exitosamente" });
+  } catch (error) {
+    if (error.code === "ER_DUP_ENTRY")
+      return res.status(400).send({ message: "Esa sede ya existe." });
+    res.status(500).send({ message: "Error al crear sede" });
+  }
+});
+
+// 4. PUT: Editar Sede
+adminRouter.put("/sedes/:id", async (req, res) => {
+  const { nombre_sede } = req.body;
+  try {
+    await db.query("UPDATE sedes SET nombre_sede = ? WHERE id = ?", [
+      nombre_sede,
+      req.params.id,
+    ]);
+    res.send({ message: "Sede actualizada" });
+  } catch (error) {
+    res.status(500).send({ message: "Error al actualizar" });
+  }
+});
+
+// 5. DELETE: Soft Delete (ESTO ARREGLA EL ERROR AL BORRAR)
+adminRouter.delete("/sedes/:id", async (req, res) => {
+  try {
+    // Marcamos como inactivo (0) en lugar de borrar físicamente
+    await db.query("UPDATE sedes SET activo = 0 WHERE id = ?", [req.params.id]);
+    res.send({ message: "Sede enviada a la papelera" });
+  } catch (error) {
+    res.status(500).send({ message: "Error al eliminar" });
+  }
+});
+
+// 6. PUT: Restaurar Sede
+adminRouter.put("/sedes/:id/reactivar", async (req, res) => {
+  try {
+    await db.query("UPDATE sedes SET activo = 1 WHERE id = ?", [req.params.id]);
+    res.send({ message: "Sede restaurada correctamente" });
+  } catch (error) {
+    res.status(500).send({ message: "Error al restaurar" });
+  }
+});
 
 // 1. GET: Carreras Activas (FILTRO IMPORTANTE: activo = 1)
 adminRouter.get("/carreras", async (req, res) => {

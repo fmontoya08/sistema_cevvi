@@ -6269,132 +6269,252 @@ const CarrerasPage = () => {
   );
 };
 
-// --- COMPONENTE SEDES (DISEÑO CLEAN DASHBOARD) ---
+// --- COMPONENTE SEDES (DISEÑO TARJETAS + SOFT DELETE) ---
 const SedesPage = () => {
   const [sedes, setSedes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [verEliminados, setVerEliminados] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+
+  // Estado para el Modal
   const [modalOpen, setModalOpen] = useState(false);
-  const [currentSede, setCurrentSede] = useState(null);
+  const [editingItem, setEditingItem] = useState(null);
+  const [form, setForm] = useState({ nombre_sede: "" });
 
   const fetchSedes = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await api.get("/admin/sedes");
-      setSedes(response.data);
-    } catch (error) {
-      console.error("Error", error);
+      const endpoint = verEliminados
+        ? "/admin/sedes/eliminadas"
+        : "/admin/sedes";
+      const { data } = await api.get(endpoint);
+      setSedes(data);
+    } catch (e) {
+      console.error(e);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [verEliminados]);
 
   useEffect(() => {
     fetchSedes();
   }, [fetchSedes]);
 
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      if (editingItem) {
+        await api.put(`/admin/sedes/${editingItem.id}`, form);
+        alert("Sede actualizada correctamente.");
+      } else {
+        await api.post("/admin/sedes", form);
+        alert("Sede creada correctamente.");
+      }
+      setModalOpen(false);
+      setForm({ nombre_sede: "" });
+      setEditingItem(null);
+      fetchSedes();
+    } catch (error) {
+      alert(error.response?.data?.message || "Error al guardar");
+    }
+  };
+
   const handleDelete = async (id) => {
-    if (window.confirm("¿Eliminar sede?")) {
+    if (window.confirm("¿Enviar esta sede a la papelera?")) {
       try {
         await api.delete(`/admin/sedes/${id}`);
         fetchSedes();
-      } catch (error) {
+      } catch (e) {
         alert("Error al eliminar");
       }
     }
   };
 
-  const openModal = (sede = null) => {
-    setCurrentSede(sede);
+  const handleRestaurar = async (id) => {
+    if (window.confirm("¿Restaurar sede?")) {
+      try {
+        await api.put(`/admin/sedes/${id}/reactivar`);
+        fetchSedes();
+      } catch (e) {
+        alert("Error al restaurar");
+      }
+    }
+  };
+
+  const openModal = (item = null) => {
+    setEditingItem(item);
+    setForm({ nombre_sede: item ? item.nombre_sede : "" });
     setModalOpen(true);
   };
 
-  const filteredSedes = sedes.filter(
-    (s) =>
-      s.nombre_sede.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (s.direccion &&
-        s.direccion.toLowerCase().includes(searchTerm.toLowerCase())),
+  const filteredSedes = sedes.filter((s) =>
+    s.nombre_sede.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-300">
+    <div className="space-y-8 animate-in fade-in duration-300 max-w-5xl mx-auto">
+      {/* HEADER */}
       <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-800 tracking-tight">
-            Campus y Sedes
+            {verEliminados ? "Papelera de Sedes" : "Sedes y Campus"}
           </h1>
           <p className="text-gray-500 mt-2 text-lg">
-            Ubicaciones físicas de la institución.
+            {verEliminados
+              ? "Sedes desactivadas."
+              : "Administra las ubicaciones físicas."}
           </p>
         </div>
-        <button
-          onClick={() => openModal()}
-          className="bg-gray-900 text-white px-6 py-3 rounded-xl hover:bg-black font-bold shadow-lg flex items-center gap-2 transition-transform active:scale-95"
-        >
-          <Plus size={20} /> Nueva Sede
-        </button>
+
+        <div className="flex gap-3 items-center">
+          <button
+            onClick={() => setVerEliminados(!verEliminados)}
+            className={`px-5 py-3 rounded-xl font-bold flex items-center gap-2 border-2 transition-colors ${verEliminados ? "bg-gray-100 border-gray-200 text-gray-600" : "bg-red-50 border-red-50 text-[#a72a34]"}`}
+          >
+            {verEliminados ? <ArrowLeft size={18} /> : <Trash2 size={18} />}
+            {verEliminados ? "Volver" : "Papelera"}
+          </button>
+
+          {!verEliminados && (
+            <button
+              onClick={() => openModal()}
+              className="bg-[#a72a34] text-white px-6 py-3 rounded-xl hover:bg-[#802028] font-bold flex items-center gap-2 shadow-lg shadow-red-900/20 transition-transform active:scale-95"
+            >
+              <Plus size={20} /> Nueva Sede
+            </button>
+          )}
+        </div>
       </div>
 
-      <div className="relative max-w-md">
+      {/* BUSCADOR */}
+      <div className="relative">
         <Search className="absolute left-4 top-3.5 text-gray-400" size={20} />
         <input
           type="text"
-          placeholder="Buscar campus o dirección..."
-          className="w-full pl-12 pr-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white shadow-sm font-medium"
+          placeholder="Buscar sede..."
+          className="w-full pl-12 pr-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#a72a34] bg-white shadow-sm font-medium"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
       </div>
 
+      {/* GRID DE TARJETAS (ESTILO GRADOS) */}
       {loading ? (
         <div className="text-center py-20 text-gray-400">Cargando...</div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredSedes.map((sede) => (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {filteredSedes.length === 0 && (
+            <div className="col-span-full p-10 text-center text-gray-400 italic bg-white rounded-2xl border border-dashed border-gray-200">
+              No se encontraron sedes.
+            </div>
+          )}
+
+          {filteredSedes.map((s) => (
             <div
-              key={sede.id}
-              className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-all group h-full flex flex-col"
+              key={s.id}
+              className={`p-6 rounded-2xl border flex justify-between items-center transition-all group ${verEliminados ? "bg-gray-50 border-gray-200 grayscale opacity-80" : "bg-white border-gray-100 hover:shadow-md hover:border-[#a72a34]/30"}`}
             >
-              <div className="flex justify-between items-start mb-4">
-                <div className="p-3 bg-teal-50 text-teal-600 rounded-xl">
+              <div className="flex items-center gap-4 overflow-hidden">
+                <div
+                  className={`p-3 rounded-xl flex-shrink-0 ${verEliminados ? "bg-gray-200 text-gray-500" : "bg-red-50 text-[#a72a34]"}`}
+                >
                   <Building size={24} />
                 </div>
-                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button
-                    onClick={() => openModal(sede)}
-                    className="p-2 text-gray-400 hover:text-teal-600 hover:bg-teal-50 rounded-lg"
-                  >
-                    <Edit size={18} />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(sede.id)}
-                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
-                  >
-                    <Trash2 size={18} />
-                  </button>
+                <div className="flex flex-col min-w-0">
+                  <h3 className="font-bold text-gray-800 text-lg truncate pr-2">
+                    {s.nombre_sede}
+                  </h3>
+                  {verEliminados && (
+                    <span className="text-xs text-red-500 font-bold uppercase tracking-wider">
+                      Eliminada
+                    </span>
+                  )}
                 </div>
               </div>
-              <h3 className="text-xl font-bold text-gray-800 mb-2">
-                {sede.nombre_sede}
-              </h3>
-              <div className="mt-auto bg-gray-50 p-3 rounded-lg flex items-start gap-2">
-                <div className="mt-0.5 text-gray-400">
-                  <Building size={14} />
-                </div>
-                <p className="text-sm text-gray-600 leading-snug">
-                  {sede.direccion || "Sin dirección registrada"}
-                </p>
+
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {!verEliminados ? (
+                  <>
+                    <button
+                      onClick={() => openModal(s)}
+                      className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                      title="Editar"
+                    >
+                      <Edit size={20} />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(s.id)}
+                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      title="Eliminar"
+                    >
+                      <Trash2 size={20} />
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => handleRestaurar(s.id)}
+                    className="flex items-center gap-2 px-3 py-2 bg-white border border-[#a72a34] text-[#a72a34] rounded-lg font-bold text-sm hover:bg-[#a72a34] hover:text-white transition-all shadow-sm"
+                  >
+                    <RotateCcw size={16} /> Restaurar
+                  </button>
+                )}
               </div>
             </div>
           ))}
         </div>
       )}
+
+      {/* MODAL CREAR/EDITAR */}
       {modalOpen && (
-        <SedesModal
-          sede={currentSede}
-          onClose={() => setModalOpen(false)}
-          onSave={fetchSedes}
-        />
+        <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-50 p-4 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all scale-100">
+            <div className="bg-white p-6 border-b flex justify-between items-center">
+              <h3 className="font-bold text-xl text-gray-800">
+                {editingItem ? "Editar Sede" : "Nueva Sede"}
+              </h3>
+              <button
+                onClick={() => setModalOpen(false)}
+                className="text-gray-400 hover:bg-gray-100 p-2 rounded-full"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="p-6 space-y-6">
+              <div>
+                <label className="block text-xs font-bold text-gray-400 uppercase mb-2">
+                  Nombre de la Sede
+                </label>
+                <input
+                  required
+                  autoFocus
+                  placeholder="Ej: Campus Norte"
+                  className="w-full p-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#a72a34] outline-none font-medium text-gray-800"
+                  value={form.nombre_sede}
+                  onChange={(e) =>
+                    setForm({ ...form, nombre_sede: e.target.value })
+                  }
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setModalOpen(false)}
+                  className="flex-1 py-3 text-gray-500 font-bold hover:bg-gray-100 rounded-xl transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 bg-[#a72a34] text-white py-3 rounded-xl font-bold hover:bg-[#802028] shadow-lg transition-transform active:scale-95"
+                >
+                  Guardar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -6500,43 +6620,89 @@ const SedesModal = ({ sede, onClose, onSave }) => {
   );
 };
 
-// --- COMPONENTE PAGOS (DISEÑO CLEAN DASHBOARD) ---
+// --- COMPONENTE CONCEPTOS DE PAGO (NOMBRE SINGULAR PARA CORREGIR ERROR) ---
 const ConceptosPagoPage = () => {
   const [conceptos, setConceptos] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [verEliminados, setVerEliminados] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [modalOpen, setModalOpen] = useState(false);
-  const [currentConcepto, setCurrentConcepto] = useState(null);
 
+  // Estado para el Modal
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState(null);
+  const [form, setForm] = useState({ nombre_concepto: "", monto: "" });
+
+  // 1. CARGA DE DATOS
   const fetchConceptos = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await api.get("/admin/conceptos_pago");
-      setConceptos(response.data);
-    } catch (error) {
-      console.error("Error", error);
+      // Rutas corregidas (backend usa guion medio)
+      const endpoint = verEliminados
+        ? "/admin/conceptos-pagos/eliminados"
+        : "/admin/conceptos-pagos";
+      const { data } = await api.get(endpoint);
+      setConceptos(data);
+    } catch (e) {
+      console.error(e);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [verEliminados]);
 
   useEffect(() => {
     fetchConceptos();
   }, [fetchConceptos]);
 
+  // 2. GUARDAR
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      if (editingItem) {
+        await api.put(`/admin/conceptos-pagos/${editingItem.id}`, form);
+        alert("Concepto actualizado correctamente.");
+      } else {
+        await api.post("/admin/conceptos-pagos", form);
+        alert("Concepto creado correctamente.");
+      }
+      setModalOpen(false);
+      setForm({ nombre_concepto: "", monto: "" });
+      setEditingItem(null);
+      fetchConceptos();
+    } catch (error) {
+      alert(error.response?.data?.message || "Error al guardar");
+    }
+  };
+
+  // 3. ELIMINAR (SOFT DELETE)
   const handleDelete = async (id) => {
-    if (window.confirm("¿Eliminar concepto?")) {
+    if (window.confirm("¿Enviar a la papelera?")) {
       try {
-        await api.delete(`/admin/conceptos_pago/${id}`);
+        await api.delete(`/admin/conceptos-pagos/${id}`);
         fetchConceptos();
-      } catch (error) {
+      } catch (e) {
         alert("Error al eliminar");
       }
     }
   };
 
-  const openModal = (concepto = null) => {
-    setCurrentConcepto(concepto);
+  // 4. RESTAURAR
+  const handleRestaurar = async (id) => {
+    if (window.confirm("¿Restaurar concepto?")) {
+      try {
+        await api.put(`/admin/conceptos-pagos/${id}/reactivar`);
+        fetchConceptos();
+      } catch (e) {
+        alert("Error al restaurar");
+      }
+    }
+  };
+
+  const openModal = (item = null) => {
+    setEditingItem(item);
+    setForm({
+      nombre_concepto: item ? item.nombre_concepto : "",
+      monto: item ? item.monto : "",
+    });
     setModalOpen(true);
   };
 
@@ -6544,7 +6710,7 @@ const ConceptosPagoPage = () => {
     c.nombre_concepto.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
-  const formatCurrency = (amount) => {
+  const formatMoney = (amount) => {
     return new Intl.NumberFormat("es-MX", {
       style: "currency",
       currency: "MXN",
@@ -6552,91 +6718,188 @@ const ConceptosPagoPage = () => {
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-300">
+    <div className="space-y-8 animate-in fade-in duration-300 max-w-5xl mx-auto">
+      {/* HEADER */}
       <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-800 tracking-tight">
-            Conceptos de Cobro
+            {verEliminados ? "Papelera de Conceptos" : "Conceptos de Pago"}
           </h1>
           <p className="text-gray-500 mt-2 text-lg">
-            Catálogo de precios y servicios.
+            {verEliminados
+              ? "Conceptos desactivados."
+              : "Catálogo de precios y servicios."}
           </p>
         </div>
-        <button
-          onClick={() => openModal()}
-          className="bg-gray-900 text-white px-6 py-3 rounded-xl hover:bg-black font-bold shadow-lg flex items-center gap-2 transition-transform active:scale-95"
-        >
-          <Plus size={20} /> Nuevo Concepto
-        </button>
+
+        <div className="flex gap-3 items-center">
+          <button
+            onClick={() => setVerEliminados(!verEliminados)}
+            className={`px-5 py-3 rounded-xl font-bold flex items-center gap-2 border-2 transition-colors ${verEliminados ? "bg-gray-100 border-gray-200 text-gray-600" : "bg-red-50 border-red-50 text-[#a72a34]"}`}
+          >
+            {verEliminados ? <ArrowLeft size={18} /> : <Trash2 size={18} />}
+            {verEliminados ? "Volver" : "Papelera"}
+          </button>
+
+          {!verEliminados && (
+            <button
+              onClick={() => openModal()}
+              className="bg-[#a72a34] text-white px-6 py-3 rounded-xl hover:bg-[#802028] font-bold flex items-center gap-2 shadow-lg shadow-red-900/20 transition-transform active:scale-95"
+            >
+              <Plus size={20} /> Nuevo Concepto
+            </button>
+          )}
+        </div>
       </div>
 
-      <div className="relative max-w-md">
+      {/* BUSCADOR */}
+      <div className="relative">
         <Search className="absolute left-4 top-3.5 text-gray-400" size={20} />
         <input
           type="text"
           placeholder="Buscar concepto..."
-          className="w-full pl-12 pr-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white shadow-sm font-medium"
+          className="w-full pl-12 pr-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#a72a34] bg-white shadow-sm font-medium"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
       </div>
 
+      {/* GRID DE TARJETAS */}
       {loading ? (
         <div className="text-center py-20 text-gray-400">Cargando...</div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredConceptos.map((concepto) => (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {filteredConceptos.length === 0 && (
+            <div className="col-span-full p-10 text-center text-gray-400 italic bg-white rounded-2xl border border-dashed border-gray-200">
+              No se encontraron conceptos.
+            </div>
+          )}
+
+          {filteredConceptos.map((c) => (
             <div
-              key={concepto.id}
-              className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-all group h-full flex flex-col justify-between"
+              key={c.id}
+              className={`p-6 rounded-2xl border flex justify-between items-center transition-all group ${verEliminados ? "bg-gray-50 border-gray-200 grayscale opacity-80" : "bg-white border-gray-100 hover:shadow-md hover:border-[#a72a34]/30"}`}
             >
-              <div className="flex justify-between items-start mb-4">
-                <div className="p-3 bg-amber-50 text-amber-600 rounded-xl">
-                  <Tag size={24} />
+              <div className="flex items-center gap-4 overflow-hidden">
+                <div
+                  className={`p-4 rounded-xl flex-shrink-0 ${verEliminados ? "bg-gray-200 text-gray-500" : "bg-green-50 text-green-600"}`}
+                >
+                  {/* Asegúrate de tener importado DollarSign arriba */}
+                  <DollarSign size={28} />
                 </div>
-                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button
-                    onClick={() => openModal(concepto)}
-                    className="p-2 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg"
-                  >
-                    <Edit size={18} />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(concepto.id)}
-                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
-                  >
-                    <Trash2 size={18} />
-                  </button>
+                <div className="flex flex-col min-w-0">
+                  <h3 className="font-bold text-gray-800 text-lg truncate pr-2">
+                    {c.nombre_concepto}
+                  </h3>
+                  <span className="text-2xl font-extrabold text-gray-900 tracking-tight">
+                    {formatMoney(c.monto)}
+                  </span>
                 </div>
               </div>
 
-              <div>
-                <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">
-                  {concepto.tipo || "General"}
-                </p>
-                <h3 className="text-lg font-bold text-gray-700 leading-tight mb-3">
-                  {concepto.nombre_concepto}
-                </h3>
-                <div className="text-3xl font-extrabold text-gray-900 tracking-tight">
-                  {formatCurrency(concepto.monto_default)}
-                </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {!verEliminados ? (
+                  <>
+                    <button
+                      onClick={() => openModal(c)}
+                      className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                    >
+                      <Edit size={20} />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(c.id)}
+                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    >
+                      <Trash2 size={20} />
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => handleRestaurar(c.id)}
+                    className="flex items-center gap-2 px-3 py-2 bg-white border border-[#a72a34] text-[#a72a34] rounded-lg font-bold text-sm hover:bg-[#a72a34] hover:text-white transition-all shadow-sm"
+                  >
+                    <RotateCcw size={16} /> Restaurar
+                  </button>
+                )}
               </div>
-
-              {concepto.es_concepto_inscripcion === 1 && (
-                <div className="mt-4 pt-3 border-t border-gray-50 flex items-center gap-2 text-amber-600 font-bold text-xs uppercase">
-                  <CheckCircle size={14} /> Concepto de Inscripción
-                </div>
-              )}
             </div>
           ))}
         </div>
       )}
+
+      {/* MODAL */}
       {modalOpen && (
-        <ConceptosPagoModal
-          concepto={currentConcepto}
-          onClose={() => setModalOpen(false)}
-          onSave={fetchConceptos}
-        />
+        <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-50 p-4 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all scale-100">
+            <div className="bg-white p-6 border-b flex justify-between items-center">
+              <h3 className="font-bold text-xl text-gray-800">
+                {editingItem ? "Editar Concepto" : "Nuevo Concepto"}
+              </h3>
+              <button
+                onClick={() => setModalOpen(false)}
+                className="text-gray-400 hover:bg-gray-100 p-2 rounded-full"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="p-6 space-y-6">
+              <div>
+                <label className="block text-xs font-bold text-gray-400 uppercase mb-2">
+                  Nombre del Servicio
+                </label>
+                <input
+                  required
+                  autoFocus
+                  placeholder="Ej: Inscripción, Colegiatura..."
+                  className="w-full p-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#a72a34] outline-none font-medium text-gray-800"
+                  value={form.nombre_concepto}
+                  onChange={(e) =>
+                    setForm({ ...form, nombre_concepto: e.target.value })
+                  }
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-400 uppercase mb-2">
+                  Precio (MXN)
+                </label>
+                <div className="relative">
+                  <span className="absolute left-4 top-4 text-gray-400 font-bold">
+                    $
+                  </span>
+                  <input
+                    required
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    className="w-full pl-8 pr-4 py-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#a72a34] outline-none font-medium text-gray-800"
+                    value={form.monto}
+                    onChange={(e) =>
+                      setForm({ ...form, monto: e.target.value })
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setModalOpen(false)}
+                  className="flex-1 py-3 text-gray-500 font-bold hover:bg-gray-100 rounded-xl transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 bg-[#a72a34] text-white py-3 rounded-xl font-bold hover:bg-[#802028] shadow-lg transition-transform active:scale-95"
+                >
+                  Guardar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );
