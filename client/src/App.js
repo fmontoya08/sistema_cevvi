@@ -9576,6 +9576,7 @@ const TransferirAlumnoModal = ({
   );
 };
 
+// --- DASHBOARD DOCENTE REDISEÑADO (TARJETAS ESTILO DASHBOARD) ---
 const DocenteDashboardPage = () => {
   const [cursos, setCursos] = useState([]);
   const navigate = useNavigate();
@@ -9593,50 +9594,106 @@ const DocenteDashboardPage = () => {
   }, []);
 
   return (
-    <div>
-      <h2 className="text-3xl font-bold text-gray-800 mb-6">
-        Mis Cursos Asignados
-      </h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {cursos.map((curso) => (
-          <div
-            key={`${curso.grupo_id}-${curso.asignatura_id}`}
-            className="bg-white p-6 rounded-lg shadow hover:shadow-lg transition-shadow cursor-pointer"
-            onClick={() =>
-              navigate(
-                `/docente/grupo/${curso.grupo_id}/asignatura/${curso.asignatura_id}/aula`,
-              )
-            }
-          >
-            <h3 className="font-bold text-lg text-principal">
-              {curso.nombre_asignatura}
-            </h3>
-            <p className="text-gray-600">Grupo: {curso.nombre_grupo}</p>
-            <p className="text-sm text-gray-500">{curso.nombre_ciclo}</p>
-
-            {/* --- REEMPLAZA EL DIV ANTERIOR CON ESTE BLOQUE --- */}
-            <div className="mt-4 pt-4 border-t flex justify-between items-center">
-              <p className="text-sm font-semibold">
-                {curso.total_alumnos} Alumnos Inscritos
-              </p>
-              <span
-                className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                  curso.total_alumnos > 0 &&
-                  curso.total_calificaciones >= curso.total_alumnos
-                    ? "bg-green-100 text-green-800"
-                    : "bg-yellow-100 text-yellow-800"
-                }`}
-              >
-                {curso.total_alumnos > 0 &&
-                curso.total_calificaciones >= curso.total_alumnos
-                  ? "Completado"
-                  : "Pendiente"}
-              </span>
-            </div>
-            {/* --- FIN DEL BLOQUE REEMPLAZADO --- */}
-          </div>
-        ))}
+    <div className="space-y-8">
+      {/* Encabezado Principal */}
+      <div className="flex flex-col md:flex-row justify-between items-center gap-4 border-b border-gray-200 pb-6">
+        <div>
+          <h2 className="text-3xl font-bold text-gray-800 tracking-tight">
+            Mis Cursos Asignados
+          </h2>
+          <p className="text-gray-500 mt-1">
+            Gestiona tus grupos y calificaciones académicas.
+          </p>
+        </div>
       </div>
+
+      {/* Grid de Tarjetas */}
+      {cursos.length === 0 ? (
+        <div className="text-center py-12 bg-white rounded-2xl border border-dashed border-gray-300">
+          <Book size={48} className="mx-auto text-gray-300 mb-4" />
+          <p className="text-gray-500 font-medium">
+            No tienes cursos asignados para este ciclo.
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {cursos.map((curso) => {
+            // Calcular porcentaje de progreso (opcional, visual)
+            const isCompleted =
+              curso.total_alumnos > 0 &&
+              curso.total_calificaciones >= curso.total_alumnos;
+
+            return (
+              <div
+                key={`${curso.grupo_id}-${curso.asignatura_id}`}
+                onClick={() =>
+                  navigate(
+                    `/docente/grupo/${curso.grupo_id}/asignatura/${curso.asignatura_id}/aula`,
+                  )
+                }
+                className="group relative bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer overflow-hidden flex flex-col"
+              >
+                {/* Decoración Superior (Barra Roja) */}
+                <div className="absolute top-0 left-0 w-full h-1 bg-[#a72a34]"></div>
+
+                <div className="p-6 flex-1 flex flex-col">
+                  {/* Encabezado de la Tarjeta */}
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="p-3 bg-red-50 text-[#a72a34] rounded-xl group-hover:bg-[#a72a34] group-hover:text-white transition-colors">
+                      <Book size={24} />
+                    </div>
+                    {/* Badge de Estado */}
+                    <span
+                      className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border ${
+                        isCompleted
+                          ? "bg-green-50 text-green-700 border-green-100"
+                          : "bg-yellow-50 text-yellow-700 border-yellow-100"
+                      }`}
+                    >
+                      {isCompleted ? "Completado" : "En Curso"}
+                    </span>
+                  </div>
+
+                  {/* Título y Detalles */}
+                  <h3 className="text-xl font-bold text-gray-800 mb-2 group-hover:text-[#a72a34] transition-colors line-clamp-2">
+                    {curso.nombre_asignatura}
+                  </h3>
+
+                  <div className="space-y-2 mb-6">
+                    <p className="text-sm text-gray-500 flex items-center gap-2">
+                      <Users size={16} className="text-gray-400" />
+                      <span className="font-medium text-gray-700">
+                        Grupo:
+                      </span>{" "}
+                      {curso.nombre_grupo}
+                    </p>
+                    <p className="text-sm text-gray-500 flex items-center gap-2">
+                      <Calendar size={16} className="text-gray-400" />
+                      <span className="font-medium text-gray-700">
+                        Ciclo:
+                      </span>{" "}
+                      {curso.nombre_ciclo}
+                    </p>
+                  </div>
+
+                  {/* Footer de la Tarjeta (Estadísticas) */}
+                  <div className="mt-auto pt-4 border-t border-gray-50 flex justify-between items-center text-sm">
+                    <div className="text-gray-500">
+                      <span className="font-bold text-gray-800">
+                        {curso.total_alumnos}
+                      </span>{" "}
+                      Alumnos
+                    </div>
+                    <div className="text-[#a72a34] font-bold flex items-center gap-1 opacity-0 group-hover:opacity-100 transform translate-x-2 group-hover:translate-x-0 transition-all">
+                      Ir al Aula <ArrowRightCircle size={16} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };
@@ -11012,255 +11069,238 @@ const AulaVirtualPage = () => {
 
   // --- Componente Principal de Vista (Rediseñado con Pestañas) ---
   // --- Componente Principal de Vista (Rediseñado con Pestañas) ---
+  // --- Componente Principal de Vista (Rediseñado estilo Dashboard) ---
   const renderView = () => (
-    <div>
-      {/* Encabezado con Nombre y Botones */}
-      <div className="mb-6 flex justify-between items-center">
-        <h2 className="text-3xl font-bold text-gray-800">Aula Virtual</h2>
-        <div className="flex items-center space-x-2">
+    <div className="space-y-6">
+      {/* 1. ENCABEZADO TIPO DASHBOARD (Fondo Blanco, Sombra Suave) */}
+      <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
+        <div>
+          <h2 className="text-3xl font-bold text-gray-800 tracking-tight">
+            Aula Virtual
+          </h2>
+          <div className="flex items-center gap-2 mt-2">
+            {/* Badges de Estado con diseño sutil */}
+            <span
+              className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border ${
+                config.modalidad === "presencial"
+                  ? "bg-blue-50 text-blue-700 border-blue-100"
+                  : "bg-purple-50 text-purple-700 border-purple-100"
+              }`}
+            >
+              {config.modalidad}
+            </span>
+            <span
+              className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border ${
+                config.estatus === "activo"
+                  ? "bg-green-50 text-green-700 border-green-100"
+                  : "bg-red-50 text-red-700 border-red-100"
+              }`}
+            >
+              {config.estatus}
+            </span>
+          </div>
+        </div>
+
+        {/* BOTONES DE ACCIÓN DOCENTE (Ahora ROJOS y Estilizados) */}
+        <div className="flex items-center gap-3">
           {user.rol === "docente" && (
             <>
-              {/* --- BOTÓN 1 CAMBIADO A NARANJA --- */}
+              {/* Botón Asistencia */}
               <button
                 onClick={handleIniciarSesionHoy}
                 disabled={isCreatingSession}
-                className="flex items-center px-4 py-2 text-sm font-semibold text-white bg-orange-500 rounded-md hover:bg-orange-600 disabled:bg-gray-400"
+                className="flex items-center px-5 py-3 text-sm font-bold text-white bg-[#a72a34] rounded-xl hover:bg-[#802028] disabled:bg-gray-400 shadow-lg shadow-red-900/20 transition-all active:scale-95"
               >
-                <ClipboardCheck size={16} className="mr-1" />
-                {isCreatingSession ? "Iniciando..." : "Asistencia Hoy"}
+                <ClipboardCheck size={18} className="mr-2" />
+                {isCreatingSession ? "Iniciando..." : "Pasar Asistencia"}
               </button>
 
-              {/* --- BOTÓN 2 CAMBIADO A NARANJA --- */}
+              {/* Botón Editar (Estilo secundario pero acorde) */}
               <button
                 onClick={() => setIsEditing(true)}
-                className="flex items-center px-3 py-1 text-sm font-semibold text-white bg-orange-500 rounded-md hover:bg-orange-600"
+                className="flex items-center px-4 py-3 text-sm font-bold text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:text-[#a72a34] hover:border-[#a72a34]/30 transition-all shadow-sm"
               >
-                <Edit2 size={14} className="mr-1" /> Editar Info. Curso
+                <Edit2 size={18} className="mr-2" /> Editar Curso
               </button>
 
-              {/* --- BOTÓN 3 MOVIDO AQUÍ Y CAMBIADO A NARANJA --- */}
+              {/* Botón Calificaciones */}
               <button
                 onClick={() =>
                   navigate(
                     `/docente/grupo/${grupoId}/asignatura/${asignaturaId}`,
                   )
                 }
-                className="flex items-center px-4 py-2 text-sm font-semibold text-white bg-orange-500 rounded-md hover:bg-orange-600"
+                className="flex items-center px-4 py-3 text-sm font-bold text-[#a72a34] bg-red-50 border border-red-100 rounded-xl hover:bg-[#a72a34] hover:text-white transition-all shadow-sm"
               >
-                <GraduationCap size={16} className="mr-1" />
-                Calificación Final
+                <GraduationCap size={18} className="mr-2" />
+                Acta Final
               </button>
             </>
           )}
         </div>
       </div>
 
-      {/* Barra de Pestañas */}
-      <div className="border-b border-gray-200 mb-6">
-        <nav className="-mb-px flex space-x-6" aria-label="Tabs">
-          <TabButton
-            label="Información"
-            isActive={activeTab === "info"}
+      {/* 2. NAVEGACIÓN DE PESTAÑAS (Estilo "Underline" limpio) */}
+      <div className="border-b border-gray-200">
+        <nav className="-mb-px flex space-x-8" aria-label="Tabs">
+          <button
             onClick={() => setActiveTab("info")}
-            icon={Book}
-          />
-          <TabButton
-            label="Tareas"
-            isActive={activeTab === "tareas"}
+            className={`pb-4 px-2 text-sm font-bold flex items-center gap-2 border-b-2 transition-all ${
+              activeTab === "info"
+                ? "border-[#a72a34] text-[#a72a34]"
+                : "border-transparent text-gray-400 hover:text-gray-600 hover:border-gray-300"
+            }`}
+          >
+            <Book size={18} /> Información
+          </button>
+          <button
             onClick={() => setActiveTab("tareas")}
-            icon={FileText}
-          />
-          <TabButton
-            label="Recursos"
-            isActive={activeTab === "recursos"}
+            className={`pb-4 px-2 text-sm font-bold flex items-center gap-2 border-b-2 transition-all ${
+              activeTab === "tareas"
+                ? "border-[#a72a34] text-[#a72a34]"
+                : "border-transparent text-gray-400 hover:text-gray-600 hover:border-gray-300"
+            }`}
+          >
+            <FileText size={18} /> Tareas
+          </button>
+          <button
             onClick={() => setActiveTab("recursos")}
-            icon={Paperclip}
-          />
-          <TabButton
-            label="Foro"
-            isActive={activeTab === "foro"}
+            className={`pb-4 px-2 text-sm font-bold flex items-center gap-2 border-b-2 transition-all ${
+              activeTab === "recursos"
+                ? "border-[#a72a34] text-[#a72a34]"
+                : "border-transparent text-gray-400 hover:text-gray-600 hover:border-gray-300"
+            }`}
+          >
+            <Paperclip size={18} /> Recursos
+          </button>
+          <button
             onClick={() => setActiveTab("foro")}
-            icon={MessageSquare}
-          />
+            className={`pb-4 px-2 text-sm font-bold flex items-center gap-2 border-b-2 transition-all ${
+              activeTab === "foro"
+                ? "border-[#a72a34] text-[#a72a34]"
+                : "border-transparent text-gray-400 hover:text-gray-600 hover:border-gray-300"
+            }`}
+          >
+            <MessageSquare size={18} /> Foro
+          </button>
         </nav>
       </div>
 
-      {/* Contenido de la Pestaña Activa */}
-      <div className="bg-white p-6 rounded-lg shadow">
+      {/* 3. CONTENIDO DE LA PESTAÑA ACTIVA (Card Blanca Limpia) */}
+      <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 min-h-[400px]">
         {/* Pestaña: Información */}
         {activeTab === "info" && (
-          <div>
-            <div className="flex justify-between items-start mb-4">
-              <h3 className="text-xl font-semibold text-gray-800">
-                Acerca del Curso
-              </h3>
-              <div className="flex space-x-2">
-                <span
-                  className={`capitalize px-3 py-1 rounded-full text-xs font-semibold ${
-                    config.modalidad === "presencial"
-                      ? "bg-blue-100 text-blue-800"
-                      : "bg-purple-100 text-purple-800"
-                  }`}
-                >
-                  {config.modalidad}
-                </span>
-                <span
-                  className={`capitalize px-3 py-1 rounded-full text-xs font-semibold ${
-                    config.estatus === "activo"
-                      ? "bg-green-100 text-green-800"
-                      : "bg-red-100 text-red-800"
-                  }`}
-                >
-                  {config.estatus}
-                </span>
+          <div className="space-y-8 animate-in fade-in duration-300">
+            {/* Sección Videollamada Destacada */}
+            <div className="bg-gradient-to-r from-gray-900 to-gray-800 p-6 rounded-2xl text-white flex justify-between items-center shadow-lg">
+              <div>
+                <h4 className="font-bold text-lg mb-1 flex items-center gap-2">
+                  <Video className="text-red-500" /> Sala de Videoconferencia
+                </h4>
+                <p className="text-gray-300 text-sm">
+                  {config.enlace_videollamada
+                    ? "Enlace activo para la sesión en vivo."
+                    : "El docente aún no ha configurado el enlace."}
+                </p>
               </div>
-            </div>
-            {/* Enlace Sesión en Vivo */}
-            <div className="mb-6 pb-6 border-b">
-              <h4 className="font-semibold text-gray-700 mb-2">
-                Sesión en Vivo
-              </h4>
-              {config.enlace_videollamada ? (
+              {config.enlace_videollamada && (
                 <a
                   href={config.enlace_videollamada}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center px-4 py-2 text-sm font-semibold text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors"
+                  className="px-6 py-3 bg-[#a72a34] hover:bg-[#802028] text-white font-bold rounded-xl transition-all shadow-lg transform hover:-translate-y-1 flex items-center gap-2"
                 >
-                  <Video size={18} className="mr-1 inline" />
-                  Entrar a Clase
+                  Unirse a la Clase <ArrowRightCircle size={18} />
                 </a>
-              ) : (
-                <p className="text-gray-500 text-sm">
-                  {user.rol === "alumno"
-                    ? "El docente aún no ha publicado el enlace."
-                    : "Aún no has configurado un enlace."}
-                </p>
               )}
             </div>
-            {/* Campos Estructurados */}
-            {config.objetivos && (
-              <div className="mb-4">
-                <h4 className="font-semibold text-sm text-gray-500 mb-1">
-                  Objetivos
-                </h4>
-                <p className="text-gray-700 whitespace-pre-wrap">
-                  {config.objetivos}
-                </p>
-              </div>
-            )}
-            {config.evaluacion && (
-              <div className="mb-4">
-                <h4 className="font-semibold text-sm text-gray-500 mb-1">
-                  Evaluación
-                </h4>
-                <p className="text-gray-700 whitespace-pre-wrap">
-                  {config.evaluacion}
-                </p>
-              </div>
-            )}
-            {config.horario && (
-              <div className="mb-4">
-                <h4 className="font-semibold text-sm text-gray-500 mb-1">
-                  Horario
-                </h4>
-                <p className="text-gray-700 whitespace-pre-wrap">
-                  {config.horario}
-                </p>
-              </div>
-            )}
-            {config.contacto_docente && (
-              <div className="mb-4">
-                <h4 className="font-semibold text-sm text-gray-500 mb-1">
-                  Contacto Docente
-                </h4>
-                <p className="text-gray-700 whitespace-pre-wrap">
-                  {config.contacto_docente}
-                </p>
-              </div>
-            )}
-            {config.descripcion_curso && (
-              <div className="mb-4">
-                <h4 className="font-semibold text-sm text-gray-500 mb-1">
-                  Descripción General
-                </h4>
-                <p className="text-gray-700 whitespace-pre-wrap">
-                  {config.descripcion_curso}
-                </p>
-              </div>
-            )}
-            {!config.objetivos &&
-              !config.evaluacion &&
-              !config.horario &&
-              !config.contacto_docente &&
-              !config.descripcion_curso && (
-                <p className="text-gray-500 text-sm">
-                  El docente aún no ha agregado información detallada.
-                </p>
-              )}
 
-            {/* Historial Asistencia (Alumno) */}
+            {/* Grid de Información */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div className="space-y-4">
+                <div>
+                  <h4 className="font-bold text-gray-800 border-b border-gray-100 pb-2 mb-2 flex items-center gap-2">
+                    <Sparkles size={16} className="text-[#a72a34]" /> Objetivos
+                  </h4>
+                  <p className="text-gray-600 text-sm leading-relaxed whitespace-pre-wrap">
+                    {config.objetivos || "Sin información definida."}
+                  </p>
+                </div>
+                <div>
+                  <h4 className="font-bold text-gray-800 border-b border-gray-100 pb-2 mb-2 flex items-center gap-2">
+                    <Award size={16} className="text-[#a72a34]" /> Evaluación
+                  </h4>
+                  <p className="text-gray-600 text-sm leading-relaxed whitespace-pre-wrap">
+                    {config.evaluacion || "Sin criterios definidos."}
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                  <h4 className="font-bold text-gray-800 mb-2 flex items-center gap-2">
+                    <Clock size={16} className="text-[#a72a34]" /> Horario
+                  </h4>
+                  <p className="text-gray-600 text-sm whitespace-pre-wrap">
+                    {config.horario || "Por definir."}
+                  </p>
+                </div>
+                <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                  <h4 className="font-bold text-gray-800 mb-2 flex items-center gap-2">
+                    <User size={16} className="text-[#a72a34]" /> Contacto
+                    Docente
+                  </h4>
+                  <p className="text-gray-600 text-sm whitespace-pre-wrap">
+                    {config.contacto_docente || "No especificado."}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Historial Asistencia (Solo Alumno) */}
             {user.rol === "alumno" && (
-              <div className="mt-6 pt-6 border-t">
-                {" "}
-                {/* Separador visual */}
-                <h4 className="font-semibold text-gray-700 mb-2 flex items-center">
-                  <History size={18} className="mr-2" /> Mi Historial de
-                  Asistencia
+              <div className="mt-8 pt-8 border-t border-gray-100">
+                <h4 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+                  <History size={20} className="text-gray-400" /> Mi Asistencia
                 </h4>
                 {loadingHistorial ? (
-                  <p>Cargando historial...</p>
+                  <p className="text-sm text-gray-400">Cargando...</p>
                 ) : historialAsistencia.length === 0 ? (
-                  <p className="text-gray-500 text-sm">
-                    Aún no hay registros de asistencia para este curso.
-                  </p>
+                  <div className="p-6 bg-gray-50 rounded-xl text-center text-gray-400 text-sm border border-dashed">
+                    No hay registros de asistencia.
+                  </div>
                 ) : (
-                  <div className="max-h-60 overflow-y-auto border rounded-md">
-                    {" "}
-                    {/* Limita altura y añade scroll */}
-                    <table className="w-full text-sm">
-                      <thead className="sticky top-0 bg-gray-50">
-                        <tr>
-                          <th className="px-4 py-2 text-left">Fecha</th>
-                          <th className="px-4 py-2 text-left">Estatus</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {historialAsistencia.map((reg) => (
-                          <tr
-                            key={reg.sesion_id}
-                            className="border-b last:border-b-0"
-                          >
-                            <td className="px-4 py-2">
-                              {(() => {
-                                // Ejemplo: reg.fecha_sesion es "2025-10-26"
-                                const parts = reg.fecha_sesion.split("-"); // ["2025", "10", "26"]
-                                // Creamos la fecha: new Date(año, mesIndex (0-11), dia)
-                                const fecha = new Date(
-                                  parseInt(parts[0]),
-                                  parseInt(parts[1]) - 1,
-                                  parseInt(parts[2]),
-                                );
-                                return fecha.toLocaleDateString(); // Formatear localmente
-                              })()}
-                            </td>
-                            <td className="px-4 py-2">
-                              <span
-                                className={`capitalize font-medium ${
-                                  reg.mi_estatus === "presente"
-                                    ? "text-green-600"
-                                    : reg.mi_estatus === "justificado"
-                                      ? "text-yellow-600"
-                                      : "text-red-600"
-                                }`}
-                              >
-                                {reg.mi_estatus}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
+                    {historialAsistencia.map((reg) => (
+                      <div
+                        key={reg.sesion_id}
+                        className={`p-3 rounded-xl border text-center ${
+                          reg.mi_estatus === "presente"
+                            ? "bg-green-50 border-green-100"
+                            : reg.mi_estatus === "justificado"
+                              ? "bg-yellow-50 border-yellow-100"
+                              : "bg-red-50 border-red-100"
+                        }`}
+                      >
+                        <p className="text-xs font-bold text-gray-500 mb-1">
+                          {(() => {
+                            const parts = reg.fecha_sesion.split("-");
+                            return `${parts[2]}/${parts[1]}`;
+                          })()}
+                        </p>
+                        <span
+                          className={`text-xs font-black uppercase ${
+                            reg.mi_estatus === "presente"
+                              ? "text-green-700"
+                              : reg.mi_estatus === "justificado"
+                                ? "text-yellow-700"
+                                : "text-red-700"
+                          }`}
+                        >
+                          {reg.mi_estatus.substring(0, 3)}
+                        </span>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
@@ -11270,18 +11310,17 @@ const AulaVirtualPage = () => {
 
         {/* Pestaña: Tareas */}
         {activeTab === "tareas" && (
-          <div>
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-semibold text-gray-800">
-                Tareas y Actividades
+          <div className="animate-in fade-in duration-300">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-gray-800">
+                Actividades de Aprendizaje
               </h3>
               {user.rol === "docente" && (
                 <button
                   onClick={() => setShowCrearTareaModal(true)}
-                  className="flex items-center px-4 py-2 font-semibold text-white bg-principal rounded-md hover:opacity-90"
+                  className="bg-[#a72a34] text-white px-5 py-2.5 rounded-xl font-bold hover:bg-[#802028] shadow-lg shadow-red-900/10 flex items-center gap-2 transition-transform active:scale-95"
                 >
-                  <Plus size={18} className="mr-2" />
-                  Crear Tarea
+                  <Plus size={18} /> Nueva Tarea
                 </button>
               )}
             </div>
@@ -11291,18 +11330,17 @@ const AulaVirtualPage = () => {
 
         {/* Pestaña: Recursos */}
         {activeTab === "recursos" && (
-          <div>
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-semibold text-gray-800">
-                Material de Clase y Recursos
+          <div className="animate-in fade-in duration-300">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-gray-800">
+                Material de Consulta
               </h3>
               {user.rol === "docente" && (
                 <button
                   onClick={() => setShowRecursoModal(true)}
-                  className="flex items-center px-4 py-2 font-semibold text-white bg-secundario rounded-md hover:opacity-90"
+                  className="bg-white border-2 border-[#a72a34] text-[#a72a34] px-5 py-2.5 rounded-xl font-bold hover:bg-[#a72a34] hover:text-white transition-all flex items-center gap-2"
                 >
-                  <Plus size={18} className="mr-2" />
-                  Agregar Recurso
+                  <UploadCloud size={18} /> Subir Material
                 </button>
               )}
             </div>
@@ -11312,16 +11350,17 @@ const AulaVirtualPage = () => {
 
         {/* Pestaña: Foro */}
         {activeTab === "foro" && (
-          <div>
-            <h3 className="text-xl font-semibold text-gray-800 mb-4">
-              Foro de Discusión
-            </h3>
-            {renderForoList()} {/* Llama a la nueva función */}
+          <div className="animate-in fade-in duration-300">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-gray-800">
+                Foro de Discusión
+              </h3>
+              {/* Botón del Foro movido a la nueva función de renderizado o aquí mismo si prefieres */}
+            </div>
+            {renderForoList()}
           </div>
         )}
       </div>
-
-      {/* Botón Ir a Calificación Final (Docente) - YA NO ESTÁ AQUÍ */}
     </div>
   );
 
