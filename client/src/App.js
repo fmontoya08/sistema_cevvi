@@ -609,99 +609,177 @@ const AdminLayout = () => {
 const DocenteLayout = () => {
   const { logout, user } = useAuth();
   const location = useLocation();
+
+  // 1. Estados necesarios para el diseño nuevo (Menú móvil y Ciclo)
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [cicloActual, setCicloActual] = useState("Cargando...");
+
+  // 2. Efecto para obtener el ciclo escolar (Igual que en Admin)
+  useEffect(() => {
+    api
+      .get("/ciclo-actual")
+      .then((res) => setCicloActual(res.data.nombre))
+      .catch(() => setCicloActual("Sin Asignar"));
+  }, []);
+
+  // 3. Menú de Navegación del Docente (Estilo Nuevo)
   const navItems = [
     { icon: Home, label: "Mis Cursos", path: "/docente/dashboard" },
+    // Puedes agregar más items aquí si el docente tiene más secciones
   ];
+
   return (
-    <div className="flex h-screen bg-gray-100 font-sans">
-      <aside className="w-64 flex-shrink-0 bg-gray-800 text-white flex flex-col">
-        <div className="h-20 flex items-center justify-center border-b border-gray-700">
-          <svg
-            className="w-auto h-10 text-principal"
-            viewBox="0 0 24 24"
-            fill="currentColor"
+    <div className="flex h-screen bg-gray-50 font-sans overflow-hidden">
+      {/* --- SIDEBAR Y FONDO OSCURO PARA MÓVIL --- */}
+
+      {/* Sombra de fondo (Solo móvil) */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 md:hidden backdrop-blur-sm transition-opacity"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar Responsivo */}
+      <aside
+        className={`
+        fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 flex flex-col 
+        transform transition-transform duration-300 ease-in-out shadow-xl md:shadow-none
+        ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0
+      `}
+      >
+        {/* HEADER DEL SIDEBAR */}
+        <div className="p-6 flex flex-col items-center justify-center border-b border-gray-100 relative">
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="absolute top-2 right-2 p-2 text-gray-400 hover:text-red-500 md:hidden"
           >
-            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5-10-5-10 5z" />
-          </svg>
+            <X size={24} />
+          </button>
+
+          <div className="w-24 h-24 mb-3 flex items-center justify-center">
+            <img
+              src={BRAND.logo}
+              alt="Logo"
+              className="w-full h-full object-contain"
+            />
+          </div>
+          <h2
+            className="font-bold text-lg text-center leading-tight"
+            style={{ color: BRAND.colors.primary }}
+          >
+            {BRAND.name}
+          </h2>
         </div>
-        <nav className="flex-1 px-4 py-6 space-y-2">
-          {navItems.map((item) => (
-            <Link
-              key={item.label}
-              to={item.path}
-              className={`flex items-center px-4 py-2 rounded-lg transition-colors duration-200 ${
-                location.pathname.startsWith(item.path)
-                  ? "bg-principal text-white"
-                  : "text-gray-300 hover:bg-gray-700 hover:text-white"
-              }`}
-            >
-              <item.icon className="w-5 h-5 mr-3" />
-              {item.label}
-            </Link>
-          ))}
+
+        {/* NAVEGACIÓN */}
+        <nav className="flex-1 px-3 py-6 space-y-1 overflow-y-auto">
+          {navItems.map((item) => {
+            // Lógica para detectar si el link está activo
+            const isActive = location.pathname.startsWith(item.path);
+            return (
+              <Link
+                key={item.label}
+                to={item.path}
+                onClick={() => setSidebarOpen(false)}
+                className={`flex items-center px-4 py-3 rounded-xl transition-all duration-200 font-medium text-sm
+                  ${isActive ? "text-white shadow-md shadow-red-900/10" : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"}`}
+                style={
+                  isActive ? { backgroundColor: BRAND.colors.primary } : {}
+                }
+              >
+                <item.icon
+                  className="w-5 h-5 mr-3"
+                  style={{ color: isActive ? "#fff" : BRAND.colors.secondary }}
+                />
+                {item.label}
+              </Link>
+            );
+          })}
         </nav>
-        <div className="px-4 py-4 border-t border-gray-700">
+
+        {/* FOOTER DEL SIDEBAR */}
+        <div className="px-4 py-4 border-t border-gray-100">
+          <div className="mb-3 px-3 py-2 bg-gray-50 rounded-lg border border-gray-100">
+            <p
+              className="text-[10px] font-bold uppercase"
+              style={{ color: BRAND.colors.secondary }}
+            >
+              Rol Actual
+            </p>
+            <p className="text-sm font-bold text-gray-700">Docente</p>
+          </div>
           <button
             onClick={logout}
-            className="w-full flex items-center px-4 py-2 rounded-lg text-gray-300 hover:bg-principal hover:text-white transition-colors duration-200"
+            className="w-full flex items-center justify-center px-4 py-2 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 text-sm font-bold"
           >
-            <LogOut className="w-5 h-5 mr-3" />
-            Cerrar Sesión
+            <LogOut className="w-4 h-4 mr-2" /> Cerrar Sesión
           </button>
         </div>
       </aside>
-      <main className="flex-1 overflow-y-auto">
-        <header className="bg-white shadow-sm p-4 flex justify-between items-center">
-          <h1 className="text-2xl font-semibold text-gray-800">
-            Portal Docente
-          </h1>
-          {/* --- REEMPLAZA ESTE DIV --- */}
-          <div className="flex items-center space-x-4">
-            <NotificationBell />
-            {/* Link al Perfil con Foto */}
-            <Link
-              to={
-                user?.rol === "admin" ? "/mi-perfil" : `/${user?.rol}/mi-perfil`
-              }
-              className="flex items-center space-x-2 text-gray-600 hover:text-principal"
-            >
-              <img
-                // Construye la URL de la foto o usa placeholder
-                src={
-                  user?.foto_perfil
-                    ? `http://localhost:3001/uploads/perfiles/${user.foto_perfil}`
-                    : `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                        user?.nombre || "?",
-                      )}+${encodeURIComponent(
-                        user?.apellido_paterno || "?",
-                      )}&background=random&color=fff`
-                }
-                alt="Perfil"
-                className="w-8 h-8 rounded-full object-cover border border-gray-300"
-                // Fallback por si la imagen no carga
-                onError={(e) => {
-                  e.target.onerror = null;
-                  e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                    user?.nombre || "?",
-                  )}+${encodeURIComponent(
-                    user?.apellido_paterno || "?",
-                  )}&background=random&color=fff`;
-                }}
-              />
-              <span>{user?.nombre}</span>
-            </Link>
-            {/* Botón Logout */}
+
+      {/* --- CONTENIDO PRINCIPAL --- */}
+      <main className="flex-1 flex flex-col h-full relative overflow-hidden md:ml-64 transition-all duration-300">
+        {/* HEADER SUPERIOR */}
+        <header className="bg-white sticky top-0 z-30 shadow-sm px-4 py-3 flex justify-between items-center h-16">
+          <div className="flex items-center gap-3">
+            {/* Botón menú móvil */}
             <button
-              onClick={logout}
-              className="text-gray-500 hover:text-principal"
-              title="Cerrar Sesión"
+              onClick={() => setSidebarOpen(true)}
+              className="p-2 -ml-2 text-gray-600 hover:bg-gray-100 rounded-lg md:hidden"
             >
-              <LogOut size={22} />
+              <Menu size={28} />
             </button>
+            <h1 className="text-xl font-bold text-gray-800 tracking-tight">
+              Portal Docente
+            </h1>
           </div>
-          {/* --- FIN REEMPLAZO --- */}
+
+          {/* Badge del Ciclo Escolar */}
+          <div className="hidden md:flex items-center gap-2 bg-[#bb9a5a]/10 px-3 py-1.5 rounded-full border border-[#bb9a5a]/20">
+            <Calendar size={14} className="text-[#bb9a5a]" />
+            <span className="text-xs font-bold text-[#bb9a5a] uppercase tracking-wide">
+              Ciclo: {cicloActual}
+            </span>
+          </div>
+
+          {/* Área de Usuario y Notificaciones */}
+          <div className="flex items-center gap-4">
+            <div className="text-gray-500 hover:text-[#a72a34] transition-colors cursor-pointer relative">
+              <NotificationBell />
+            </div>
+
+            <div className="h-8 w-px bg-gray-200 mx-1 hidden sm:block"></div>
+
+            <Link
+              to="/docente/mi-perfil" // Ajusta esta ruta si usas una diferente para el perfil docente
+              className="flex items-center gap-3 hover:bg-gray-50 p-1 pr-2 rounded-full transition-colors group cursor-pointer"
+            >
+              <div className="text-right hidden sm:block">
+                <p className="text-sm font-bold text-gray-800 group-hover:text-[#a72a34] transition-colors">
+                  {user?.nombre}
+                </p>
+                <p className="text-xs text-gray-500 capitalize">{user?.rol}</p>
+              </div>
+              <div className="w-10 h-10 rounded-full bg-gray-100 border border-gray-200 overflow-hidden group-hover:border-[#a72a34] transition-colors">
+                {user?.foto_perfil ? (
+                  <img
+                    src={`http://localhost:3001/uploads/perfiles/${user.foto_perfil}`}
+                    className="w-full h-full object-cover"
+                    alt="Perfil"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-gray-400 font-bold text-lg bg-gray-100">
+                    {user?.nombre?.charAt(0)}
+                  </div>
+                )}
+              </div>
+            </Link>
+          </div>
         </header>
-        <div className="p-6">
+
+        {/* ÁREA DE CONTENIDO (Outlet) */}
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 pb-20 bg-gray-50">
           <Outlet />
         </div>
       </main>
@@ -711,108 +789,182 @@ const DocenteLayout = () => {
 
 const AlumnoLayout = () => {
   const { logout, user } = useAuth();
+  const location = useLocation();
+
+  // 1. Estados para el diseño nuevo
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [cicloActual, setCicloActual] = useState("Cargando...");
+
+  // 2. Obtener Ciclo Escolar
+  useEffect(() => {
+    api
+      .get("/ciclo-actual")
+      .then((res) => setCicloActual(res.data.nombre))
+      .catch(() => setCicloActual("Sin Asignar"));
+  }, []);
+
+  // 3. Menú de Navegación del Alumno (Basado en tus rutas)
+  const navItems = [
+    { icon: Home, label: "Mi Panel", path: "/alumno/dashboard" },
+    { icon: DollarSign, label: "Mis Pagos", path: "/alumno/mis-pagos" },
+    {
+      icon: ClipboardEdit,
+      label: "Mis Solicitudes",
+      path: "/alumno/mis-solicitudes",
+    },
+  ];
+
   return (
-    <div className="flex h-screen bg-gray-100 font-sans">
-      <aside className="w-64 flex-shrink-0 bg-gray-800 text-white flex flex-col">
-        <div className="h-20 flex items-center justify-center border-b border-gray-700">
-          <svg
-            className="w-auto h-10 text-principal"
-            viewBox="0 0 24 24"
-            fill="currentColor"
+    <div className="flex h-screen bg-gray-50 font-sans overflow-hidden">
+      {/* --- SIDEBAR (MÓVIL Y ESCRITORIO) --- */}
+
+      {/* Backdrop oscuro para móvil */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 md:hidden backdrop-blur-sm transition-opacity"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar contenedor */}
+      <aside
+        className={`
+        fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 flex flex-col 
+        transform transition-transform duration-300 ease-in-out shadow-xl md:shadow-none
+        ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0
+      `}
+      >
+        {/* HEADER DEL SIDEBAR */}
+        <div className="p-6 flex flex-col items-center justify-center border-b border-gray-100 relative">
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="absolute top-2 right-2 p-2 text-gray-400 hover:text-red-500 md:hidden"
           >
-            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5-10-5-10 5z" />
-          </svg>
+            <X size={24} />
+          </button>
+
+          <div className="w-24 h-24 mb-3 flex items-center justify-center">
+            <img
+              src={BRAND.logo}
+              alt="Logo"
+              className="w-full h-full object-contain"
+            />
+          </div>
+          <h2
+            className="font-bold text-lg text-center leading-tight"
+            style={{ color: BRAND.colors.primary }}
+          >
+            {BRAND.name}
+          </h2>
         </div>
-        <nav className="flex-1 px-4 py-6 space-y-2">
-          <Link
-            to="/alumno/dashboard"
-            className="flex items-center px-4 py-2 rounded-lg bg-principal text-white"
-          >
-            <Home className="w-5 h-5 mr-3" />
-            Mi Grupo
-          </Link>
-          {/* --- AÑADE ESTE NUEVO LINK --- */}
-          <Link
-            to="/alumno/mis-pagos"
-            className="flex items-center px-4 py-2 rounded-lg text-gray-300 hover:bg-gray-700 hover:text-white"
-          >
-            <DollarSign className="w-5 h-5 mr-3" />
-            Mis Pagos
-          </Link>
-          {/* --- FIN --- */}
-          {/* --- AÑADE ESTE NUEVO LINK --- */}
-          <Link
-            to="/alumno/mis-solicitudes"
-            className="flex items-center px-4 py-2 rounded-lg text-gray-300 hover:bg-gray-700 hover:text-white"
-            // className={`flex items-center ... ${location.pathname === '/alumno/mis-solicitudes' ? 'bg-principal text-white' : '...'}`}
-          >
-            <ClipboardEdit className="w-5 h-5 mr-3" />
-            Mis Solicitudes
-          </Link>
-          {/* --- FIN --- */}
+
+        {/* NAVEGACIÓN */}
+        <nav className="flex-1 px-3 py-6 space-y-1 overflow-y-auto">
+          {navItems.map((item) => {
+            const isActive = location.pathname.startsWith(item.path);
+            return (
+              <Link
+                key={item.label}
+                to={item.path}
+                onClick={() => setSidebarOpen(false)}
+                className={`flex items-center px-4 py-3 rounded-xl transition-all duration-200 font-medium text-sm
+                  ${isActive ? "text-white shadow-md shadow-red-900/10" : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"}`}
+                style={
+                  isActive ? { backgroundColor: BRAND.colors.primary } : {}
+                }
+              >
+                <item.icon
+                  className="w-5 h-5 mr-3"
+                  style={{ color: isActive ? "#fff" : BRAND.colors.secondary }}
+                />
+                {item.label}
+              </Link>
+            );
+          })}
         </nav>
-        <div className="px-4 py-4 border-t border-gray-700">
+
+        {/* FOOTER DEL SIDEBAR */}
+        <div className="px-4 py-4 border-t border-gray-100">
+          <div className="mb-3 px-3 py-2 bg-gray-50 rounded-lg border border-gray-100">
+            <p
+              className="text-[10px] font-bold uppercase"
+              style={{ color: BRAND.colors.secondary }}
+            >
+              Rol Actual
+            </p>
+            <p className="text-sm font-bold text-gray-700">Alumno</p>
+          </div>
           <button
             onClick={logout}
-            className="w-full flex items-center px-4 py-2 rounded-lg text-gray-300 hover:bg-principal hover:text-white transition-colors duration-200"
+            className="w-full flex items-center justify-center px-4 py-2 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 text-sm font-bold"
           >
-            <LogOut className="w-5 h-5 mr-3" />
-            Cerrar Sesión
+            <LogOut className="w-4 h-4 mr-2" /> Cerrar Sesión
           </button>
         </div>
       </aside>
-      <main className="flex-1 overflow-y-auto">
-        <header className="bg-white shadow-sm p-4 flex justify-between items-center">
-          <h1 className="text-2xl font-semibold text-gray-800">
-            Portal del Alumno
-          </h1>
-          {/* --- REEMPLAZA ESTE DIV --- */}
-          <div className="flex items-center space-x-4">
-            <NotificationBell />
-            {/* Link al Perfil con Foto */}
-            <Link
-              to={
-                user?.rol === "admin" ? "/mi-perfil" : `/${user?.rol}/mi-perfil`
-              }
-              className="flex items-center space-x-2 text-gray-600 hover:text-principal"
-            >
-              <img
-                // Construye la URL de la foto o usa placeholder
-                src={
-                  user?.foto_perfil
-                    ? `http://localhost:3001/uploads/perfiles/${user.foto_perfil}`
-                    : `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                        user?.nombre || "?",
-                      )}+${encodeURIComponent(
-                        user?.apellido_paterno || "?",
-                      )}&background=random&color=fff`
-                }
-                alt="Perfil"
-                className="w-8 h-8 rounded-full object-cover border border-gray-300"
-                // Fallback por si la imagen no carga
-                onError={(e) => {
-                  e.target.onerror = null;
-                  e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                    user?.nombre || "?",
-                  )}+${encodeURIComponent(
-                    user?.apellido_paterno || "?",
-                  )}&background=random&color=fff`;
-                }}
-              />
-              <span>{user?.nombre}</span>
-            </Link>
-            {/* Botón Logout */}
+
+      {/* --- CONTENIDO PRINCIPAL --- */}
+      <main className="flex-1 flex flex-col h-full relative overflow-hidden md:ml-64 transition-all duration-300">
+        {/* HEADER SUPERIOR */}
+        <header className="bg-white sticky top-0 z-30 shadow-sm px-4 py-3 flex justify-between items-center h-16">
+          <div className="flex items-center gap-3">
+            {/* Botón hamburguesa móvil */}
             <button
-              onClick={logout}
-              className="text-gray-500 hover:text-principal"
-              title="Cerrar Sesión"
+              onClick={() => setSidebarOpen(true)}
+              className="p-2 -ml-2 text-gray-600 hover:bg-gray-100 rounded-lg md:hidden"
             >
-              <LogOut size={22} />
+              <Menu size={28} />
             </button>
+            <h1 className="text-xl font-bold text-gray-800 tracking-tight">
+              Portal Alumno
+            </h1>
           </div>
-          {/* --- FIN REEMPLAZO --- */}
+
+          {/* Badge Ciclo Escolar */}
+          <div className="hidden md:flex items-center gap-2 bg-[#bb9a5a]/10 px-3 py-1.5 rounded-full border border-[#bb9a5a]/20">
+            <Calendar size={14} className="text-[#bb9a5a]" />
+            <span className="text-xs font-bold text-[#bb9a5a] uppercase tracking-wide">
+              Ciclo: {cicloActual}
+            </span>
+          </div>
+
+          {/* Usuario y Perfil */}
+          <div className="flex items-center gap-4">
+            <div className="text-gray-500 hover:text-[#a72a34] transition-colors cursor-pointer relative">
+              <NotificationBell />
+            </div>
+
+            <div className="h-8 w-px bg-gray-200 mx-1 hidden sm:block"></div>
+
+            <Link
+              to="/alumno/mi-perfil" // Ruta específica del alumno
+              className="flex items-center gap-3 hover:bg-gray-50 p-1 pr-2 rounded-full transition-colors group cursor-pointer"
+            >
+              <div className="text-right hidden sm:block">
+                <p className="text-sm font-bold text-gray-800 group-hover:text-[#a72a34] transition-colors">
+                  {user?.nombre}
+                </p>
+                <p className="text-xs text-gray-500 capitalize">{user?.rol}</p>
+              </div>
+              <div className="w-10 h-10 rounded-full bg-gray-100 border border-gray-200 overflow-hidden group-hover:border-[#a72a34] transition-colors">
+                {user?.foto_perfil ? (
+                  <img
+                    src={`http://localhost:3001/uploads/perfiles/${user.foto_perfil}`}
+                    className="w-full h-full object-cover"
+                    alt="Perfil"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-gray-400 font-bold text-lg bg-gray-100">
+                    {user?.nombre?.charAt(0)}
+                  </div>
+                )}
+              </div>
+            </Link>
+          </div>
         </header>
-        <div className="p-6">
+
+        {/* CONTENIDO (OUTLET) */}
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 pb-20 bg-gray-50">
           <Outlet />
         </div>
       </main>
