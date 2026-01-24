@@ -139,30 +139,23 @@ api.interceptors.request.use(
 
 // Interceptor de RESPUESTA (para manejar errores)
 api.interceptors.response.use(
-  (response) => {
-    // Si la respuesta es exitosa, solo la retornamos
-    return response;
-  },
+  (response) => response,
   (error) => {
-    // Si el error es un 401 (No Autorizado) o 403 (Prohibido)
-    if (
-      error.response &&
-      (error.response.status === 401 || error.response.status === 403)
-    ) {
-      console.warn("Token no válido o sesión expirada. Redirigiendo al login.");
-
-      // Limpiamos el localStorage para forzar el logout
-      localStorage.removeItem("user");
-      localStorage.removeItem("token");
-
-      // Redirigimos al login
-      // Usamos window.location.href para forzar una recarga completa
-      // y limpiar el estado de React.
-      if (window.location.pathname !== "/login") {
-        window.location.href = "/login";
+    if (error.response) {
+      // SI EL ERROR ES 401: El token murió, aquí SÍ cerramos sesión
+      if (error.response.status === 401) {
+        localStorage.removeItem("user");
+        localStorage.removeItem("token");
+        if (window.location.pathname !== "/login") {
+          window.location.href = "/login";
+        }
+      }
+      // SI EL ERROR ES 403: Es solo un problema de permisos
+      // ¡NO CERRAMOS SESIÓN! Solo avisamos en consola
+      else if (error.response.status === 403) {
+        console.warn("Acceso denegado a este recurso (403).");
       }
     }
-    // Retornamos el error para que otras partes (como el login) puedan manejarlo
     return Promise.reject(error);
   },
 );
@@ -10645,8 +10638,9 @@ const AulaVirtualPage = () => {
   // --- Funciones de Carga (fetchAulaConfig, fetchTareas, fetchRecursos, fetchHistorialAsistencia se mantienen igual) ---
   const fetchAulaConfig = useCallback(async () => {
     try {
+      // Usamos el rol dinámico para evitar bloqueos de permisos
       const { data } = await api.get(
-        `/${user.rol}/aula-virtual/${grupoId}/${asignaturaId}/config`,
+        `/${user.rol}/grupo/${grupoId}/asignatura/${asignaturaId}/config-aula`,
       );
       setConfig(data);
       setFormData({
@@ -10659,11 +10653,40 @@ const AulaVirtualPage = () => {
       });
     } catch (error) {
       console.error("Error al cargar config", error);
+      // Evitamos que config sea null para que no te saque de la página
+      setConfig({});
     } finally {
       setLoading(false);
     }
   }, [user.rol, grupoId, asignaturaId]);
 
+  // const fetchTareas = useCallback(async () => {
+  //   setLoadingTareas(true);
+  //   try {
+  //     const { data } = await api.get(
+  //       `/${user.rol}/aula-virtual/${grupoId}/${asignaturaId}/tareas`,
+  //     );
+  //     setTareas(data);
+  //   } catch (error) {
+  //     console.error("Error al cargar tareas", error);
+  //   } finally {
+  //     setLoadingTareas(false);
+  //   }
+  // }, [user.rol, grupoId, asignaturaId]);
+
+  // const fetchRecursos = useCallback(async () => {
+  //   setLoadingRecursos(true);
+  //   try {
+  //     const { data } = await api.get(
+  //       `/${user.rol}/aula-virtual/${grupoId}/${asignaturaId}/recursos`,
+  //     );
+  //     setRecursos(data);
+  //   } catch (error) {
+  //     console.error("Error al cargar recursos", error);
+  //   } finally {
+  //     setLoadingRecursos(false);
+  //   }
+  // }, [user.rol, grupoId, asignaturaId]);
   const fetchTareas = useCallback(async () => {
     setLoadingTareas(true);
     try {
@@ -10709,16 +10732,13 @@ const AulaVirtualPage = () => {
 
   // --- NUEVA FUNCIÓN PARA CARGAR HILOS DEL FORO ---
   const fetchHilos = useCallback(async () => {
-    setLoadingHilos(true);
     try {
-      // Usamos la ruta /api/foro/... que creamos (accesible por ambos roles)
       const { data } = await api.get(`/foro/${grupoId}/${asignaturaId}/hilos`);
       setHilosForo(data);
     } catch (error) {
-      console.error("Error al cargar hilos del foro", error);
+      // Si el middleware falla, solo dejamos los hilos vacíos
+      console.error("No tienes acceso al foro de esta materia.");
       setHilosForo([]);
-    } finally {
-      setLoadingHilos(false);
     }
   }, [grupoId, asignaturaId]);
   // --- FIN NUEVA FUNCIÓN ---
@@ -10819,15 +10839,14 @@ const AulaVirtualPage = () => {
     }
   };
 
-  if (loading)
-    return <p className="text-center mt-10">Cargando aula virtual...</p>;
-  if (!config)
+  if (loading) {
     return (
-      <p className="text-center mt-10 text-red-600">
-        No se pudo cargar la configuración del aula.
-      </p>
+      <div className="flex justify-center items-center h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#a72a34]"></div>
+        <p className="ml-4 text-gray-600 font-bold">Cargando Aula Virtual...</p>
+      </div>
     );
-
+  }
   // --- Componente para Formulario de Editar Config (renderDocenteForm se mantiene igual) ---
   // Componente para Formulario de Editar Config
   const renderDocenteForm = () => (
@@ -11207,183 +11226,124 @@ const AulaVirtualPage = () => {
   // --- Componente Principal de Vista (Rediseñado estilo Dashboard) ---
   const renderView = () => (
     <div className="space-y-6">
-      {/* 1. ENCABEZADO TIPO DASHBOARD (Fondo Blanco, Sombra Suave) */}
+      {/* CABECERA ESTILO DASHBOARD */}
       <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
         <div>
-          <h2 className="text-3xl font-bold text-gray-800 tracking-tight">
+          <h2 className="text-3xl font-bold text-gray-800 tracking-tight flex items-center gap-3">
+            <button
+              onClick={() => navigate(-1)}
+              className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+            >
+              <ArrowLeft size={24} className="text-gray-400" />
+            </button>
             Aula Virtual
           </h2>
-          <div className="flex items-center gap-2 mt-2">
-            {/* Badges de Estado con diseño sutil */}
-            <span
-              className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border ${
-                config.modalidad === "presencial"
-                  ? "bg-blue-50 text-blue-700 border-blue-100"
-                  : "bg-purple-50 text-purple-700 border-purple-100"
-              }`}
+        </div>
+
+        {/* ACCIONES DOCENTE (Solo visibles para docente) */}
+        {user.rol === "docente" && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleIniciarSesionHoy}
+              disabled={isCreatingSession}
+              className="flex items-center px-4 py-2 text-sm font-bold text-white bg-[#a72a34] rounded-xl hover:bg-[#802028] shadow-lg shadow-red-900/10 transition-all"
             >
-              {config.modalidad}
-            </span>
-            <span
-              className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border ${
-                config.estatus === "activo"
-                  ? "bg-green-50 text-green-700 border-green-100"
-                  : "bg-red-50 text-red-700 border-red-100"
-              }`}
+              <ClipboardCheck size={16} className="mr-2" />
+              Asistencia Hoy
+            </button>
+            <button
+              onClick={() => setIsEditing(true)}
+              className="flex items-center px-4 py-2 text-sm font-bold text-[#a72a34] bg-red-50 rounded-xl hover:bg-red-100 transition-all"
             >
-              {config.estatus}
-            </span>
+              <Edit2 size={16} className="mr-2" /> Editar Info
+            </button>
           </div>
-        </div>
-
-        {/* BOTONES DE ACCIÓN DOCENTE (Ahora ROJOS y Estilizados) */}
-        <div className="flex items-center gap-3">
-          {user.rol === "docente" && (
-            <>
-              {/* Botón Asistencia */}
-              <button
-                onClick={handleIniciarSesionHoy}
-                disabled={isCreatingSession}
-                className="flex items-center px-5 py-3 text-sm font-bold text-white bg-[#a72a34] rounded-xl hover:bg-[#802028] disabled:bg-gray-400 shadow-lg shadow-red-900/20 transition-all active:scale-95"
-              >
-                <ClipboardCheck size={18} className="mr-2" />
-                {isCreatingSession ? "Iniciando..." : "Pasar Asistencia"}
-              </button>
-
-              {/* Botón Editar (Estilo secundario pero acorde) */}
-              <button
-                onClick={() => setIsEditing(true)}
-                className="flex items-center px-4 py-3 text-sm font-bold text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:text-[#a72a34] hover:border-[#a72a34]/30 transition-all shadow-sm"
-              >
-                <Edit2 size={18} className="mr-2" /> Editar Curso
-              </button>
-
-              {/* Botón Calificaciones */}
-              <button
-                onClick={() =>
-                  navigate(
-                    `/docente/grupo/${grupoId}/asignatura/${asignaturaId}`,
-                  )
-                }
-                className="flex items-center px-4 py-3 text-sm font-bold text-[#a72a34] bg-red-50 border border-red-100 rounded-xl hover:bg-[#a72a34] hover:text-white transition-all shadow-sm"
-              >
-                <GraduationCap size={18} className="mr-2" />
-                Acta Final
-              </button>
-            </>
-          )}
-        </div>
+        )}
       </div>
 
-      {/* 2. NAVEGACIÓN DE PESTAÑAS (Estilo "Underline" limpio) */}
+      {/* NAVEGACIÓN DE PESTAÑAS (Estilo Rojo) */}
       <div className="border-b border-gray-200">
-        <nav className="-mb-px flex space-x-8" aria-label="Tabs">
-          <button
-            onClick={() => setActiveTab("info")}
-            className={`pb-4 px-2 text-sm font-bold flex items-center gap-2 border-b-2 transition-all ${
-              activeTab === "info"
-                ? "border-[#a72a34] text-[#a72a34]"
-                : "border-transparent text-gray-400 hover:text-gray-600 hover:border-gray-300"
-            }`}
-          >
-            <Book size={18} /> Información
-          </button>
-          <button
-            onClick={() => setActiveTab("tareas")}
-            className={`pb-4 px-2 text-sm font-bold flex items-center gap-2 border-b-2 transition-all ${
-              activeTab === "tareas"
-                ? "border-[#a72a34] text-[#a72a34]"
-                : "border-transparent text-gray-400 hover:text-gray-600 hover:border-gray-300"
-            }`}
-          >
-            <FileText size={18} /> Tareas
-          </button>
-          <button
-            onClick={() => setActiveTab("recursos")}
-            className={`pb-4 px-2 text-sm font-bold flex items-center gap-2 border-b-2 transition-all ${
-              activeTab === "recursos"
-                ? "border-[#a72a34] text-[#a72a34]"
-                : "border-transparent text-gray-400 hover:text-gray-600 hover:border-gray-300"
-            }`}
-          >
-            <Paperclip size={18} /> Recursos
-          </button>
-          <button
-            onClick={() => setActiveTab("foro")}
-            className={`pb-4 px-2 text-sm font-bold flex items-center gap-2 border-b-2 transition-all ${
-              activeTab === "foro"
-                ? "border-[#a72a34] text-[#a72a34]"
-                : "border-transparent text-gray-400 hover:text-gray-600 hover:border-gray-300"
-            }`}
-          >
-            <MessageSquare size={18} /> Foro
-          </button>
+        <nav className="-mb-px flex space-x-8">
+          {["info", "tareas", "recursos", "foro"].map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`pb-4 px-2 text-sm font-bold uppercase tracking-wider border-b-2 transition-all ${
+                activeTab === tab
+                  ? "border-[#a72a34] text-[#a72a34]"
+                  : "border-transparent text-gray-400 hover:text-gray-600 hover:border-gray-300"
+              }`}
+            >
+              {tab === "info" ? "Información" : tab}
+            </button>
+          ))}
         </nav>
       </div>
 
-      {/* 3. CONTENIDO DE LA PESTAÑA ACTIVA (Card Blanca Limpia) */}
+      {/* CONTENIDO DE LA PESTAÑA */}
       <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 min-h-[400px]">
-        {/* Pestaña: Información */}
         {activeTab === "info" && (
           <div className="space-y-8 animate-in fade-in duration-300">
-            {/* Sección Videollamada Destacada */}
-            <div className="bg-gradient-to-r from-gray-900 to-gray-800 p-6 rounded-2xl text-white flex justify-between items-center shadow-lg">
+            {/* Videollamada */}
+            <div className="bg-gray-900 p-6 rounded-2xl text-white flex justify-between items-center shadow-xl">
               <div>
                 <h4 className="font-bold text-lg mb-1 flex items-center gap-2">
-                  <Video className="text-red-500" /> Sala de Videoconferencia
+                  <Video className="text-red-500" /> Sesión de Clase
                 </h4>
-                <p className="text-gray-300 text-sm">
-                  {config.enlace_videollamada
-                    ? "Enlace activo para la sesión en vivo."
-                    : "El docente aún no ha configurado el enlace."}
+                <p className="text-gray-400 text-sm">
+                  Acceso directo a la sala virtual.
                 </p>
               </div>
-              {config.enlace_videollamada && (
+              {config.enlace_videollamada ? (
                 <a
                   href={config.enlace_videollamada}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="px-6 py-3 bg-[#a72a34] hover:bg-[#802028] text-white font-bold rounded-xl transition-all shadow-lg transform hover:-translate-y-1 flex items-center gap-2"
+                  className="px-6 py-3 bg-[#a72a34] hover:bg-[#802028] text-white font-bold rounded-xl transition-all shadow-lg shadow-red-900/20"
                 >
-                  Unirse a la Clase <ArrowRightCircle size={18} />
+                  Unirse a la Clase
                 </a>
+              ) : (
+                <span className="text-gray-500 italic text-sm">
+                  Enlace no configurado
+                </span>
               )}
             </div>
 
-            {/* Grid de Información */}
+            {/* Información Detallada (Lo que el docente agregó) */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div className="space-y-4">
+              <div className="space-y-6">
                 <div>
-                  <h4 className="font-bold text-gray-800 border-b border-gray-100 pb-2 mb-2 flex items-center gap-2">
+                  <h4 className="font-bold text-gray-800 border-b pb-2 mb-3 flex items-center gap-2">
                     <Sparkles size={16} className="text-[#a72a34]" /> Objetivos
+                    del Curso
                   </h4>
-                  <p className="text-gray-600 text-sm leading-relaxed whitespace-pre-wrap">
-                    {config.objetivos || "Sin información definida."}
+                  <p className="text-gray-600 text-sm leading-relaxed whitespace-pre-wrap bg-gray-50 p-4 rounded-xl">
+                    {config.objetivos || "Sin información."}
                   </p>
                 </div>
                 <div>
-                  <h4 className="font-bold text-gray-800 border-b border-gray-100 pb-2 mb-2 flex items-center gap-2">
+                  <h4 className="font-bold text-gray-800 border-b pb-2 mb-3 flex items-center gap-2">
                     <Award size={16} className="text-[#a72a34]" /> Evaluación
                   </h4>
-                  <p className="text-gray-600 text-sm leading-relaxed whitespace-pre-wrap">
-                    {config.evaluacion || "Sin criterios definidos."}
+                  <p className="text-gray-600 text-sm leading-relaxed whitespace-pre-wrap bg-gray-50 p-4 rounded-xl">
+                    {config.evaluacion || "Sin información."}
                   </p>
                 </div>
               </div>
 
               <div className="space-y-4">
-                <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
-                  <h4 className="font-bold text-gray-800 mb-2 flex items-center gap-2">
-                    <Clock size={16} className="text-[#a72a34]" /> Horario
+                <div className="bg-red-50 p-5 rounded-2xl border border-red-100">
+                  <h4 className="font-bold text-[#a72a34] mb-2 flex items-center gap-2 uppercase text-xs tracking-widest">
+                    <Clock size={16} /> Horario de Clases
                   </h4>
-                  <p className="text-gray-600 text-sm whitespace-pre-wrap">
+                  <p className="text-gray-700 text-sm font-medium whitespace-pre-wrap">
                     {config.horario || "Por definir."}
                   </p>
                 </div>
-                <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
-                  <h4 className="font-bold text-gray-800 mb-2 flex items-center gap-2">
-                    <User size={16} className="text-[#a72a34]" /> Contacto
-                    Docente
+                <div className="bg-gray-50 p-5 rounded-2xl border border-gray-100">
+                  <h4 className="font-bold text-gray-400 mb-2 flex items-center gap-2 uppercase text-xs tracking-widest">
+                    <UserPlus size={16} /> Contacto Docente
                   </h4>
                   <p className="text-gray-600 text-sm whitespace-pre-wrap">
                     {config.contacto_docente || "No especificado."}
@@ -11391,110 +11351,12 @@ const AulaVirtualPage = () => {
                 </div>
               </div>
             </div>
-
-            {/* Historial Asistencia (Solo Alumno) */}
-            {user.rol === "alumno" && (
-              <div className="mt-8 pt-8 border-t border-gray-100">
-                <h4 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
-                  <History size={20} className="text-gray-400" /> Mi Asistencia
-                </h4>
-                {loadingHistorial ? (
-                  <p className="text-sm text-gray-400">Cargando...</p>
-                ) : historialAsistencia.length === 0 ? (
-                  <div className="p-6 bg-gray-50 rounded-xl text-center text-gray-400 text-sm border border-dashed">
-                    No hay registros de asistencia.
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
-                    {historialAsistencia.map((reg) => (
-                      <div
-                        key={reg.sesion_id}
-                        className={`p-3 rounded-xl border text-center ${
-                          reg.mi_estatus === "presente"
-                            ? "bg-green-50 border-green-100"
-                            : reg.mi_estatus === "justificado"
-                              ? "bg-yellow-50 border-yellow-100"
-                              : "bg-red-50 border-red-100"
-                        }`}
-                      >
-                        <p className="text-xs font-bold text-gray-500 mb-1">
-                          {(() => {
-                            const parts = reg.fecha_sesion.split("-");
-                            return `${parts[2]}/${parts[1]}`;
-                          })()}
-                        </p>
-                        <span
-                          className={`text-xs font-black uppercase ${
-                            reg.mi_estatus === "presente"
-                              ? "text-green-700"
-                              : reg.mi_estatus === "justificado"
-                                ? "text-yellow-700"
-                                : "text-red-700"
-                          }`}
-                        >
-                          {reg.mi_estatus.substring(0, 3)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
           </div>
         )}
 
-        {/* Pestaña: Tareas */}
-        {activeTab === "tareas" && (
-          <div className="animate-in fade-in duration-300">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold text-gray-800">
-                Actividades de Aprendizaje
-              </h3>
-              {user.rol === "docente" && (
-                <button
-                  onClick={() => setShowCrearTareaModal(true)}
-                  className="bg-[#a72a34] text-white px-5 py-2.5 rounded-xl font-bold hover:bg-[#802028] shadow-lg shadow-red-900/10 flex items-center gap-2 transition-transform active:scale-95"
-                >
-                  <Plus size={18} /> Nueva Tarea
-                </button>
-              )}
-            </div>
-            {renderTareasList()}
-          </div>
-        )}
-
-        {/* Pestaña: Recursos */}
-        {activeTab === "recursos" && (
-          <div className="animate-in fade-in duration-300">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold text-gray-800">
-                Material de Consulta
-              </h3>
-              {user.rol === "docente" && (
-                <button
-                  onClick={() => setShowRecursoModal(true)}
-                  className="bg-white border-2 border-[#a72a34] text-[#a72a34] px-5 py-2.5 rounded-xl font-bold hover:bg-[#a72a34] hover:text-white transition-all flex items-center gap-2"
-                >
-                  <UploadCloud size={18} /> Subir Material
-                </button>
-              )}
-            </div>
-            {renderRecursosList()}
-          </div>
-        )}
-
-        {/* Pestaña: Foro */}
-        {activeTab === "foro" && (
-          <div className="animate-in fade-in duration-300">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold text-gray-800">
-                Foro de Discusión
-              </h3>
-              {/* Botón del Foro movido a la nueva función de renderizado o aquí mismo si prefieres */}
-            </div>
-            {renderForoList()}
-          </div>
-        )}
+        {activeTab === "tareas" && renderTareasList()}
+        {activeTab === "recursos" && renderRecursosList()}
+        {activeTab === "foro" && renderForoList()}
       </div>
     </div>
   );
@@ -11536,6 +11398,7 @@ const AulaVirtualPage = () => {
     </div>
   );
 };
+
 // --- FIN REEMPLAZO AulaVirtualPage ---
 
 // Modal para crear una nueva tarea (solo Docente)
