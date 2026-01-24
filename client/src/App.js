@@ -787,110 +787,187 @@ const DocenteLayout = () => {
   );
 };
 
+// --- LAYOUT ALUMNO (COPIA EXACTA DE DOCENTE) ---
 const AlumnoLayout = () => {
   const { logout, user } = useAuth();
+  const location = useLocation();
+
+  // 1. Estados idénticos al Docente
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [cicloActual, setCicloActual] = useState("Cargando...");
+
+  // 2. Efecto para obtener el ciclo escolar
+  useEffect(() => {
+    api
+      .get("/ciclo-actual")
+      .then((res) => setCicloActual(res.data.nombre))
+      .catch(() => setCicloActual("Sin Asignar"));
+  }, []);
+
+  // 3. Menú de Navegación del Alumno (Tus opciones)
+  const navItems = [
+    { icon: Home, label: "Mi Grupo", path: "/alumno/dashboard" },
+    { icon: DollarSign, label: "Mis Pagos", path: "/alumno/mis-pagos" },
+    {
+      icon: ClipboardEdit,
+      label: "Solicitudes",
+      path: "/alumno/mis-solicitudes",
+    },
+    { icon: User, label: "Mi Perfil", path: "/alumno/mi-perfil" },
+  ];
+
   return (
-    <div className="flex h-screen bg-gray-100 font-sans">
-      <aside className="w-64 flex-shrink-0 bg-gray-800 text-white flex flex-col">
-        <div className="h-20 flex items-center justify-center border-b border-gray-700">
-          <svg
-            className="w-auto h-10 text-principal"
-            viewBox="0 0 24 24"
-            fill="currentColor"
+    <div className="flex h-screen bg-gray-50 font-sans overflow-hidden">
+      {/* --- SIDEBAR Y FONDO OSCURO PARA MÓVIL --- */}
+
+      {/* Sombra de fondo (Solo móvil) */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 md:hidden backdrop-blur-sm transition-opacity"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar Responsivo (IDÉNTICO A DOCENTE) */}
+      <aside
+        className={`
+        fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 flex flex-col 
+        transform transition-transform duration-300 ease-in-out shadow-xl md:shadow-none
+        ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0
+      `}
+      >
+        {/* HEADER DEL SIDEBAR */}
+        <div className="p-6 flex flex-col items-center justify-center border-b border-gray-100 relative">
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="absolute top-2 right-2 p-2 text-gray-400 hover:text-red-500 md:hidden"
           >
-            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5-10-5-10 5z" />
-          </svg>
+            <X size={24} />
+          </button>
+
+          <div className="w-24 h-24 mb-3 flex items-center justify-center">
+            <img
+              src={BRAND.logo}
+              alt="Logo"
+              className="w-full h-full object-contain"
+            />
+          </div>
+          <h2
+            className="font-bold text-lg text-center leading-tight"
+            style={{ color: BRAND.colors.primary }}
+          >
+            {BRAND.name}
+          </h2>
         </div>
-        <nav className="flex-1 px-4 py-6 space-y-2">
-          <Link
-            to="/alumno/dashboard"
-            className="flex items-center px-4 py-2 rounded-lg bg-principal text-white"
-          >
-            <Home className="w-5 h-5 mr-3" />
-            Mi Grupo
-          </Link>
-          {/* --- AÑADE ESTE NUEVO LINK --- */}
-          <Link
-            to="/alumno/mis-pagos"
-            className="flex items-center px-4 py-2 rounded-lg text-gray-300 hover:bg-gray-700 hover:text-white"
-          >
-            <DollarSign className="w-5 h-5 mr-3" />
-            Mis Pagos
-          </Link>
-          {/* --- FIN --- */}
-          {/* --- AÑADE ESTE NUEVO LINK --- */}
-          <Link
-            to="/alumno/mis-solicitudes"
-            className="flex items-center px-4 py-2 rounded-lg text-gray-300 hover:bg-gray-700 hover:text-white"
-            // className={`flex items-center ... ${location.pathname === '/alumno/mis-solicitudes' ? 'bg-principal text-white' : '...'}`}
-          >
-            <ClipboardEdit className="w-5 h-5 mr-3" />
-            Mis Solicitudes
-          </Link>
-          {/* --- FIN --- */}
+
+        {/* NAVEGACIÓN */}
+        <nav className="flex-1 px-3 py-6 space-y-1 overflow-y-auto">
+          {navItems.map((item) => {
+            // Lógica para detectar si el link está activo
+            const isActive = location.pathname.startsWith(item.path);
+            return (
+              <Link
+                key={item.label}
+                to={item.path}
+                onClick={() => setSidebarOpen(false)}
+                className={`flex items-center px-4 py-3 rounded-xl transition-all duration-200 font-medium text-sm
+                  ${isActive ? "text-white shadow-md shadow-red-900/10" : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"}`}
+                style={
+                  isActive ? { backgroundColor: BRAND.colors.primary } : {}
+                }
+              >
+                <item.icon
+                  className="w-5 h-5 mr-3"
+                  style={{ color: isActive ? "#fff" : BRAND.colors.secondary }}
+                />
+                {item.label}
+              </Link>
+            );
+          })}
         </nav>
-        <div className="px-4 py-4 border-t border-gray-700">
+
+        {/* FOOTER DEL SIDEBAR */}
+        <div className="px-4 py-4 border-t border-gray-100">
+          <div className="mb-3 px-3 py-2 bg-gray-50 rounded-lg border border-gray-100">
+            <p
+              className="text-[10px] font-bold uppercase"
+              style={{ color: BRAND.colors.secondary }}
+            >
+              Rol Actual
+            </p>
+            <p className="text-sm font-bold text-gray-700">Alumno</p>
+          </div>
           <button
             onClick={logout}
-            className="w-full flex items-center px-4 py-2 rounded-lg text-gray-300 hover:bg-principal hover:text-white transition-colors duration-200"
+            className="w-full flex items-center justify-center px-4 py-2 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 text-sm font-bold"
           >
-            <LogOut className="w-5 h-5 mr-3" />
-            Cerrar Sesión
+            <LogOut className="w-4 h-4 mr-2" /> Cerrar Sesión
           </button>
         </div>
       </aside>
-      <main className="flex-1 overflow-y-auto">
-        <header className="bg-white shadow-sm p-4 flex justify-between items-center">
-          <h1 className="text-2xl font-semibold text-gray-800">
-            Portal del Alumno
-          </h1>
-          {/* --- REEMPLAZA ESTE DIV --- */}
-          <div className="flex items-center space-x-4">
-            <NotificationBell />
-            {/* Link al Perfil con Foto */}
-            <Link
-              to={
-                user?.rol === "admin" ? "/mi-perfil" : `/${user?.rol}/mi-perfil`
-              }
-              className="flex items-center space-x-2 text-gray-600 hover:text-principal"
-            >
-              <img
-                // Construye la URL de la foto o usa placeholder
-                src={
-                  user?.foto_perfil
-                    ? `http://localhost:3001/uploads/perfiles/${user.foto_perfil}`
-                    : `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                        user?.nombre || "?",
-                      )}+${encodeURIComponent(
-                        user?.apellido_paterno || "?",
-                      )}&background=random&color=fff`
-                }
-                alt="Perfil"
-                className="w-8 h-8 rounded-full object-cover border border-gray-300"
-                // Fallback por si la imagen no carga
-                onError={(e) => {
-                  e.target.onerror = null;
-                  e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                    user?.nombre || "?",
-                  )}+${encodeURIComponent(
-                    user?.apellido_paterno || "?",
-                  )}&background=random&color=fff`;
-                }}
-              />
-              <span>{user?.nombre}</span>
-            </Link>
-            {/* Botón Logout */}
+
+      {/* --- CONTENIDO PRINCIPAL --- */}
+      <main className="flex-1 flex flex-col h-full relative overflow-hidden md:ml-64 transition-all duration-300">
+        {/* HEADER SUPERIOR (IDÉNTICO A DOCENTE) */}
+        <header className="bg-white sticky top-0 z-30 shadow-sm px-4 py-3 flex justify-between items-center h-16">
+          <div className="flex items-center gap-3">
+            {/* Botón menú móvil */}
             <button
-              onClick={logout}
-              className="text-gray-500 hover:text-principal"
-              title="Cerrar Sesión"
+              onClick={() => setSidebarOpen(true)}
+              className="p-2 -ml-2 text-gray-600 hover:bg-gray-100 rounded-lg md:hidden"
             >
-              <LogOut size={22} />
+              <Menu size={28} />
             </button>
+            <h1 className="text-xl font-bold text-gray-800 tracking-tight">
+              Portal Alumno
+            </h1>
           </div>
-          {/* --- FIN REEMPLAZO --- */}
+
+          {/* Badge del Ciclo Escolar */}
+          <div className="hidden md:flex items-center gap-2 bg-[#bb9a5a]/10 px-3 py-1.5 rounded-full border border-[#bb9a5a]/20">
+            <Calendar size={14} className="text-[#bb9a5a]" />
+            <span className="text-xs font-bold text-[#bb9a5a] uppercase tracking-wide">
+              Ciclo: {cicloActual}
+            </span>
+          </div>
+
+          {/* Área de Usuario y Notificaciones */}
+          <div className="flex items-center gap-4">
+            <div className="text-gray-500 hover:text-[#a72a34] transition-colors cursor-pointer relative">
+              <NotificationBell />
+            </div>
+
+            <div className="h-8 w-px bg-gray-200 mx-1 hidden sm:block"></div>
+
+            <Link
+              to="/alumno/mi-perfil"
+              className="flex items-center gap-3 hover:bg-gray-50 p-1 pr-2 rounded-full transition-colors group cursor-pointer"
+            >
+              <div className="text-right hidden sm:block">
+                <p className="text-sm font-bold text-gray-800 group-hover:text-[#a72a34] transition-colors">
+                  {user?.nombre}
+                </p>
+                <p className="text-xs text-gray-500 capitalize">{user?.rol}</p>
+              </div>
+              <div className="w-10 h-10 rounded-full bg-gray-100 border border-gray-200 overflow-hidden group-hover:border-[#a72a34] transition-colors">
+                {user?.foto_perfil ? (
+                  <img
+                    src={`http://localhost:3001/uploads/perfiles/${user.foto_perfil}`}
+                    className="w-full h-full object-cover"
+                    alt="Perfil"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-gray-400 font-bold text-lg bg-gray-100">
+                    {user?.nombre?.charAt(0)}
+                  </div>
+                )}
+              </div>
+            </Link>
+          </div>
         </header>
-        <div className="p-6">
+
+        {/* ÁREA DE CONTENIDO (Outlet) */}
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 pb-20 bg-gray-50">
           <Outlet />
         </div>
       </main>
@@ -10022,16 +10099,18 @@ const AdminCalificarPage = () => {
 };
 
 // --- REEMPLAZA EL COMPONENTE AlumnoDashboardPage CON ESTO ---
+// --- DASHBOARD ALUMNO (REDISEÑADO CON TARJETAS) ---
 const AlumnoDashboardPage = () => {
-  // 1. Cambiamos el estado para que sea un array
   const [misGrupos, setMisGrupos] = useState([]);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchMiGrupo = async () => {
       try {
         const { data } = await api.get("/alumno/mi-grupo");
-        setMisGrupos(data); // 2. Guardamos el array
+        // Aseguramos que sea un array para evitar errores
+        setMisGrupos(Array.isArray(data) ? data : [data]);
       } catch (error) {
         console.error("Error al cargar la información del grupo", error);
       } finally {
@@ -10041,64 +10120,120 @@ const AlumnoDashboardPage = () => {
     fetchMiGrupo();
   }, []);
 
-  if (loading) return <p>Cargando tu información...</p>;
-
-  // 3. Actualizamos la comprobación
-  if (!misGrupos || misGrupos.length === 0) {
-    return <p>Aún no estás inscrito en ningún grupo.</p>;
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#a72a34]"></div>
+      </div>
+    );
   }
 
-  // 4. Hacemos un map sobre el array misGrupos
-  return (
-    <div className="space-y-8">
-      {misGrupos.map((infoGrupo, index) => (
-        <div key={index}>
-          <h2 className="text-3xl font-bold text-gray-800 mb-2">
-            Grupo: {infoGrupo.grupo.nombre_grupo} ({infoGrupo.grupo.modalidad})
-          </h2>
-          <p className="text-lg text-secundario mb-6">
-            Ciclo Escolar: {infoGrupo.grupo.nombre_ciclo}
-          </p>
+  if (!misGrupos || misGrupos.length === 0) {
+    return (
+      <div className="text-center py-12 bg-white rounded-2xl border border-dashed border-gray-300">
+        <Book size={48} className="mx-auto text-gray-300 mb-4" />
+        <p className="text-gray-500 font-medium">
+          Aún no estás inscrito en ningún grupo.
+        </p>
+      </div>
+    );
+  }
 
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h3 className="text-xl font-bold mb-4">
-              Mis Asignaturas y Calificaciones
-            </h3>
-            <table className="w-full table-auto">
-              <thead className="text-left bg-gray-50">
-                <tr>
-                  <th className="px-4 py-2">Asignatura</th>
-                  <th className="px-4 py-2">Docente</th>
-                  <th className="px-4 py-2">Calificación</th>
-                </tr>
-              </thead>
-              <tbody>
-                {infoGrupo.asignaturas.map((asig) => (
-                  <tr key={asig.clave_asignatura} className="border-b">
-                    <td className="px-4 py-2">
-                      <Link
-                        to={`/alumno/grupo/${infoGrupo.grupo.id}/asignatura/${asig.asignatura_id}/aula`}
-                        className="font-semibold text-principal hover:underline"
-                      >
-                        {asig.nombre_asignatura}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-2">
-                      {asig.docente_nombre
-                        ? `${asig.docente_nombre} ${
-                            asig.docente_apellido || ""
-                          }`
-                        : "N/A"}
-                    </td>
-                    <td className="px-4 py-2 font-semibold">
-                      {asig.calificacion !== null
-                        ? asig.calificacion
-                        : "Sin calificar"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+  return (
+    <div className="space-y-12">
+      {misGrupos.map((infoGrupo, index) => (
+        <div
+          key={index}
+          className="animate-in fade-in slide-in-from-bottom-4 duration-500"
+        >
+          {/* Encabezado del Grupo */}
+          <div className="flex flex-col md:flex-row justify-between items-end mb-6 border-b border-gray-200 pb-4 gap-4">
+            <div>
+              <h2 className="text-3xl font-bold text-gray-800 tracking-tight">
+                {infoGrupo.grupo.nombre_grupo}
+              </h2>
+              <div className="flex items-center gap-3 mt-2">
+                <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-bold uppercase tracking-wide border border-gray-200">
+                  {infoGrupo.grupo.modalidad}
+                </span>
+                <span className="flex items-center gap-1 text-sm text-[#a72a34] font-semibold">
+                  <Calendar size={14} /> {infoGrupo.grupo.nombre_ciclo}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* GRID DE MATERIAS (Tarjetas idénticas al Docente) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {infoGrupo.asignaturas.map((asig) => {
+              // Determinar color según calificación
+              const tieneCalificacion = asig.calificacion !== null;
+              const aprobada =
+                tieneCalificacion && parseFloat(asig.calificacion) >= 70; // Ajusta este 70 a tu criterio
+
+              return (
+                <div
+                  key={asig.clave_asignatura}
+                  onClick={() =>
+                    navigate(
+                      `/alumno/grupo/${infoGrupo.grupo.id}/asignatura/${asig.asignatura_id}/aula`,
+                    )
+                  }
+                  className="group relative bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer overflow-hidden flex flex-col"
+                >
+                  {/* Decoración Superior (Barra Roja) */}
+                  <div className="absolute top-0 left-0 w-full h-1 bg-[#a72a34]"></div>
+
+                  <div className="p-6 flex-1 flex flex-col">
+                    {/* Icono y Badge de Calificación */}
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="p-3 bg-red-50 text-[#a72a34] rounded-xl group-hover:bg-[#a72a34] group-hover:text-white transition-colors shadow-sm">
+                        <Book size={24} />
+                      </div>
+
+                      {tieneCalificacion ? (
+                        <div className={`flex flex-col items-end`}>
+                          <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">
+                            Calificación
+                          </span>
+                          <span
+                            className={`text-lg font-black ${aprobada ? "text-green-600" : "text-red-600"}`}
+                          >
+                            {asig.calificacion}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-gray-100 text-gray-500 border border-gray-200">
+                          En Curso
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Título de la Materia */}
+                    <h3 className="text-xl font-bold text-gray-800 mb-2 group-hover:text-[#a72a34] transition-colors line-clamp-2">
+                      {asig.nombre_asignatura}
+                    </h3>
+
+                    {/* Docente */}
+                    <div className="mt-auto pt-4 border-t border-gray-50">
+                      <p className="text-sm text-gray-500 mb-1">Docente:</p>
+                      <p className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                        <Users size={16} className="text-gray-400" />
+                        {asig.docente_nombre
+                          ? `${asig.docente_nombre} ${asig.docente_apellido || ""}`
+                          : "Por asignar"}
+                      </p>
+                    </div>
+
+                    {/* Botón Flotante Hover */}
+                    <div className="mt-4 flex items-center justify-end text-[#a72a34] font-bold text-sm opacity-0 group-hover:opacity-100 transform translate-x-4 group-hover:translate-x-0 transition-all duration-300">
+                      Entrar al Aula{" "}
+                      <ArrowRightCircle size={16} className="ml-1" />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       ))}
