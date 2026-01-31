@@ -81,10 +81,6 @@ import {
   BookOpen,
   AlertCircle,
 } from "lucide-react";
-import FullCalendar from "@fullcalendar/react";
-import dayGridPlugin from "@fullcalendar/daygrid";
-import interactionPlugin from "@fullcalendar/interaction";
-import esLocale from "@fullcalendar/core/locales/es";
 import { Bar, Pie } from "react-chartjs-2";
 import {
   Chart as ChartJS,
@@ -143,30 +139,23 @@ api.interceptors.request.use(
 
 // Interceptor de RESPUESTA (para manejar errores)
 api.interceptors.response.use(
-  (response) => {
-    // Si la respuesta es exitosa, solo la retornamos
-    return response;
-  },
+  (response) => response,
   (error) => {
-    // Si el error es un 401 (No Autorizado) o 403 (Prohibido)
-    if (
-      error.response &&
-      (error.response.status === 401 || error.response.status === 403)
-    ) {
-      console.warn("Token no válido o sesión expirada. Redirigiendo al login.");
-
-      // Limpiamos el localStorage para forzar el logout
-      localStorage.removeItem("user");
-      localStorage.removeItem("token");
-
-      // Redirigimos al login
-      // Usamos window.location.href para forzar una recarga completa
-      // y limpiar el estado de React.
-      if (window.location.pathname !== "/login") {
-        window.location.href = "/login";
+    if (error.response) {
+      // SI EL ERROR ES 401: El token murió, aquí SÍ cerramos sesión
+      if (error.response.status === 401) {
+        localStorage.removeItem("user");
+        localStorage.removeItem("token");
+        if (window.location.pathname !== "/login") {
+          window.location.href = "/login";
+        }
+      }
+      // SI EL ERROR ES 403: Es solo un problema de permisos
+      // ¡NO CERRAMOS SESIÓN! Solo avisamos en consola
+      else if (error.response.status === 403) {
+        console.warn("Acceso denegado a este recurso (403).");
       }
     }
-    // Retornamos el error para que otras partes (como el login) puedan manejarlo
     return Promise.reject(error);
   },
 );
@@ -174,152 +163,6 @@ api.interceptors.response.use(
 
 // --- CONTEXTO DE AUTENTICACIÓN ---
 const AuthContext = createContext(null);
-
-// --- COMPONENTE CALENDARIO ADMIN ---
-const CalendarioAdmin = () => {
-  const [eventos, setEventos] = useState([]);
-
-  useEffect(() => {
-    cargarEventos();
-  }, []);
-
-  const cargarEventos = async () => {
-    try {
-      const res = await api.get("/eventos-admin");
-      // Asignar colores
-      const eventosConColor = res.data.map((e) => ({
-        ...e,
-        color:
-          e.modalidad === "virtual"
-            ? "#3b82f6"
-            : e.modalidad === "presencial"
-              ? "#10b981"
-              : "#a72a34",
-      }));
-      setEventos(eventosConColor);
-    } catch (error) {
-      console.error("Error cargando calendario");
-    }
-  };
-
-  const handleDateClick = async (arg) => {
-    const titulo = prompt("📅 Nuevo Evento:\nIngresa el título:");
-    if (!titulo) return;
-
-    const tipo = prompt(
-      "Tipo de evento (Escribe el número):\n1. General (Rojo)\n2. Virtual (Azul)\n3. Presencial (Verde)",
-      "1",
-    );
-    let mod = "general";
-    if (tipo === "2") mod = "virtual";
-    if (tipo === "3") mod = "presencial";
-
-    try {
-      await api.post("/eventos-admin", {
-        title: titulo,
-        start: arg.dateStr,
-        modalidad: mod,
-      });
-      cargarEventos();
-      alert("Evento guardado ✅");
-    } catch (error) {
-      alert("Error al guardar ❌");
-    }
-  };
-
-  const handleEventClick = async (info) => {
-    if (window.confirm(`¿Eliminar "${info.event.title}"?`)) {
-      try {
-        await api.delete(
-          `/eventos-admin/${info.event.extendedProps.id || info.event.id}`,
-        );
-        info.event.remove();
-      } catch (error) {
-        alert("Error al eliminar");
-      }
-    }
-  };
-
-  return (
-    <div className="p-6 bg-white rounded-xl shadow-lg m-4">
-      <h2 className="text-2xl font-bold mb-4 flex items-center gap-2 text-gray-800">
-        <Calendar className="text-[#a72a34]" /> Gestión de Calendario (Admin)
-      </h2>
-      <FullCalendar
-        plugins={[dayGridPlugin, interactionPlugin]}
-        initialView="dayGridMonth"
-        locale={esLocale}
-        events={eventos}
-        dateClick={handleDateClick}
-        eventClick={handleEventClick}
-        height="auto"
-      />
-    </div>
-  );
-};
-
-// --- COMPONENTE CALENDARIO ALUMNO (SOLO LECTURA) ---
-const CalendarioAlumno = () => {
-  const [eventos, setEventos] = useState([]);
-
-  useEffect(() => {
-    cargarEventos();
-  }, []);
-
-  const cargarEventos = async () => {
-    try {
-      // Usamos la ruta nueva de alumno
-      const res = await api.get("/eventos-alumno");
-
-      const eventosConColor = res.data.map((e) => ({
-        ...e,
-        color:
-          e.modalidad === "virtual"
-            ? "#3b82f6"
-            : e.modalidad === "presencial"
-              ? "#10b981"
-              : "#a72a34",
-      }));
-      setEventos(eventosConColor);
-    } catch (error) {
-      console.error("Error cargando mi calendario");
-    }
-  };
-
-  const handleEventClick = (info) => {
-    // Solo mostramos información, no dejamos borrar
-    alert(
-      `📅 Clase/Evento: ${info.event.title}\nModalidad: ${info.event.extendedProps.modalidad}`,
-    );
-  };
-
-  return (
-    <div className="p-6 bg-white rounded-xl shadow-lg m-4">
-      <h2 className="text-2xl font-bold mb-4 flex items-center gap-2 text-gray-800">
-        <Calendar className="text-blue-600" /> Mi Calendario Escolar
-      </h2>
-      <div className="mb-4 flex gap-3 text-xs">
-        <span className="px-2 py-1 bg-[#a72a34] text-white rounded">
-          General
-        </span>
-        <span className="px-2 py-1 bg-blue-500 text-white rounded">
-          Virtual
-        </span>
-        <span className="px-2 py-1 bg-green-500 text-white rounded">
-          Presencial
-        </span>
-      </div>
-      <FullCalendar
-        plugins={[dayGridPlugin, interactionPlugin]}
-        initialView="dayGridMonth"
-        locale={esLocale}
-        events={eventos}
-        eventClick={handleEventClick} // Solo ver info
-        height="auto"
-      />
-    </div>
-  );
-};
 
 const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -565,8 +408,8 @@ const ProtectedRoute = ({ allowedRoles }) => {
 
 // --- ADMIN LAYOUT RESPONSIVE (CELULAR + PC) ---
 const AdminLayout = () => {
-  const location = useLocation();
   const { logout, user } = useAuth();
+  const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false); // Estado para menú móvil
   const [cicloActual, setCicloActual] = useState("Cargando...");
   useEffect(() => {
@@ -580,7 +423,6 @@ const AdminLayout = () => {
     // ANTES: path: "/admin/dashboard"  --> AHORA: path: "/dashboard"
     { icon: Home, label: "Dashboard", path: "/dashboard" },
     { icon: Users, label: "Usuarios", path: "/usuarios" },
-    { icon: Calendar, label: "Calendario", path: "/admin/calendario" },
     { icon: Calendar, label: "Ciclos Escolares", path: "/ciclos" },
     { icon: FileText, label: "Planes de Estudio", path: "/planes-estudio" },
     { icon: TrendingUp, label: "Grados", path: "/grados" },
@@ -758,8 +600,8 @@ const AdminLayout = () => {
 };
 
 const DocenteLayout = () => {
-  const location = useLocation();
   const { logout, user } = useAuth();
+  const location = useLocation();
 
   // 1. Estados necesarios para el diseño nuevo (Menú móvil y Ciclo)
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -938,14 +780,16 @@ const DocenteLayout = () => {
   );
 };
 
-// --- LAYOUT ALUMNO (COPIA EXACTA DEL ADMIN) ---
+// --- LAYOUT ALUMNO (COPIA EXACTA DE DOCENTE) ---
 const AlumnoLayout = () => {
-  const location = useLocation();
   const { logout, user } = useAuth();
+  const location = useLocation();
+
+  // 1. Estados idénticos al Docente
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [cicloActual, setCicloActual] = useState("Cargando...");
 
-  // Cargar Ciclo Escolar (Igual que en Admin para el Header)
+  // 2. Efecto para obtener el ciclo escolar
   useEffect(() => {
     api
       .get("/ciclo-actual")
@@ -953,18 +797,23 @@ const AlumnoLayout = () => {
       .catch(() => setCicloActual("Sin Asignar"));
   }, []);
 
-  // MENÚ DEL ALUMNO
+  // 3. Menú de Navegación del Alumno (Tus opciones)
   const navItems = [
-    { icon: Home, label: "Inicio", path: "/alumno/dashboard" },
+    { icon: Home, label: "Mi Grupo", path: "/alumno/dashboard" },
     { icon: DollarSign, label: "Mis Pagos", path: "/alumno/mis-pagos" },
-    { icon: ClipboardEdit, label: "Trámites", path: "/alumno/mis-solicitudes" },
-    { icon: Calendar, label: "Calendario", path: "/alumno/calendario" },
+    {
+      icon: ClipboardEdit,
+      label: "Solicitudes",
+      path: "/alumno/mis-solicitudes",
+    },
     { icon: User, label: "Mi Perfil", path: "/alumno/mi-perfil" },
   ];
 
   return (
     <div className="flex h-screen bg-gray-50 font-sans overflow-hidden">
-      {/* 1. SOMBRA DE FONDO (Solo visible en móvil al abrir menú) */}
+      {/* --- SIDEBAR Y FONDO OSCURO PARA MÓVIL --- */}
+
+      {/* Sombra de fondo (Solo móvil) */}
       {sidebarOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-40 md:hidden backdrop-blur-sm transition-opacity"
@@ -972,7 +821,7 @@ const AlumnoLayout = () => {
         />
       )}
 
-      {/* 2. SIDEBAR RESPONSIVE */}
+      {/* Sidebar Responsivo (IDÉNTICO A DOCENTE) */}
       <aside
         className={`
         fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 flex flex-col 
@@ -1007,6 +856,7 @@ const AlumnoLayout = () => {
         {/* NAVEGACIÓN */}
         <nav className="flex-1 px-3 py-6 space-y-1 overflow-y-auto">
           {navItems.map((item) => {
+            // Lógica para detectar si el link está activo
             const isActive = location.pathname.startsWith(item.path);
             return (
               <Link
@@ -1049,11 +899,12 @@ const AlumnoLayout = () => {
         </div>
       </aside>
 
-      {/* 3. CONTENIDO PRINCIPAL */}
+      {/* --- CONTENIDO PRINCIPAL --- */}
       <main className="flex-1 flex flex-col h-full relative overflow-hidden md:ml-64 transition-all duration-300">
-        {/* HEADER SUPERIOR */}
+        {/* HEADER SUPERIOR (IDÉNTICO A DOCENTE) */}
         <header className="bg-white sticky top-0 z-30 shadow-sm px-4 py-3 flex justify-between items-center h-16">
           <div className="flex items-center gap-3">
+            {/* Botón menú móvil */}
             <button
               onClick={() => setSidebarOpen(true)}
               className="p-2 -ml-2 text-gray-600 hover:bg-gray-100 rounded-lg md:hidden"
@@ -1061,10 +912,11 @@ const AlumnoLayout = () => {
               <Menu size={28} />
             </button>
             <h1 className="text-xl font-bold text-gray-800 tracking-tight">
-              Portal del Alumno
+              Portal Alumno
             </h1>
           </div>
 
+          {/* Badge del Ciclo Escolar */}
           <div className="hidden md:flex items-center gap-2 bg-[#bb9a5a]/10 px-3 py-1.5 rounded-full border border-[#bb9a5a]/20">
             <Calendar size={14} className="text-[#bb9a5a]" />
             <span className="text-xs font-bold text-[#bb9a5a] uppercase tracking-wide">
@@ -1072,15 +924,14 @@ const AlumnoLayout = () => {
             </span>
           </div>
 
+          {/* Área de Usuario y Notificaciones */}
           <div className="flex items-center gap-4">
-            {/* Notificaciones (Si tienes el componente NotificationBell, si no, puedes quitarlo) */}
             <div className="text-gray-500 hover:text-[#a72a34] transition-colors cursor-pointer relative">
               <NotificationBell />
             </div>
 
             <div className="h-8 w-px bg-gray-200 mx-1 hidden sm:block"></div>
 
-            {/* PERFIL USUARIO */}
             <Link
               to="/alumno/mi-perfil"
               className="flex items-center gap-3 hover:bg-gray-50 p-1 pr-2 rounded-full transition-colors group cursor-pointer"
@@ -1108,7 +959,7 @@ const AlumnoLayout = () => {
           </div>
         </header>
 
-        {/* ÁREA DE CONTENIDO */}
+        {/* ÁREA DE CONTENIDO (Outlet) */}
         <div className="flex-1 overflow-y-auto p-4 md:p-8 pb-20 bg-gray-50">
           <Outlet />
         </div>
@@ -8643,7 +8494,6 @@ const DetalleFinancieroAlumnoPage = () => {
 
 // --- INICIA NUEVO COMPONENTE: MisPagosPage (Alumno) ---
 // --- COMPONENTE FINANZAS ALUMNO (DASHBOARD ROJO) ---
-// --- COMPONENTE MIS PAGOS (TU DISEÑO) ---
 const MisPagosPage = () => {
   const [movimientos, setMovimientos] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -8700,7 +8550,7 @@ const MisPagosPage = () => {
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-300 max-w-7xl mx-auto p-6">
+    <div className="space-y-8 animate-in fade-in duration-300 max-w-7xl mx-auto">
       {/* HEADER */}
       <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-center gap-6">
         <div>
@@ -10242,16 +10092,18 @@ const AdminCalificarPage = () => {
 };
 
 // --- REEMPLAZA EL COMPONENTE AlumnoDashboardPage CON ESTO ---
+// --- DASHBOARD ALUMNO (REDISEÑADO CON TARJETAS) ---
 const AlumnoDashboardPage = () => {
-  // 1. Cambiamos el estado para que sea un array
   const [misGrupos, setMisGrupos] = useState([]);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchMiGrupo = async () => {
       try {
         const { data } = await api.get("/alumno/mi-grupo");
-        setMisGrupos(data); // 2. Guardamos el array
+        // Aseguramos que sea un array para evitar errores
+        setMisGrupos(Array.isArray(data) ? data : [data]);
       } catch (error) {
         console.error("Error al cargar la información del grupo", error);
       } finally {
@@ -10261,64 +10113,120 @@ const AlumnoDashboardPage = () => {
     fetchMiGrupo();
   }, []);
 
-  if (loading) return <p>Cargando tu información...</p>;
-
-  // 3. Actualizamos la comprobación
-  if (!misGrupos || misGrupos.length === 0) {
-    return <p>Aún no estás inscrito en ningún grupo.</p>;
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#a72a34]"></div>
+      </div>
+    );
   }
 
-  // 4. Hacemos un map sobre el array misGrupos
-  return (
-    <div className="space-y-8">
-      {misGrupos.map((infoGrupo, index) => (
-        <div key={index}>
-          <h2 className="text-3xl font-bold text-gray-800 mb-2">
-            Grupo: {infoGrupo.grupo.nombre_grupo} ({infoGrupo.grupo.modalidad})
-          </h2>
-          <p className="text-lg text-secundario mb-6">
-            Ciclo Escolar: {infoGrupo.grupo.nombre_ciclo}
-          </p>
+  if (!misGrupos || misGrupos.length === 0) {
+    return (
+      <div className="text-center py-12 bg-white rounded-2xl border border-dashed border-gray-300">
+        <Book size={48} className="mx-auto text-gray-300 mb-4" />
+        <p className="text-gray-500 font-medium">
+          Aún no estás inscrito en ningún grupo.
+        </p>
+      </div>
+    );
+  }
 
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h3 className="text-xl font-bold mb-4">
-              Mis Asignaturas y Calificaciones
-            </h3>
-            <table className="w-full table-auto">
-              <thead className="text-left bg-gray-50">
-                <tr>
-                  <th className="px-4 py-2">Asignatura</th>
-                  <th className="px-4 py-2">Docente</th>
-                  <th className="px-4 py-2">Calificación</th>
-                </tr>
-              </thead>
-              <tbody>
-                {infoGrupo.asignaturas.map((asig) => (
-                  <tr key={asig.clave_asignatura} className="border-b">
-                    <td className="px-4 py-2">
-                      <Link
-                        to={`/alumno/grupo/${infoGrupo.grupo.id}/asignatura/${asig.asignatura_id}/aula`}
-                        className="font-semibold text-principal hover:underline"
-                      >
-                        {asig.nombre_asignatura}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-2">
-                      {asig.docente_nombre
-                        ? `${asig.docente_nombre} ${
-                            asig.docente_apellido || ""
-                          }`
-                        : "N/A"}
-                    </td>
-                    <td className="px-4 py-2 font-semibold">
-                      {asig.calificacion !== null
-                        ? asig.calificacion
-                        : "Sin calificar"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+  return (
+    <div className="space-y-12">
+      {misGrupos.map((infoGrupo, index) => (
+        <div
+          key={index}
+          className="animate-in fade-in slide-in-from-bottom-4 duration-500"
+        >
+          {/* Encabezado del Grupo */}
+          <div className="flex flex-col md:flex-row justify-between items-end mb-6 border-b border-gray-200 pb-4 gap-4">
+            <div>
+              <h2 className="text-3xl font-bold text-gray-800 tracking-tight">
+                {infoGrupo.grupo.nombre_grupo}
+              </h2>
+              <div className="flex items-center gap-3 mt-2">
+                <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-bold uppercase tracking-wide border border-gray-200">
+                  {infoGrupo.grupo.modalidad}
+                </span>
+                <span className="flex items-center gap-1 text-sm text-[#a72a34] font-semibold">
+                  <Calendar size={14} /> {infoGrupo.grupo.nombre_ciclo}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* GRID DE MATERIAS (Tarjetas idénticas al Docente) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {infoGrupo.asignaturas.map((asig) => {
+              // Determinar color según calificación
+              const tieneCalificacion = asig.calificacion !== null;
+              const aprobada =
+                tieneCalificacion && parseFloat(asig.calificacion) >= 70; // Ajusta este 70 a tu criterio
+
+              return (
+                <div
+                  key={asig.clave_asignatura}
+                  onClick={() =>
+                    navigate(
+                      `/alumno/grupo/${infoGrupo.grupo.id}/asignatura/${asig.asignatura_id}/aula`,
+                    )
+                  }
+                  className="group relative bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer overflow-hidden flex flex-col"
+                >
+                  {/* Decoración Superior (Barra Roja) */}
+                  <div className="absolute top-0 left-0 w-full h-1 bg-[#a72a34]"></div>
+
+                  <div className="p-6 flex-1 flex flex-col">
+                    {/* Icono y Badge de Calificación */}
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="p-3 bg-red-50 text-[#a72a34] rounded-xl group-hover:bg-[#a72a34] group-hover:text-white transition-colors shadow-sm">
+                        <Book size={24} />
+                      </div>
+
+                      {tieneCalificacion ? (
+                        <div className={`flex flex-col items-end`}>
+                          <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">
+                            Calificación
+                          </span>
+                          <span
+                            className={`text-lg font-black ${aprobada ? "text-green-600" : "text-red-600"}`}
+                          >
+                            {asig.calificacion}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-gray-100 text-gray-500 border border-gray-200">
+                          En Curso
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Título de la Materia */}
+                    <h3 className="text-xl font-bold text-gray-800 mb-2 group-hover:text-[#a72a34] transition-colors line-clamp-2">
+                      {asig.nombre_asignatura}
+                    </h3>
+
+                    {/* Docente */}
+                    <div className="mt-auto pt-4 border-t border-gray-50">
+                      <p className="text-sm text-gray-500 mb-1">Docente:</p>
+                      <p className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                        <Users size={16} className="text-gray-400" />
+                        {asig.docente_nombre
+                          ? `${asig.docente_nombre} ${asig.docente_apellido || ""}`
+                          : "Por asignar"}
+                      </p>
+                    </div>
+
+                    {/* Botón Flotante Hover */}
+                    <div className="mt-4 flex items-center justify-end text-[#a72a34] font-bold text-sm opacity-0 group-hover:opacity-100 transform translate-x-4 group-hover:translate-x-0 transition-all duration-300">
+                      Entrar al Aula{" "}
+                      <ArrowRightCircle size={16} className="ml-1" />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       ))}
@@ -10730,8 +10638,9 @@ const AulaVirtualPage = () => {
   // --- Funciones de Carga (fetchAulaConfig, fetchTareas, fetchRecursos, fetchHistorialAsistencia se mantienen igual) ---
   const fetchAulaConfig = useCallback(async () => {
     try {
+      // Usamos el rol dinámico para evitar bloqueos de permisos
       const { data } = await api.get(
-        `/${user.rol}/aula-virtual/${grupoId}/${asignaturaId}/config`,
+        `/${user.rol}/grupo/${grupoId}/asignatura/${asignaturaId}/config-aula`,
       );
       setConfig(data);
       setFormData({
@@ -10744,11 +10653,40 @@ const AulaVirtualPage = () => {
       });
     } catch (error) {
       console.error("Error al cargar config", error);
+      // Evitamos que config sea null para que no te saque de la página
+      setConfig({});
     } finally {
       setLoading(false);
     }
   }, [user.rol, grupoId, asignaturaId]);
 
+  // const fetchTareas = useCallback(async () => {
+  //   setLoadingTareas(true);
+  //   try {
+  //     const { data } = await api.get(
+  //       `/${user.rol}/aula-virtual/${grupoId}/${asignaturaId}/tareas`,
+  //     );
+  //     setTareas(data);
+  //   } catch (error) {
+  //     console.error("Error al cargar tareas", error);
+  //   } finally {
+  //     setLoadingTareas(false);
+  //   }
+  // }, [user.rol, grupoId, asignaturaId]);
+
+  // const fetchRecursos = useCallback(async () => {
+  //   setLoadingRecursos(true);
+  //   try {
+  //     const { data } = await api.get(
+  //       `/${user.rol}/aula-virtual/${grupoId}/${asignaturaId}/recursos`,
+  //     );
+  //     setRecursos(data);
+  //   } catch (error) {
+  //     console.error("Error al cargar recursos", error);
+  //   } finally {
+  //     setLoadingRecursos(false);
+  //   }
+  // }, [user.rol, grupoId, asignaturaId]);
   const fetchTareas = useCallback(async () => {
     setLoadingTareas(true);
     try {
@@ -10794,16 +10732,13 @@ const AulaVirtualPage = () => {
 
   // --- NUEVA FUNCIÓN PARA CARGAR HILOS DEL FORO ---
   const fetchHilos = useCallback(async () => {
-    setLoadingHilos(true);
     try {
-      // Usamos la ruta /api/foro/... que creamos (accesible por ambos roles)
       const { data } = await api.get(`/foro/${grupoId}/${asignaturaId}/hilos`);
       setHilosForo(data);
     } catch (error) {
-      console.error("Error al cargar hilos del foro", error);
+      // Si el middleware falla, solo dejamos los hilos vacíos
+      console.error("No tienes acceso al foro de esta materia.");
       setHilosForo([]);
-    } finally {
-      setLoadingHilos(false);
     }
   }, [grupoId, asignaturaId]);
   // --- FIN NUEVA FUNCIÓN ---
@@ -10904,15 +10839,14 @@ const AulaVirtualPage = () => {
     }
   };
 
-  if (loading)
-    return <p className="text-center mt-10">Cargando aula virtual...</p>;
-  if (!config)
+  if (loading) {
     return (
-      <p className="text-center mt-10 text-red-600">
-        No se pudo cargar la configuración del aula.
-      </p>
+      <div className="flex justify-center items-center h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#a72a34]"></div>
+        <p className="ml-4 text-gray-600 font-bold">Cargando Aula Virtual...</p>
+      </div>
     );
-
+  }
   // --- Componente para Formulario de Editar Config (renderDocenteForm se mantiene igual) ---
   // Componente para Formulario de Editar Config
   const renderDocenteForm = () => (
@@ -11292,183 +11226,124 @@ const AulaVirtualPage = () => {
   // --- Componente Principal de Vista (Rediseñado estilo Dashboard) ---
   const renderView = () => (
     <div className="space-y-6">
-      {/* 1. ENCABEZADO TIPO DASHBOARD (Fondo Blanco, Sombra Suave) */}
+      {/* CABECERA ESTILO DASHBOARD */}
       <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
         <div>
-          <h2 className="text-3xl font-bold text-gray-800 tracking-tight">
+          <h2 className="text-3xl font-bold text-gray-800 tracking-tight flex items-center gap-3">
+            <button
+              onClick={() => navigate(-1)}
+              className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+            >
+              <ArrowLeft size={24} className="text-gray-400" />
+            </button>
             Aula Virtual
           </h2>
-          <div className="flex items-center gap-2 mt-2">
-            {/* Badges de Estado con diseño sutil */}
-            <span
-              className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border ${
-                config.modalidad === "presencial"
-                  ? "bg-blue-50 text-blue-700 border-blue-100"
-                  : "bg-purple-50 text-purple-700 border-purple-100"
-              }`}
+        </div>
+
+        {/* ACCIONES DOCENTE (Solo visibles para docente) */}
+        {user.rol === "docente" && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleIniciarSesionHoy}
+              disabled={isCreatingSession}
+              className="flex items-center px-4 py-2 text-sm font-bold text-white bg-[#a72a34] rounded-xl hover:bg-[#802028] shadow-lg shadow-red-900/10 transition-all"
             >
-              {config.modalidad}
-            </span>
-            <span
-              className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border ${
-                config.estatus === "activo"
-                  ? "bg-green-50 text-green-700 border-green-100"
-                  : "bg-red-50 text-red-700 border-red-100"
-              }`}
+              <ClipboardCheck size={16} className="mr-2" />
+              Asistencia Hoy
+            </button>
+            <button
+              onClick={() => setIsEditing(true)}
+              className="flex items-center px-4 py-2 text-sm font-bold text-[#a72a34] bg-red-50 rounded-xl hover:bg-red-100 transition-all"
             >
-              {config.estatus}
-            </span>
+              <Edit2 size={16} className="mr-2" /> Editar Info
+            </button>
           </div>
-        </div>
-
-        {/* BOTONES DE ACCIÓN DOCENTE (Ahora ROJOS y Estilizados) */}
-        <div className="flex items-center gap-3">
-          {user.rol === "docente" && (
-            <>
-              {/* Botón Asistencia */}
-              <button
-                onClick={handleIniciarSesionHoy}
-                disabled={isCreatingSession}
-                className="flex items-center px-5 py-3 text-sm font-bold text-white bg-[#a72a34] rounded-xl hover:bg-[#802028] disabled:bg-gray-400 shadow-lg shadow-red-900/20 transition-all active:scale-95"
-              >
-                <ClipboardCheck size={18} className="mr-2" />
-                {isCreatingSession ? "Iniciando..." : "Pasar Asistencia"}
-              </button>
-
-              {/* Botón Editar (Estilo secundario pero acorde) */}
-              <button
-                onClick={() => setIsEditing(true)}
-                className="flex items-center px-4 py-3 text-sm font-bold text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:text-[#a72a34] hover:border-[#a72a34]/30 transition-all shadow-sm"
-              >
-                <Edit2 size={18} className="mr-2" /> Editar Curso
-              </button>
-
-              {/* Botón Calificaciones */}
-              <button
-                onClick={() =>
-                  navigate(
-                    `/docente/grupo/${grupoId}/asignatura/${asignaturaId}`,
-                  )
-                }
-                className="flex items-center px-4 py-3 text-sm font-bold text-[#a72a34] bg-red-50 border border-red-100 rounded-xl hover:bg-[#a72a34] hover:text-white transition-all shadow-sm"
-              >
-                <GraduationCap size={18} className="mr-2" />
-                Acta Final
-              </button>
-            </>
-          )}
-        </div>
+        )}
       </div>
 
-      {/* 2. NAVEGACIÓN DE PESTAÑAS (Estilo "Underline" limpio) */}
+      {/* NAVEGACIÓN DE PESTAÑAS (Estilo Rojo) */}
       <div className="border-b border-gray-200">
-        <nav className="-mb-px flex space-x-8" aria-label="Tabs">
-          <button
-            onClick={() => setActiveTab("info")}
-            className={`pb-4 px-2 text-sm font-bold flex items-center gap-2 border-b-2 transition-all ${
-              activeTab === "info"
-                ? "border-[#a72a34] text-[#a72a34]"
-                : "border-transparent text-gray-400 hover:text-gray-600 hover:border-gray-300"
-            }`}
-          >
-            <Book size={18} /> Información
-          </button>
-          <button
-            onClick={() => setActiveTab("tareas")}
-            className={`pb-4 px-2 text-sm font-bold flex items-center gap-2 border-b-2 transition-all ${
-              activeTab === "tareas"
-                ? "border-[#a72a34] text-[#a72a34]"
-                : "border-transparent text-gray-400 hover:text-gray-600 hover:border-gray-300"
-            }`}
-          >
-            <FileText size={18} /> Tareas
-          </button>
-          <button
-            onClick={() => setActiveTab("recursos")}
-            className={`pb-4 px-2 text-sm font-bold flex items-center gap-2 border-b-2 transition-all ${
-              activeTab === "recursos"
-                ? "border-[#a72a34] text-[#a72a34]"
-                : "border-transparent text-gray-400 hover:text-gray-600 hover:border-gray-300"
-            }`}
-          >
-            <Paperclip size={18} /> Recursos
-          </button>
-          <button
-            onClick={() => setActiveTab("foro")}
-            className={`pb-4 px-2 text-sm font-bold flex items-center gap-2 border-b-2 transition-all ${
-              activeTab === "foro"
-                ? "border-[#a72a34] text-[#a72a34]"
-                : "border-transparent text-gray-400 hover:text-gray-600 hover:border-gray-300"
-            }`}
-          >
-            <MessageSquare size={18} /> Foro
-          </button>
+        <nav className="-mb-px flex space-x-8">
+          {["info", "tareas", "recursos", "foro"].map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`pb-4 px-2 text-sm font-bold uppercase tracking-wider border-b-2 transition-all ${
+                activeTab === tab
+                  ? "border-[#a72a34] text-[#a72a34]"
+                  : "border-transparent text-gray-400 hover:text-gray-600 hover:border-gray-300"
+              }`}
+            >
+              {tab === "info" ? "Información" : tab}
+            </button>
+          ))}
         </nav>
       </div>
 
-      {/* 3. CONTENIDO DE LA PESTAÑA ACTIVA (Card Blanca Limpia) */}
+      {/* CONTENIDO DE LA PESTAÑA */}
       <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 min-h-[400px]">
-        {/* Pestaña: Información */}
         {activeTab === "info" && (
           <div className="space-y-8 animate-in fade-in duration-300">
-            {/* Sección Videollamada Destacada */}
-            <div className="bg-gradient-to-r from-gray-900 to-gray-800 p-6 rounded-2xl text-white flex justify-between items-center shadow-lg">
+            {/* Videollamada */}
+            <div className="bg-gray-900 p-6 rounded-2xl text-white flex justify-between items-center shadow-xl">
               <div>
                 <h4 className="font-bold text-lg mb-1 flex items-center gap-2">
-                  <Video className="text-red-500" /> Sala de Videoconferencia
+                  <Video className="text-red-500" /> Sesión de Clase
                 </h4>
-                <p className="text-gray-300 text-sm">
-                  {config.enlace_videollamada
-                    ? "Enlace activo para la sesión en vivo."
-                    : "El docente aún no ha configurado el enlace."}
+                <p className="text-gray-400 text-sm">
+                  Acceso directo a la sala virtual.
                 </p>
               </div>
-              {config.enlace_videollamada && (
+              {config.enlace_videollamada ? (
                 <a
                   href={config.enlace_videollamada}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="px-6 py-3 bg-[#a72a34] hover:bg-[#802028] text-white font-bold rounded-xl transition-all shadow-lg transform hover:-translate-y-1 flex items-center gap-2"
+                  className="px-6 py-3 bg-[#a72a34] hover:bg-[#802028] text-white font-bold rounded-xl transition-all shadow-lg shadow-red-900/20"
                 >
-                  Unirse a la Clase <ArrowRightCircle size={18} />
+                  Unirse a la Clase
                 </a>
+              ) : (
+                <span className="text-gray-500 italic text-sm">
+                  Enlace no configurado
+                </span>
               )}
             </div>
 
-            {/* Grid de Información */}
+            {/* Información Detallada (Lo que el docente agregó) */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div className="space-y-4">
+              <div className="space-y-6">
                 <div>
-                  <h4 className="font-bold text-gray-800 border-b border-gray-100 pb-2 mb-2 flex items-center gap-2">
+                  <h4 className="font-bold text-gray-800 border-b pb-2 mb-3 flex items-center gap-2">
                     <Sparkles size={16} className="text-[#a72a34]" /> Objetivos
+                    del Curso
                   </h4>
-                  <p className="text-gray-600 text-sm leading-relaxed whitespace-pre-wrap">
-                    {config.objetivos || "Sin información definida."}
+                  <p className="text-gray-600 text-sm leading-relaxed whitespace-pre-wrap bg-gray-50 p-4 rounded-xl">
+                    {config.objetivos || "Sin información."}
                   </p>
                 </div>
                 <div>
-                  <h4 className="font-bold text-gray-800 border-b border-gray-100 pb-2 mb-2 flex items-center gap-2">
+                  <h4 className="font-bold text-gray-800 border-b pb-2 mb-3 flex items-center gap-2">
                     <Award size={16} className="text-[#a72a34]" /> Evaluación
                   </h4>
-                  <p className="text-gray-600 text-sm leading-relaxed whitespace-pre-wrap">
-                    {config.evaluacion || "Sin criterios definidos."}
+                  <p className="text-gray-600 text-sm leading-relaxed whitespace-pre-wrap bg-gray-50 p-4 rounded-xl">
+                    {config.evaluacion || "Sin información."}
                   </p>
                 </div>
               </div>
 
               <div className="space-y-4">
-                <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
-                  <h4 className="font-bold text-gray-800 mb-2 flex items-center gap-2">
-                    <Clock size={16} className="text-[#a72a34]" /> Horario
+                <div className="bg-red-50 p-5 rounded-2xl border border-red-100">
+                  <h4 className="font-bold text-[#a72a34] mb-2 flex items-center gap-2 uppercase text-xs tracking-widest">
+                    <Clock size={16} /> Horario de Clases
                   </h4>
-                  <p className="text-gray-600 text-sm whitespace-pre-wrap">
+                  <p className="text-gray-700 text-sm font-medium whitespace-pre-wrap">
                     {config.horario || "Por definir."}
                   </p>
                 </div>
-                <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
-                  <h4 className="font-bold text-gray-800 mb-2 flex items-center gap-2">
-                    <User size={16} className="text-[#a72a34]" /> Contacto
-                    Docente
+                <div className="bg-gray-50 p-5 rounded-2xl border border-gray-100">
+                  <h4 className="font-bold text-gray-400 mb-2 flex items-center gap-2 uppercase text-xs tracking-widest">
+                    <UserPlus size={16} /> Contacto Docente
                   </h4>
                   <p className="text-gray-600 text-sm whitespace-pre-wrap">
                     {config.contacto_docente || "No especificado."}
@@ -11476,110 +11351,12 @@ const AulaVirtualPage = () => {
                 </div>
               </div>
             </div>
-
-            {/* Historial Asistencia (Solo Alumno) */}
-            {user.rol === "alumno" && (
-              <div className="mt-8 pt-8 border-t border-gray-100">
-                <h4 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
-                  <History size={20} className="text-gray-400" /> Mi Asistencia
-                </h4>
-                {loadingHistorial ? (
-                  <p className="text-sm text-gray-400">Cargando...</p>
-                ) : historialAsistencia.length === 0 ? (
-                  <div className="p-6 bg-gray-50 rounded-xl text-center text-gray-400 text-sm border border-dashed">
-                    No hay registros de asistencia.
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
-                    {historialAsistencia.map((reg) => (
-                      <div
-                        key={reg.sesion_id}
-                        className={`p-3 rounded-xl border text-center ${
-                          reg.mi_estatus === "presente"
-                            ? "bg-green-50 border-green-100"
-                            : reg.mi_estatus === "justificado"
-                              ? "bg-yellow-50 border-yellow-100"
-                              : "bg-red-50 border-red-100"
-                        }`}
-                      >
-                        <p className="text-xs font-bold text-gray-500 mb-1">
-                          {(() => {
-                            const parts = reg.fecha_sesion.split("-");
-                            return `${parts[2]}/${parts[1]}`;
-                          })()}
-                        </p>
-                        <span
-                          className={`text-xs font-black uppercase ${
-                            reg.mi_estatus === "presente"
-                              ? "text-green-700"
-                              : reg.mi_estatus === "justificado"
-                                ? "text-yellow-700"
-                                : "text-red-700"
-                          }`}
-                        >
-                          {reg.mi_estatus.substring(0, 3)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
           </div>
         )}
 
-        {/* Pestaña: Tareas */}
-        {activeTab === "tareas" && (
-          <div className="animate-in fade-in duration-300">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold text-gray-800">
-                Actividades de Aprendizaje
-              </h3>
-              {user.rol === "docente" && (
-                <button
-                  onClick={() => setShowCrearTareaModal(true)}
-                  className="bg-[#a72a34] text-white px-5 py-2.5 rounded-xl font-bold hover:bg-[#802028] shadow-lg shadow-red-900/10 flex items-center gap-2 transition-transform active:scale-95"
-                >
-                  <Plus size={18} /> Nueva Tarea
-                </button>
-              )}
-            </div>
-            {renderTareasList()}
-          </div>
-        )}
-
-        {/* Pestaña: Recursos */}
-        {activeTab === "recursos" && (
-          <div className="animate-in fade-in duration-300">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold text-gray-800">
-                Material de Consulta
-              </h3>
-              {user.rol === "docente" && (
-                <button
-                  onClick={() => setShowRecursoModal(true)}
-                  className="bg-white border-2 border-[#a72a34] text-[#a72a34] px-5 py-2.5 rounded-xl font-bold hover:bg-[#a72a34] hover:text-white transition-all flex items-center gap-2"
-                >
-                  <UploadCloud size={18} /> Subir Material
-                </button>
-              )}
-            </div>
-            {renderRecursosList()}
-          </div>
-        )}
-
-        {/* Pestaña: Foro */}
-        {activeTab === "foro" && (
-          <div className="animate-in fade-in duration-300">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold text-gray-800">
-                Foro de Discusión
-              </h3>
-              {/* Botón del Foro movido a la nueva función de renderizado o aquí mismo si prefieres */}
-            </div>
-            {renderForoList()}
-          </div>
-        )}
+        {activeTab === "tareas" && renderTareasList()}
+        {activeTab === "recursos" && renderRecursosList()}
+        {activeTab === "foro" && renderForoList()}
       </div>
     </div>
   );
@@ -11621,6 +11398,7 @@ const AulaVirtualPage = () => {
     </div>
   );
 };
+
 // --- FIN REEMPLAZO AulaVirtualPage ---
 
 // Modal para crear una nueva tarea (solo Docente)
@@ -13394,7 +13172,6 @@ function App() {
               />
               {/* --- FIN NUEVA RUTA SOLICITUDES (ADMIN) --- */}
               <Route path="/mi-perfil" element={<MiPerfilPage />} />
-              <Route path="/admin/calendario" element={<CalendarioAdmin />} />
             </Route>
           </Route>
 
@@ -13467,7 +13244,6 @@ function App() {
                 path="/alumno/grupo/:grupoId/asignatura/:asignaturaId/foro/hilo/:hiloId"
                 element={<HiloPage />}
               />
-              <Route path="/alumno/calendario" element={<CalendarioAlumno />} />
             </Route>
           </Route>
           {/* --- FIN DEL BLOQUE AÑADIDO --- */}

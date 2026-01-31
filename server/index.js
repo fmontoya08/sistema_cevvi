@@ -5999,6 +5999,153 @@ apiRouter.use("/aspirante", aspiranteRouter); // Registra el router de aspirante
 
 // --- INICIO DEL SERVIDOR ---
 const PORT = 3001;
+// ==========================================
+// MÓDULO CALENDARIO (LADO ADMIN)
+// ==========================================
+
+// 1. Middleware de Seguridad (Solo para Admin)
+const verificarAdmin = (req, res, next) => {
+  const authHeader = req.headers["authorization"];
+  if (!authHeader) return res.sendStatus(401);
+
+  const token = authHeader.split(" ")[1];
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) return res.sendStatus(403);
+
+    // Verificamos que sea ADMIN (sin importar mayúsculas)
+    if (user.rol.toLowerCase() !== "admin") {
+      return res.status(403).send("Acceso denegado: Solo administradores.");
+    }
+    req.user = user;
+    next();
+  });
+};
+
+// 2. Rutas del Calendario Admin
+
+// GET: Ver todos los eventos
+app.get("/api/eventos-admin", verificarAdmin, async (req, res) => {
+  try {
+    const [eventos] = await db.query("SELECT * FROM eventos");
+    res.json(eventos);
+  } catch (error) {
+    res.status(500).send("Error al obtener eventos");
+  }
+});
+
+// POST: Crear nuevo evento
+app.post("/api/eventos-admin", verificarAdmin, async (req, res) => {
+  const { title, start, modalidad } = req.body;
+  try {
+    await db.query(
+      "INSERT INTO eventos (title, start, modalidad, allDay) VALUES (?, ?, ?, ?)",
+      [title, start, modalidad || "general", true],
+    );
+    res.json({ message: "Evento creado" });
+  } catch (error) {
+    res.status(500).send("Error al guardar");
+  }
+});
+
+// DELETE: Borrar evento
+app.delete("/api/eventos-admin/:id", verificarAdmin, async (req, res) => {
+  try {
+    await db.query("DELETE FROM eventos WHERE id = ?", [req.params.id]);
+    res.json({ message: "Evento eliminado" });
+  } catch (error) {
+    res.status(500).send("Error al eliminar");
+  }
+});
+// ==========================================
+// MÓDULO CALENDARIO (LADO ALUMNO)
+// ==========================================
+
+// 1. Middleware para verificar que sea Alumno
+const verificarAlumno = (req, res, next) => {
+  const authHeader = req.headers["authorization"];
+  if (!authHeader) return res.sendStatus(401);
+
+  const token = authHeader.split(" ")[1];
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) return res.sendStatus(403);
+
+    if (user.rol.toLowerCase() !== "alumno") {
+      return res.status(403).send("Acceso denegado: Solo alumnos.");
+    }
+    req.user = user;
+    next();
+  });
+};
+
+// 2. Ruta Inteligente: Obtener eventos (CORREGIDA PARA TU BASE DE DATOS)
+app.get("/api/eventos-alumno", verificarAlumno, async (req, res) => {
+  try {
+    const { id } = req.user;
+
+    // A) Averiguamos la modalidad mirando DIRECTAMENTE en la tabla usuarios
+    // Hacemos JOIN con grupos usando el 'grupo_id' que ya tiene el usuario
+    const [info] = await db.query(
+      `
+        SELECT g.modalidad 
+        FROM usuarios u
+        JOIN grupos g ON u.grupo_id = g.id
+        WHERE u.id = ? 
+        LIMIT 1
+    `,
+      [id],
+    );
+
+    // Si no encontramos grupo o modalidad, asumimos 'presencial' por seguridad
+    const modalidadAlumno =
+      info.length > 0 && info[0].modalidad ? info[0].modalidad : "presencial";
+
+    console.log(`Alumno ID: ${id} | Modalidad detectada: ${modalidadAlumno}`);
+
+    // B) Buscamos sus eventos (Generales + Su Modalidad)
+    const [eventos] = await db.query(
+      `
+        SELECT * FROM eventos 
+        WHERE modalidad = 'general' OR modalidad = ?
+    `,
+      [modalidadAlumno],
+    );
+
+    res.json(eventos);
+  } catch (error) {
+    console.error("Error calendario alumno:", error);
+    res.status(500).send("Error al obtener calendario");
+  }
+});
+// ==========================================
+// MÓDULO FINANZAS (ALUMNO)
+// ==========================================
+
+// Ruta: Obtener Estado de Cuenta
+app.get("/api/alumno/finanzas/resumen", verificarAlumno, async (req, res) => {
+  try {
+    const { id } = req.user; // ID del alumno logueado
+
+    const query = `
+      SELECT 
+        a.id, 
+        c.nombre_concepto, 
+        a.monto_a_pagar, 
+        a.estatus_pago, 
+        a.fecha_vencimiento, 
+        a.fecha_pago 
+      FROM adeudos_alumnos a 
+      JOIN conceptos_pago c ON a.concepto_id = c.id 
+      WHERE a.alumno_id = ? 
+      ORDER BY a.fecha_vencimiento ASC
+    `;
+
+    const [pagos] = await db.query(query, [id]);
+    res.json(pagos);
+  } catch (error) {
+    console.error("Error al obtener pagos:", error);
+    res.status(500).send("Error del servidor al cargar finanzas");
+  }
+});
 app.listen(PORT, () => {
   console.log(`Servidor corriendo en http://localhost:${PORT}`);
 });

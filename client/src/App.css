@@ -36,3 +36,15 @@
     transform: rotate(360deg);
   }
 }
+
+/* Agrega esto a tu index.css o App.css */
+.fc {
+  font-family: inherit;
+  --fc-button-bg-color: #a72a34;
+  --fc-button-border-color: #a72a34;
+  --fc-button-hover-bg-color: #802028;
+}
+.fc-event {
+  cursor: pointer;
+  padding: 2px 5px;
+}
