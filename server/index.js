@@ -1,3 +1,5 @@
+const imaps = require("imap-simple");
+const { simpleParser } = require("mailparser");
 const express = require("express");
 const mysql = require("mysql2/promise");
 const cors = require("cors");
@@ -497,20 +499,26 @@ apiRouter.put("/auth/cambiar-password", async (req, res) => {
   }
 });
 
-// --- RUTA CORREGIDA: Obtener No Leídas (CON VALIDACIÓN) ---
-apiRouter.get("/notificaciones/no-leidas", verifyToken, async (req, res) => {
-  // 1. VALIDACIÓN DE SEGURIDAD: Evita el crash si no hay usuario
-  if (!req.user) {
-    return res.status(401).send({ message: "No autenticado" });
-  }
+// ==========================================
+// MÓDULO NOTIFICACIONES (VERSIÓN FINAL LIMPIA)
+// ==========================================
 
+// 1. OBTENER NOTIFICACIONES NO LEÍDAS (Para la campanita)
+apiRouter.get("/notificaciones/no-leidas", verifyToken, async (req, res) => {
+  if (!req.user) return res.status(401).send({ message: "No autenticado" });
   const userId = req.user.id;
+
   try {
+    // IMPORTANTE: Aquí usamos los nombres reales de TU base de datos:
+    // usuario_id (no user_id)
+    // leido (no leida)
+    // Y usamos "as link" para que el Frontend lo entienda.
     const [notificaciones] = await db.query(
       `SELECT 
          id, 
          mensaje, 
-         url_destino, 
+         url_destino as link, 
+         leido as leida, 
          fecha as fecha_creacion
        FROM notificaciones 
        WHERE usuario_id = ? AND leido = 0 
@@ -526,189 +534,57 @@ apiRouter.get("/notificaciones/no-leidas", verifyToken, async (req, res) => {
 
     res.json({ notificaciones, count });
   } catch (error) {
-    console.error("Error al obtener notificaciones no leídas:", error);
+    console.error("Error al obtener notificaciones:", error);
     res.status(500).send({ message: "Error al cargar notificaciones" });
   }
 });
 
-// PUT /api/notificaciones/:id/marcar-leida - Marcar una notificación específica como leída
-apiRouter.put("/notificaciones/:id/marcar-leida", async (req, res) => {
-  if (!req.user) {
-    return res.status(401).send({ message: "No autenticado" });
-  }
-  const userId = req.user.id;
-  const notificationId = req.params.id;
-  try {
-    const [result] = await db.query(
-      "UPDATE notificaciones SET leida = TRUE WHERE id = ? AND user_id = ?",
-      [notificationId, userId],
-    );
-    if (result.affectedRows > 0) {
-      res.send({ message: "Notificación marcada como leída" });
-    } else {
-      res.status(404).send({
-        message: "Notificación no encontrada o no pertenece al usuario",
-      });
-    }
-  } catch (error) {
-    console.error("Error al marcar notificación como leída:", error);
-    res.status(500).send({ message: "Error en el servidor" });
-  }
-});
+// 2. MARCAR UNA ESPECÍFICA COMO LEÍDA
+apiRouter.put(
+  "/notificaciones/:id/marcar-leida",
+  verifyToken,
+  async (req, res) => {
+    const userId = req.user.id;
+    const notifId = req.params.id;
 
-// --- RUTA CORREGIDA: Marcar todas como leídas ---
+    try {
+      // CORRECCIÓN: Usamos 'leido' y 'usuario_id'
+      const [result] = await db.query(
+        "UPDATE notificaciones SET leido = 1 WHERE id = ? AND usuario_id = ?",
+        [notifId, userId],
+      );
+
+      if (result.affectedRows > 0) {
+        res.send({ message: "Notificación marcada como leída" });
+      } else {
+        res.status(404).send({ message: "No encontrada" });
+      }
+    } catch (error) {
+      console.error("Error al marcar leída:", error);
+      res.status(500).send({ message: "Error en el servidor" });
+    }
+  },
+);
+
+// 3. MARCAR TODAS COMO LEÍDAS
 apiRouter.put(
   "/notificaciones/marcar-todas-leidas",
   verifyToken,
   async (req, res) => {
     const userId = req.user.id;
     try {
-      // Usamos 'leido = 1' y 'usuario_id'
+      // CORRECCIÓN: Usamos 'leido' y 'usuario_id'
       await db.query(
         "UPDATE notificaciones SET leido = 1 WHERE usuario_id = ? AND leido = 0",
         [userId],
       );
       res.json({ message: "Todas marcadas como leídas" });
     } catch (error) {
-      console.error("Error al marcar notificaciones:", error);
+      console.error("Error al marcar todas:", error);
       res.status(500).send({ message: "Error del servidor" });
     }
   },
 );
-
-// --- FIN RUTAS NOTIFICACIONES ---
-
-// PUT /api/notificaciones/:id/marcar-leida
-apiRouter.put("/notificaciones/:id/marcar-leida", async (req, res) => {
-  // ... (el resto de esta ruta)
-});
-
-// --- RUTA CORREGIDA: Marcar todas como leídas ---
-apiRouter.put(
-  "/notificaciones/marcar-todas-leidas",
-  verifyToken,
-  async (req, res) => {
-    // 1. VALIDACIÓN DE SEGURIDAD
-    if (!req.user) {
-      return res.status(401).send({ message: "No autenticado" });
-    }
-
-    const userId = req.user.id;
-    try {
-      await db.query(
-        "UPDATE notificaciones SET leido = 1 WHERE usuario_id = ? AND leido = 0",
-        [userId],
-      );
-      res.json({ message: "Todas marcadas como leídas" });
-    } catch (error) {
-      console.error("Error al marcar notificaciones:", error);
-      res.status(500).send({ message: "Error del servidor" });
-    }
-  },
-);
-
-// --- FIN RUTAS NOTIFICACIONES ---
-// --- FIN DEL BLOQUE PEGADO ---
-
-// ... (El resto de tus rutas, como /register-push-token, continúan aquí)
-
-// PUT /api/notificaciones/:id/marcar-leida - Marcar una notificación específica como leída
-apiRouter.put("/notificaciones/:id/marcar-leida", async (req, res) => {
-  if (!req.user) {
-    return res.status(401).send({ message: "No autenticado" });
-  }
-  const userId = req.user.id;
-  const notificationId = req.params.id;
-  try {
-    const [result] = await db.query(
-      "UPDATE notificaciones SET leida = TRUE WHERE id = ? AND user_id = ?",
-      [notificationId, userId],
-    );
-    if (result.affectedRows > 0) {
-      res.send({ message: "Notificación marcada como leída" });
-    } else {
-      res.status(404).send({
-        message: "Notificación no encontrada o no pertenece al usuario",
-      });
-    }
-  } catch (error) {
-    console.error("Error al marcar notificación como leída:", error);
-    res.status(500).send({ message: "Error en el servidor" });
-  }
-});
-
-// PUT /api/notificaciones/marcar-todas-leidas - Marcar todas las notificaciones del usuario como leídas
-apiRouter.put("/notificaciones/marcar-todas-leidas", async (req, res) => {
-  if (!req.user) {
-    return res.status(401).send({ message: "No autenticado" });
-  }
-  const userId = req.user.id;
-  try {
-    await db.query(
-      "UPDATE notificaciones SET leida = TRUE WHERE user_id = ? AND leida = FALSE", // Solo actualiza las no leídas
-      [userId],
-    );
-    res.send({ message: "Todas las notificaciones marcadas como leídas" });
-  } catch (error) {
-    console.error(
-      "Error al marcar todas las notificaciones como leídas:",
-      error,
-    );
-    res.status(500).send({ message: "Error en el servidor" });
-  }
-});
-
-// --- FIN RUTAS NOTIFICACIONES ---
-
-// ... (El resto de tus rutas API existentes, como /register-push-token, /calificar-grupo-completo, etc.)
-
-// RUTA PARA REGISTRAR UN TOKEN
-apiRouter.post("/register-push-token", async (req, res) => {
-  const { token } = req.body;
-  const userId = req.user.id; // Obtenemos el ID del usuario del token JWT
-
-  if (!token) {
-    return res.status(400).send({ message: "Token es requerido." });
-  }
-
-  try {
-    // Usamos INSERT IGNORE para evitar errores si el token ya existe
-    await db.query(
-      "INSERT IGNORE INTO push_tokens (user_id, token) VALUES (?, ?)",
-      [userId, token],
-    );
-    res.status(200).send({ message: "Token registrado con éxito." });
-  } catch (error) {
-    console.error("Error al registrar push token:", error);
-    res.status(500).send({ message: "Error en el servidor." });
-  }
-});
-
-// RUTA PARA ELIMINAR UN TOKEN (PARA EL LOGOUT)
-apiRouter.delete("/unregister-push-token", async (req, res) => {
-  const { token } = req.body;
-  const userId = req.user.id;
-
-  if (!token) {
-    return res.status(400).send({ message: "Token es requerido." });
-  }
-
-  try {
-    await db.query("DELETE FROM push_tokens WHERE user_id = ? AND token = ?", [
-      userId,
-      token,
-    ]);
-    res.status(200).send({ message: "Token eliminado con éxito." });
-  } catch (error) {
-    console.error("Error al eliminar push token:", error);
-    res.status(500).send({ message: "Error en el servidor." });
-  }
-});
-// --- FIN RUTAS PUSH TOKEN ---
-
-// --- INICIA NUEVO CÓDIGO (RUTAS MI PERFIL) ---
-
-// --- RUTAS DE PERFIL (SOLO INFORMACIÓN, SIN RECUPERACIÓN) ---
 
 // 1. GET /api/mi-perfil (Trae TODOS los datos con nombres reales)
 apiRouter.get("/mi-perfil", async (req, res) => {
@@ -972,6 +848,185 @@ apiRouter.post("/calificar-grupo-completo", async (req, res) => {
 // --- RUTAS DE ADMIN ---
 const adminRouter = express.Router();
 adminRouter.use(isAdmin); // ¡Importante! 'isAdmin' se aplica a todas las rutas de 'adminRouter'
+// ==============================================================
+// MÓDULO DE CORREO DINÁMICO (Multiusuario) - CON DEPURACIÓN
+// ==============================================================
+
+// Función auxiliar para obtener credenciales del usuario actual
+async function getUserEmailCredentials(userId) {
+  // Buscamos el email y el password_email del usuario en la BD
+  const [rows] = await db.query(
+    "SELECT email, password_email FROM usuarios WHERE id = ?",
+    [userId],
+  );
+
+  // --- ZONA DE DEPURACIÓN (MIRA ESTO EN TU TERMINAL) ---
+  console.log("----------------------------------------------------");
+  console.log(`[EMAIL DEBUG] Intentando conectar usuario ID: ${userId}`);
+
+  if (rows.length > 0) {
+    console.log(`[EMAIL DEBUG] Email en BD: '${rows[0].email}'`);
+    console.log(`[EMAIL DEBUG] Pass en BD:  '${rows[0].password_email}'`);
+    // ^^^ Fíjate si las comillas '' muestran espacios vacíos al final del password
+  } else {
+    console.log("[EMAIL DEBUG] ERROR: Usuario no encontrado en BD");
+  }
+  console.log("----------------------------------------------------");
+  // -----------------------------------------------------
+
+  if (rows.length === 0 || !rows[0].password_email) {
+    throw new Error(
+      "No tienes un correo institucional asignado o falta tu contraseña de email.",
+    );
+  }
+
+  return {
+    user: rows[0].email, // El correo (ej. controlescolar@...)
+    password: rows[0].password_email, // La contraseña real
+    host: "mail.universidadsigloxxi.com",
+    imapPort: 993,
+    smtpPort: 465,
+    tls: true,
+  };
+}
+
+// 1. LEER BANDEJA (Dinámico)
+adminRouter.get("/email/inbox", async (req, res) => {
+  try {
+    // A) Obtenemos las credenciales DE ESTE usuario específico
+    const mailConfig = await getUserEmailCredentials(req.user.id);
+
+    // B) Configuramos la conexión con SUS datos
+    const config = {
+      imap: {
+        user: mailConfig.user,
+        password: mailConfig.password,
+        host: mailConfig.host,
+        port: mailConfig.imapPort,
+        tls: true,
+        authTimeout: 10000,
+        tlsOptions: { rejectUnauthorized: false }, // Corrección SSL Neubox
+      },
+    };
+
+    const connection = await imaps.connect(config);
+    await connection.openBox("INBOX");
+
+    const searchCriteria = ["ALL"];
+    const fetchOptions = {
+      bodies: ["HEADER", "TEXT"],
+      markSeen: false,
+      struct: true,
+    };
+
+    const messages = await connection.search(searchCriteria, fetchOptions);
+    const latestMessages = messages.slice(-15).reverse();
+
+    const correos = await Promise.all(
+      latestMessages.map(async (item) => {
+        const header = item.parts.find((p) => p.which === "HEADER");
+        return {
+          id: item.attributes.uid,
+          asunto: header?.body?.subject?.[0] || "(Sin Asunto)",
+          de: header?.body?.from?.[0] || "Desconocido",
+          fecha: header?.body?.date?.[0] || "",
+        };
+      }),
+    );
+
+    connection.end();
+    res.json(correos);
+  } catch (error) {
+    console.error("Error inbox dinámico:", error.message);
+
+    // Devolvemos un error claro al frontend
+    if (error.message.includes("Authentication failed")) {
+      return res
+        .status(401)
+        .json({
+          error: "Contraseña de correo incorrecta en la Base de Datos.",
+        });
+    }
+    if (error.message.includes("No tienes un correo")) {
+      return res.status(400).json({ error: error.message });
+    }
+
+    res.status(500).send("Error al conectar con tu correo institucional.");
+  }
+});
+
+// 2. LEER MENSAJE INDIVIDUAL (Dinámico)
+adminRouter.get("/email/mensaje/:uid", async (req, res) => {
+  const { uid } = req.params;
+  try {
+    const mailConfig = await getUserEmailCredentials(req.user.id);
+
+    const config = {
+      imap: {
+        user: mailConfig.user,
+        password: mailConfig.password,
+        host: mailConfig.host,
+        port: mailConfig.imapPort,
+        tls: true,
+        authTimeout: 10000,
+        tlsOptions: { rejectUnauthorized: false },
+      },
+    };
+
+    const connection = await imaps.connect(config);
+    await connection.openBox("INBOX");
+
+    const searchCriteria = [["UID", uid]];
+    const fetchOptions = { bodies: [""], markSeen: true };
+    const messages = await connection.search(searchCriteria, fetchOptions);
+
+    if (!messages.length) {
+      connection.end();
+      return res.status(404).send("Correo no encontrado");
+    }
+
+    const all = messages[0].parts.find((part) => part.which === "");
+    const parsed = await simpleParser(all.body);
+
+    connection.end();
+
+    res.json({
+      asunto: parsed.subject,
+      de: parsed.from?.text,
+      fecha: parsed.date,
+      html: parsed.html || parsed.textAsHtml || parsed.text,
+    });
+  } catch (error) {
+    console.error("Error mensaje dinámico:", error.message);
+    res.status(500).send("Error al abrir el correo");
+  }
+});
+
+// 3. ENVIAR CORREO (Dinámico)
+adminRouter.post("/email/enviar", async (req, res) => {
+  try {
+    const mailConfig = await getUserEmailCredentials(req.user.id);
+
+    let transporter = nodemailer.createTransport({
+      host: mailConfig.host,
+      port: mailConfig.smtpPort,
+      secure: true,
+      auth: { user: mailConfig.user, pass: mailConfig.password },
+      tls: { rejectUnauthorized: false },
+    });
+
+    await transporter.sendMail({
+      from: `"Universidad Siglo XXI" <${mailConfig.user}>`,
+      to: req.body.destinatario,
+      subject: req.body.asunto,
+      html: req.body.mensaje,
+    });
+    res.json({ message: "Enviado correctamente" });
+  } catch (error) {
+    console.error("Error envío dinámico:", error.message);
+    res.status(500).send("Error al enviar");
+  }
+});
 
 // --- RUTAS DE GESTIÓN FINANCIERA (ADMIN --> ALUMNO) ---
 
@@ -3591,16 +3646,20 @@ adminRouter.post("/grupos/:id/agregar-materia", async (req, res) => {
       // Lista de IDs para buscar tokens
       const idsAlumnos = alumnos.map((a) => a.alumno_id);
 
-      // A) Insertar Campanita (BD)
+      // --- CORRECCIÓN 1: CREAMOS EL LINK AL AULA ---
+      // Formato: /alumno/grupo/ID_GRUPO/asignatura/ID_MATERIA/aula
+      const linkAula = `/alumno/grupo/${id}/asignatura/${asignatura_id}/aula`;
+
+      // A) Insertar Campanita (BD) - AHORA CON LINK
       for (const idAlum of idsAlumnos) {
         await connection.query(
-          "INSERT INTO notificaciones (usuario_id, mensaje, leido, fecha, tipo) VALUES (?, ?, 0, NOW(), 'sistema')",
-          [idAlum, mensaje],
+          // Agregamos 'url_destino' a la consulta
+          "INSERT INTO notificaciones (usuario_id, mensaje, url_destino, leido, fecha, tipo) VALUES (?, ?, ?, 0, NOW(), 'sistema')",
+          [idAlum, mensaje, linkAula], // <--- Pasamos la variable linkAula
         );
       }
 
       // B) --- ENVIAR PUSH MASIVO (ANDROID) ---
-      // Buscamos tokens de TODOS estos alumnos
       const [tokens] = await connection.query(
         "SELECT token FROM push_tokens WHERE user_id IN (?)",
         [idsAlumnos],
@@ -3612,6 +3671,7 @@ adminRouter.post("/grupos/:id/agregar-materia", async (req, res) => {
           sound: "default",
           title: "Carga Académica Actualizada",
           body: mensaje,
+          data: { url: linkAula }, // <-- CORRECCIÓN 2: Enviamos el link al celular también
         }));
 
         await fetch("https://exp.host/--/api/v2/push/send", {
@@ -6144,6 +6204,143 @@ app.get("/api/alumno/finanzas/resumen", verificarAlumno, async (req, res) => {
   } catch (error) {
     console.error("Error al obtener pagos:", error);
     res.status(500).send("Error del servidor al cargar finanzas");
+  }
+});
+// ==========================================
+// MÓDULO DE CORREO (DENTRO DE ADMIN ROUTER)
+// ==========================================
+
+// Configuración para IMAP (Leer correos)
+const emailConfig = {
+  user: "controlescolar@universidadsigloxxi.com",
+  password: "_(Wx!5CSLI9jmof#", // Tu contraseña real
+  host: "mail.universidadsigloxxi.com",
+  imapPort: 993,
+  tls: true,
+};
+
+// 1. RUTA PARA LEER INBOX (GET /api/admin/email/inbox)
+adminRouter.get("/email/inbox", async (req, res) => {
+  const config = {
+    imap: {
+      user: emailConfig.user,
+      password: emailConfig.password,
+      host: emailConfig.host,
+      port: emailConfig.imapPort,
+      tls: true,
+      authTimeout: 3000,
+    },
+  };
+
+  try {
+    const connection = await imaps.connect(config);
+    await connection.openBox("INBOX");
+
+    const searchCriteria = ["ALL"];
+    const fetchOptions = {
+      bodies: ["HEADER", "TEXT"],
+      markSeen: false,
+      struct: true,
+    };
+
+    // Obtenemos mensajes
+    const messages = await connection.search(searchCriteria, fetchOptions);
+
+    // Tomamos los últimos 10
+    const latestMessages = messages.slice(-10).reverse();
+
+    const correosProcesados = await Promise.all(
+      latestMessages.map(async (item) => {
+        const header = item.parts.find((part) => part.which === "HEADER");
+        const subject = header.body.subject
+          ? header.body.subject[0]
+          : "(Sin Asunto)";
+        const from = header.body.from ? header.body.from[0] : "Desconocido";
+        const date = header.body.date ? header.body.date[0] : "";
+
+        return {
+          id: item.attributes.uid,
+          asunto: subject,
+          de: from,
+          fecha: date,
+        };
+      }),
+    );
+
+    connection.end();
+    res.json(correosProcesados);
+  } catch (error) {
+    console.error("Error leyendo correos:", error);
+    res.status(500).send("Error al leer la bandeja de entrada");
+  }
+});
+
+// 2. RUTA PARA ENVIAR CORREO (POST /api/admin/email/enviar)
+adminRouter.post("/email/enviar", async (req, res) => {
+  const { destinatario, asunto, mensaje } = req.body;
+
+  try {
+    // Reutilizamos el transporter que ya tienes configurado más arriba en tu archivo
+    // Asegúrate de que tu variable 'transporter' esté creada antes de esto
+    await transporter.sendMail({
+      from: `"Control Escolar" <${emailConfig.user}>`,
+      to: destinatario,
+      subject: asunto,
+      html: mensaje,
+    });
+
+    res.json({ message: "Correo enviado exitosamente" });
+  } catch (error) {
+    console.error("Error enviando correo:", error);
+    res.status(500).send("Error al enviar el correo");
+  }
+});
+// 3. RUTA PARA LEER EL CUERPO DE UN CORREO ESPECÍFICO
+adminRouter.get("/email/mensaje/:uid", async (req, res) => {
+  const { uid } = req.params;
+
+  const config = {
+    imap: {
+      user: mailConfig.user,
+      password: mailConfig.password,
+      host: mailConfig.host,
+      port: mailConfig.imapPort,
+      tls: true,
+      authTimeout: 10000,
+      tlsOptions: { rejectUnauthorized: false }, // <-- IMPORTANTE: La corrección de seguridad
+    },
+  };
+
+  try {
+    const connection = await imaps.connect(config);
+    await connection.openBox("INBOX");
+
+    const searchCriteria = [["UID", uid]];
+    const fetchOptions = { bodies: [""], markSeen: true }; // "" trae todo el cuerpo
+
+    const messages = await connection.search(searchCriteria, fetchOptions);
+
+    if (messages.length === 0) {
+      connection.end();
+      return res.status(404).send("Correo no encontrado");
+    }
+
+    // Usamos mailparser para convertir el código raro del correo en texto leíble
+    const all = messages[0].parts.find((part) => part.which === "");
+    const parsed = await simpleParser(all.body);
+
+    connection.end();
+
+    // Devolvemos HTML (si tiene) o Texto plano
+    res.json({
+      asunto: parsed.subject,
+      de: parsed.from.text,
+      fecha: parsed.date,
+      html: parsed.html || parsed.textAsHtml || parsed.text, // Priorizamos HTML
+    });
+  } catch (error) {
+    console.error("Error leyendo mensaje:", error);
+    res.status(500).send("Error al abrir el correo");
   }
 });
 app.listen(PORT, () => {

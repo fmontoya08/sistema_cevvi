@@ -1,3 +1,4 @@
+import CorreoAdminPage from "./pages/CorreoAdminPage";
 import React, {
   useState,
   useEffect,
@@ -581,6 +582,7 @@ const AdminLayout = () => {
     { icon: Home, label: "Dashboard", path: "/dashboard" },
     { icon: Users, label: "Usuarios", path: "/usuarios" },
     { icon: Calendar, label: "Calendario", path: "/admin/calendario" },
+    { icon: Mail, label: "Correo Institucional", path: "/admin/correo" },
     { icon: Calendar, label: "Ciclos Escolares", path: "/ciclos" },
     { icon: FileText, label: "Planes de Estudio", path: "/planes-estudio" },
     { icon: TrendingUp, label: "Grados", path: "/grados" },
@@ -13377,6 +13379,7 @@ function App() {
               {/* --- INICIO NUEVAS RUTAS FINANZAS (ADMIN) --- */}
               <Route path="/conceptos-pago" element={<ConceptosPagoPage />} />
               <Route path="/admin/finanzas" element={<CajaPage />} />
+              <Route path="/admin/correo" element={<CorreoAdminPage />} />
               {/* <Route
                 path="/admin/finanzas/alumno/:id"
                 element={<DetalleFinancieroAlumnoPage />}
