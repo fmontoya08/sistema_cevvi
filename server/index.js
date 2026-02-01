@@ -845,6 +845,231 @@ apiRouter.post("/calificar-grupo-completo", async (req, res) => {
 });
 // --- FIN DE LA NUEVA RUTA ---
 
+// ==============================================================
+// MÓDULO DE CORREO UNIVERSAL (ADMIN, ALUMNO, DOCENTE)
+// ==============================================================
+// Nota: Usamos app.get con verifyToken para que cualquiera con sesión pueda entrar
+
+// Función auxiliar (se mantiene igual)
+async function getUserEmailCredentials(userId) {
+  const [rows] = await db.query(
+    "SELECT email, password_email FROM usuarios WHERE id = ?",
+    [userId],
+  );
+
+  if (rows.length === 0 || !rows[0].password_email) {
+    throw new Error(
+      "No tienes un correo institucional asignado o falta tu contraseña de email.",
+    );
+  }
+  return {
+    user: rows[0].email,
+    password: rows[0].password_email,
+    host: "mail.universidadsigloxxi.com",
+    imapPort: 993,
+    smtpPort: 465,
+    tls: true,
+  };
+}
+
+// --- NUEVAS RUTAS PARA CONFIGURACIÓN DE CORREO ---
+
+// 1. Verificar si el usuario ya configuró su correo
+app.get("/api/email/status", verifyToken, async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      "SELECT email, password_email FROM usuarios WHERE id = ?",
+      [req.user.id],
+    );
+
+    if (rows.length === 0)
+      return res.status(404).json({ error: "Usuario no encontrado" });
+
+    res.json({
+      email: rows[0].email,
+      configurado:
+        !!rows[0].password_email && rows[0].password_email.length > 0,
+      // 'configurado' será TRUE si tiene contraseña, FALSE si está vacía
+    });
+  } catch (error) {
+    console.error("Error status correo:", error);
+    res.status(500).send("Error al verificar estado");
+  }
+});
+
+// 2. Guardar la contraseña del correo (Solo la primera vez o si quiere cambiarla)
+app.post("/api/email/configurar", verifyToken, async (req, res) => {
+  const { password } = req.body;
+
+  if (!password)
+    return res.status(400).json({ error: "La contraseña es obligatoria" });
+
+  try {
+    // Actualizamos SOLO la contraseña del correo en la base de datos
+    await db.query("UPDATE usuarios SET password_email = ? WHERE id = ?", [
+      password,
+      req.user.id,
+    ]);
+
+    res.json({ message: "Contraseña guardada correctamente" });
+  } catch (error) {
+    console.error("Error guardando password email:", error);
+    res.status(500).send("Error al guardar configuración");
+  }
+});
+
+// ... Aquí siguen las rutas de inbox, mensaje, etc. que ya tenías ...
+
+// 1. LEER BANDEJA (Ruta Universal: /api/email/inbox)
+// 1. LEER BANDEJA (Ruta Universal con más tiempo de espera)
+app.get("/api/email/inbox", verifyToken, async (req, res) => {
+  try {
+    const mailConfig = await getUserEmailCredentials(req.user.id);
+
+    const config = {
+      imap: {
+        user: mailConfig.user,
+        password: mailConfig.password,
+        host: mailConfig.host,
+        port: mailConfig.imapPort,
+        tls: true,
+        authTimeout: 30000, // <--- CAMBIO: Aumentamos a 30 segundos (30000)
+        tlsOptions: { rejectUnauthorized: false },
+      },
+    };
+
+    const connection = await imaps.connect(config);
+    await connection.openBox("INBOX");
+
+    // ... el resto del código sigue igual ...
+    const searchCriteria = ["ALL"];
+    const fetchOptions = {
+      bodies: ["HEADER", "TEXT"],
+      markSeen: false,
+      struct: true,
+    };
+    const messages = await connection.search(searchCriteria, fetchOptions);
+    const latestMessages = messages.slice(-15).reverse();
+
+    const correos = await Promise.all(
+      latestMessages.map(async (item) => {
+        const header = item.parts.find((p) => p.which === "HEADER");
+        return {
+          id: item.attributes.uid,
+          asunto: header?.body?.subject?.[0] || "(Sin Asunto)",
+          de: header?.body?.from?.[0] || "Desconocido",
+          fecha: header?.body?.date?.[0] || "",
+        };
+      }),
+    );
+
+    connection.end();
+    res.json(correos);
+  } catch (error) {
+    console.error("Error inbox:", error.message);
+    if (error.message.includes("Authentication failed")) {
+      return res.status(401).json({ error: "Contraseña incorrecta." });
+    }
+    // Si es timeout, avisamos
+    if (error.message.includes("Timed out")) {
+      return res
+        .status(504)
+        .json({
+          error:
+            "El servidor de correo tarda mucho en responder. Intenta de nuevo.",
+        });
+    }
+    res.status(500).send("Error de conexión con correo.");
+  }
+});
+
+// 2. LEER MENSAJE (Ruta Universal Mejorada)
+app.get("/api/email/mensaje/:uid", verifyToken, async (req, res) => {
+  const { uid } = req.params;
+
+  // LOG PARA DEPURAR: Ver qué ID estamos buscando
+  console.log(`[EMAIL DEBUG] Buscando cuerpo del mensaje UID: ${uid}`);
+
+  try {
+    const mailConfig = await getUserEmailCredentials(req.user.id);
+
+    const config = {
+      imap: {
+        user: mailConfig.user,
+        password: mailConfig.password,
+        host: mailConfig.host,
+        port: mailConfig.imapPort,
+        tls: true,
+        authTimeout: 20000, // Aumentamos a 20s por si el correo es pesado
+        tlsOptions: { rejectUnauthorized: false },
+      },
+    };
+
+    const connection = await imaps.connect(config);
+    await connection.openBox("INBOX");
+
+    // CORRECCIÓN CLAVE: Convertimos 'uid' a Número Entero (parseInt)
+    // Algunos servidores fallan si se envía como texto "123" en lugar de número 123
+    const searchCriteria = [["UID", parseInt(uid, 10)]];
+    const fetchOptions = { bodies: [""], markSeen: true };
+
+    const messages = await connection.search(searchCriteria, fetchOptions);
+
+    if (!messages.length) {
+      console.log("[EMAIL DEBUG] Error: Mensaje no encontrado en INBOX");
+      connection.end();
+      return res.status(404).send("Correo no encontrado");
+    }
+
+    console.log("[EMAIL DEBUG] Mensaje encontrado. Descargando contenido...");
+
+    // Buscamos la parte del cuerpo (body) que solicitamos
+    const all = messages[0].parts.find((part) => part.which === "");
+
+    // Parseamos el contenido crudo a HTML/Texto legible
+    const parsed = await simpleParser(all.body);
+
+    connection.end();
+
+    res.json({
+      asunto: parsed.subject,
+      de: parsed.from?.text,
+      fecha: parsed.date,
+      // Usamos html si existe, si no textAsHtml, si no texto plano
+      html: parsed.html || parsed.textAsHtml || parsed.text,
+      // Agregamos adjuntos básicos por si quisieras mostrarlos luego
+      adjuntos: parsed.attachments ? parsed.attachments.length : 0,
+    });
+  } catch (error) {
+    console.error("ERROR CRÍTICO AL ABRIR MENSAJE:", error);
+    res.status(500).send("Error al procesar el contenido del correo.");
+  }
+});
+
+// 3. ENVIAR (Ruta Universal: /api/email/enviar)
+app.post("/api/email/enviar", verifyToken, async (req, res) => {
+  try {
+    const mailConfig = await getUserEmailCredentials(req.user.id);
+    let transporter = nodemailer.createTransport({
+      host: mailConfig.host,
+      port: mailConfig.smtpPort,
+      secure: true,
+      auth: { user: mailConfig.user, pass: mailConfig.password },
+      tls: { rejectUnauthorized: false },
+    });
+    await transporter.sendMail({
+      from: `"Universidad Siglo XXI" <${mailConfig.user}>`,
+      to: req.body.destinatario,
+      subject: req.body.asunto,
+      html: req.body.mensaje,
+    });
+    res.json({ message: "Enviado correctamente" });
+  } catch (error) {
+    console.error("Error envío:", error.message);
+    res.status(500).send("Error al enviar");
+  }
+});
+
 // --- RUTAS DE ADMIN ---
 const adminRouter = express.Router();
 adminRouter.use(isAdmin); // ¡Importante! 'isAdmin' se aplica a todas las rutas de 'adminRouter'
@@ -941,11 +1166,9 @@ adminRouter.get("/email/inbox", async (req, res) => {
 
     // Devolvemos un error claro al frontend
     if (error.message.includes("Authentication failed")) {
-      return res
-        .status(401)
-        .json({
-          error: "Contraseña de correo incorrecta en la Base de Datos.",
-        });
+      return res.status(401).json({
+        error: "Contraseña de correo incorrecta en la Base de Datos.",
+      });
     }
     if (error.message.includes("No tienes un correo")) {
       return res.status(400).json({ error: error.message });

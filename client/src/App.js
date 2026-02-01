@@ -1,4 +1,4 @@
-import CorreoAdminPage from "./pages/CorreoAdminPage";
+import CorreoPage from "./pages/CorreoAdminPage";
 import React, {
   useState,
   useEffect,
@@ -778,6 +778,7 @@ const DocenteLayout = () => {
   // 3. Menú de Navegación del Docente (Estilo Nuevo)
   const navItems = [
     { icon: Home, label: "Mis Cursos", path: "/docente/dashboard" },
+    { icon: Mail, label: "Correo Institucional", path: "/docente/correo" },
     // Puedes agregar más items aquí si el docente tiene más secciones
   ];
 
@@ -962,6 +963,7 @@ const AlumnoLayout = () => {
     { icon: ClipboardEdit, label: "Trámites", path: "/alumno/mis-solicitudes" },
     { icon: Calendar, label: "Calendario", path: "/alumno/calendario" },
     { icon: User, label: "Mi Perfil", path: "/alumno/mi-perfil" },
+    { icon: Mail, label: "Correo Institucional", path: "/alumno/correo" },
   ];
 
   return (
@@ -13379,7 +13381,7 @@ function App() {
               {/* --- INICIO NUEVAS RUTAS FINANZAS (ADMIN) --- */}
               <Route path="/conceptos-pago" element={<ConceptosPagoPage />} />
               <Route path="/admin/finanzas" element={<CajaPage />} />
-              <Route path="/admin/correo" element={<CorreoAdminPage />} />
+              <Route path="/admin/correo" element={<CorreoPage />} />
               {/* <Route
                 path="/admin/finanzas/alumno/:id"
                 element={<DetalleFinancieroAlumnoPage />}
@@ -13408,6 +13410,7 @@ function App() {
                 path="/docente/dashboard"
                 element={<DocenteDashboardPage />}
               />
+              <Route path="/docente/correo" element={<CorreoPage />} />
               <Route
                 path="/docente/grupo/:grupoId/asignatura/:asignaturaId"
                 element={<DetalleCursoDocentePage />}
@@ -13466,6 +13469,7 @@ function App() {
               />
               {/* --- FIN NUEVA RUTA SOLICITUDES (ALUMNO) --- */}
               <Route path="/alumno/mi-perfil" element={<MiPerfilPage />} />
+              <Route path="/alumno/correo" element={<CorreoPage />} />
               <Route
                 path="/alumno/grupo/:grupoId/asignatura/:asignaturaId/foro/hilo/:hiloId"
                 element={<HiloPage />}
