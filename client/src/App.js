@@ -1,4 +1,5 @@
 import CorreoPage from "./pages/CorreoAdminPage";
+import RegistroPage from "./pages/RegistroPage";
 import React, {
   useState,
   useEffect,
@@ -1896,10 +1897,19 @@ const UsuariosPage = () => {
 
     try {
       const res = await api.post("/admin/usuarios", { ...form, rol: tipo });
-      // Mensaje simple confirmando la matrícula generada
-      alert(
-        `¡Registro Exitoso!\n\nSe asignó la Matrícula: ${res.data.matricula}`,
-      );
+      if (res.data.credenciales) {
+        alert(
+          `✅ ¡ALUMNO REGISTRADO CON ÉXITO!\n\n` +
+            `👤 Matrícula: ${res.data.credenciales.usuario}\n` +
+            `📧 Correo: ${res.data.credenciales.correo}\n` +
+            `🔑 Contraseña: ${res.data.credenciales.password}\n\n` +
+            `⚠️ IMPORTANTE: Entrega estos datos al alumno ahora mismo.`,
+        );
+      } else {
+        alert(
+          `¡Registro Exitoso!\n\nSe asignó la Matrícula: ${res.data.matricula}`,
+        );
+      }
       setModal(false);
       setForm(baseForm);
       fetchData();
@@ -2216,23 +2226,42 @@ const UsuariosPage = () => {
                   />
                 </div>
 
-                {/* FILA 2: CONTACTO */}
+                {/* PEGA ESTO EN EL FORMULARIO DEL MODAL DE USUARIOS */}
                 <div className="lg:col-span-2">
                   <label className="block text-xs font-bold text-gray-400 uppercase mb-1">
-                    Correo Electrónico *
+                    Correo Personal (Gmail / Outlook) *
                   </label>
                   <input
                     required
                     type="email"
                     className="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#a72a34] outline-none"
-                    value={formAspirante.email}
+                    placeholder="Para enviar credenciales..."
+                    value={formAspirante.email_personal || ""}
                     onChange={(e) =>
                       setFormAspirante({
                         ...formAspirante,
-                        email: e.target.value,
+                        email_personal: e.target.value,
                       })
                     }
                   />
+                </div>
+
+                {/* FILA 2: CONTACTO */}
+                <div className="lg:col-span-2">
+                  <label className="block text-xs font-bold text-gray-400 uppercase mb-1">
+                    Correo Institucional (Automático)
+                  </label>
+                  {/* Input deshabilitado visualmente */}
+                  <input
+                    type="text"
+                    disabled
+                    className="w-full p-3 border border-gray-200 rounded-xl bg-gray-100 text-gray-500 cursor-not-allowed italic"
+                    placeholder="Se generará al guardar (ej: 20260015@...)"
+                  />
+                  <p className="text-[10px] text-red-500 mt-1 font-bold">
+                    * El sistema creará el correo y la contraseña
+                    automáticamente.
+                  </p>
                 </div>
                 <div className="lg:col-span-1">
                   <label className="block text-xs font-bold text-gray-400 uppercase mb-1">
@@ -11495,10 +11524,11 @@ const AulaVirtualPage = () => {
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
+                    {/* --- BLOQUE CORREGIDO: HISTORIAL DE ASISTENCIA --- */}
                     {historialAsistencia.map((reg) => (
                       <div
                         key={reg.sesion_id}
-                        className={`p-3 rounded-xl border text-center ${
+                        className={`p-3 rounded-xl border text-center transition-all hover:shadow-md ${
                           reg.mi_estatus === "presente"
                             ? "bg-green-50 border-green-100"
                             : reg.mi_estatus === "justificado"
@@ -11506,22 +11536,27 @@ const AulaVirtualPage = () => {
                               : "bg-red-50 border-red-100"
                         }`}
                       >
-                        <p className="text-xs font-bold text-gray-500 mb-1">
-                          {(() => {
-                            const parts = reg.fecha_sesion.split("-");
-                            return `${parts[2]}/${parts[1]}`;
-                          })()}
+                        {/* AQUÍ AGREGAMOS LA PALABRA "ASISTENCIA" */}
+                        <p className="text-[10px] uppercase font-bold tracking-wider text-gray-400 mb-1">
+                          Asistencia
                         </p>
+
+                        {/* AQUÍ USAMOS LA FECHA BONITA QUE VIENE DEL BACKEND */}
+                        <p className="text-xs font-bold text-gray-700 mb-2">
+                          {reg.fecha_mostrar || "Fecha pendiente"}
+                        </p>
+
+                        {/* ESTATUS (Presente/Falta) */}
                         <span
-                          className={`text-xs font-black uppercase ${
+                          className={`text-xs font-black uppercase px-2 py-0.5 rounded-full ${
                             reg.mi_estatus === "presente"
-                              ? "text-green-700"
+                              ? "bg-green-100 text-green-700"
                               : reg.mi_estatus === "justificado"
-                                ? "text-yellow-700"
-                                : "text-red-700"
+                                ? "bg-yellow-100 text-yellow-700"
+                                : "bg-red-100 text-red-700"
                           }`}
                         >
-                          {reg.mi_estatus.substring(0, 3)}
+                          {reg.mi_estatus}
                         </span>
                       </div>
                     ))}
@@ -13322,6 +13357,7 @@ function App() {
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/registro" element={<RegistroPage />} />
           <Route
             path="/unauthorized"
             element={
