@@ -1362,23 +1362,76 @@ adminRouter.get("/alumnos/:id/finanzas", async (req, res) => {
   }
 });
 
-// 2. CREAR CARGO MANUAL (Asignar deuda)
+// 2. CREAR CARGO MANUAL (MEJORADO CON NOTIFICACIONES)
 adminRouter.post("/finanzas/cargo", async (req, res) => {
   const { alumno_id, concepto_id, fecha_vencimiento } = req.body;
+
+  const connection = await db.getConnection(); // Usamos transacción para seguridad
   try {
-    // Obtenemos el monto default del concepto
-    const [[concepto]] = await db.query(
+    await connection.beginTransaction();
+
+    // A) Obtenemos datos del concepto (Nombre y Monto)
+    const [[concepto]] = await connection.query(
       "SELECT * FROM conceptos_pago WHERE id = ?",
       [concepto_id],
     );
 
-    await db.query(
+    if (!concepto) {
+      throw new Error("Concepto no encontrado");
+    }
+
+    // B) Insertamos el adeudo
+    await connection.query(
       "INSERT INTO adeudos_alumnos (alumno_id, concepto_id, monto_a_pagar, estatus_pago, fecha_vencimiento) VALUES (?, ?, ?, 'pendiente', ?)",
       [alumno_id, concepto_id, concepto.monto_default, fecha_vencimiento],
     );
-    res.json({ message: "Cargo asignado correctamente" });
+
+    // --- AQUÍ EMPIEZA LA MAGIA DE LAS NOTIFICACIONES ---
+
+    // C) Creamos el mensaje y el link
+    const mensaje = `Se ha generado un nuevo cargo: ${concepto.nombre_concepto} por $${concepto.monto_default}`;
+    const linkPagos = "/alumno/mis-pagos"; // Link directo a la sección de pagos
+
+    // D) Notificación Interna (Campanita)
+    await connection.query(
+      "INSERT INTO notificaciones (usuario_id, mensaje, url_destino, leido, fecha, tipo) VALUES (?, ?, ?, 0, NOW(), 'pago')",
+      [alumno_id, mensaje, linkPagos],
+    );
+
+    // E) Notificación Push (Android)
+    const [tokens] = await connection.query(
+      "SELECT token FROM push_tokens WHERE user_id = ?",
+      [alumno_id],
+    );
+
+    if (tokens.length > 0) {
+      const expoMessages = tokens.map((t) => ({
+        to: t.token,
+        sound: "default",
+        title: "Nuevo Cargo Generado",
+        body: mensaje,
+        data: { url: linkPagos }, // Para abrir la app en la sección de pagos
+      }));
+
+      // Enviar a Expo (Sin await para no trabar la respuesta si tarda)
+      fetch("https://exp.host/--/api/v2/push/send", {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(expoMessages),
+      }).catch((err) => console.error("Error enviando push:", err));
+    }
+
+    await connection.commit();
+    res.json({ message: "Cargo asignado y notificación enviada" });
   } catch (error) {
+    await connection.rollback();
+    console.error("Error asignando cargo:", error);
     res.status(500).send({ message: "Error al asignar cargo" });
+  } finally {
+    connection.release();
   }
 });
 
