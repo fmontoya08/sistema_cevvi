@@ -9,6 +9,7 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 const fetch = require("node-fetch");
+const MailComposer = require("nodemailer/lib/mail-composer");
 
 const app = express();
 app.use(cors());
@@ -920,11 +921,21 @@ app.post("/api/email/configurar", verifyToken, async (req, res) => {
 
 // ... Aquí siguen las rutas de inbox, mensaje, etc. que ya tenías ...
 
-// 1. LEER BANDEJA (Ruta Universal: /api/email/inbox)
-// 1. LEER BANDEJA (Ruta Universal con más tiempo de espera)
-app.get("/api/email/inbox", verifyToken, async (req, res) => {
+// 1. LEER CARPETA (Ruta Dinámica: Inbox, Enviados, Papelera)
+app.get("/api/email/folder/:boxName", verifyToken, async (req, res) => {
+  const { boxName } = req.params; // recibimos "inbox", "sent" o "trash"
+
   try {
     const mailConfig = await getUserEmailCredentials(req.user.id);
+
+    // TRADUCCIÓN DE CARPETAS (Neubox/cPanel suele usar estos nombres)
+    let folderSystemName = "INBOX";
+
+    if (boxName === "sent") folderSystemName = "INBOX.Sent"; // O prueba solo "Sent" si falla
+    if (boxName === "trash") folderSystemName = "INBOX.Trash"; // O prueba "Trash"
+    if (boxName === "inbox") folderSystemName = "INBOX";
+
+    console.log(`[EMAIL DEBUG] Abriendo carpeta: ${folderSystemName}`);
 
     const config = {
       imap: {
@@ -933,21 +944,33 @@ app.get("/api/email/inbox", verifyToken, async (req, res) => {
         host: mailConfig.host,
         port: mailConfig.imapPort,
         tls: true,
-        authTimeout: 30000, // <--- CAMBIO: Aumentamos a 30 segundos (30000)
+        authTimeout: 30000,
         tlsOptions: { rejectUnauthorized: false },
       },
     };
 
     const connection = await imaps.connect(config);
-    await connection.openBox("INBOX");
 
-    // ... el resto del código sigue igual ...
+    // Intentamos abrir la carpeta solicitada
+    try {
+      await connection.openBox(folderSystemName);
+    } catch (err) {
+      console.log(
+        `[EMAIL DEBUG] Carpeta ${folderSystemName} no encontrada, intentando nombre alternativo...`,
+      );
+      // Fallback simple: si falla INBOX.Sent, probamos Sent (a veces varía la config)
+      if (boxName === "sent") await connection.openBox("Sent");
+      else if (boxName === "trash") await connection.openBox("Trash");
+      else throw err;
+    }
+
     const searchCriteria = ["ALL"];
     const fetchOptions = {
       bodies: ["HEADER", "TEXT"],
       markSeen: false,
       struct: true,
     };
+
     const messages = await connection.search(searchCriteria, fetchOptions);
     const latestMessages = messages.slice(-15).reverse();
 
@@ -957,7 +980,8 @@ app.get("/api/email/inbox", verifyToken, async (req, res) => {
         return {
           id: item.attributes.uid,
           asunto: header?.body?.subject?.[0] || "(Sin Asunto)",
-          de: header?.body?.from?.[0] || "Desconocido",
+          de: header?.body?.from?.[0] || "Desconocido", // En "Enviados" esto serás tú
+          para: header?.body?.to?.[0] || "", // En "Enviados" esto es útil ver
           fecha: header?.body?.date?.[0] || "",
         };
       }),
@@ -966,32 +990,38 @@ app.get("/api/email/inbox", verifyToken, async (req, res) => {
     connection.end();
     res.json(correos);
   } catch (error) {
-    console.error("Error inbox:", error.message);
-    if (error.message.includes("Authentication failed")) {
+    console.error("Error leyendo carpeta:", error.message);
+    if (error.message.includes("Authentication failed"))
       return res.status(401).json({ error: "Contraseña incorrecta." });
+    if (error.message.includes("Timed out"))
+      return res.status(504).json({ error: "Tiempo de espera agotado." });
+
+    // Si la carpeta no existe
+    if (
+      error.message.includes("Box not found") ||
+      error.message.includes("doesn't exist")
+    ) {
+      return res.status(404).json({ error: "Carpeta vacía o no encontrada." });
     }
-    // Si es timeout, avisamos
-    if (error.message.includes("Timed out")) {
-      return res
-        .status(504)
-        .json({
-          error:
-            "El servidor de correo tarda mucho en responder. Intenta de nuevo.",
-        });
-    }
+
     res.status(500).send("Error de conexión con correo.");
   }
 });
 
-// 2. LEER MENSAJE (Ruta Universal Mejorada)
+// 2. LEER MENSAJE (Ahora soporta carpetas: Inbox, Sent, Trash)
 app.get("/api/email/mensaje/:uid", verifyToken, async (req, res) => {
   const { uid } = req.params;
+  const { folder } = req.query; // <--- LEEMOS LA CARPETA DE LA URL (?folder=sent)
 
-  // LOG PARA DEPURAR: Ver qué ID estamos buscando
-  console.log(`[EMAIL DEBUG] Buscando cuerpo del mensaje UID: ${uid}`);
+  console.log(`[EMAIL DEBUG] Buscando UID: ${uid} en carpeta: ${folder}`);
 
   try {
     const mailConfig = await getUserEmailCredentials(req.user.id);
+
+    // TRADUCCIÓN DE CARPETAS (Igual que en la ruta de lista)
+    let folderSystemName = "INBOX";
+    if (folder === "sent") folderSystemName = "INBOX.Sent";
+    if (folder === "trash") folderSystemName = "INBOX.Trash";
 
     const config = {
       imap: {
@@ -1000,33 +1030,34 @@ app.get("/api/email/mensaje/:uid", verifyToken, async (req, res) => {
         host: mailConfig.host,
         port: mailConfig.imapPort,
         tls: true,
-        authTimeout: 20000, // Aumentamos a 20s por si el correo es pesado
+        authTimeout: 20000,
         tlsOptions: { rejectUnauthorized: false },
       },
     };
 
     const connection = await imaps.connect(config);
-    await connection.openBox("INBOX");
 
-    // CORRECCIÓN CLAVE: Convertimos 'uid' a Número Entero (parseInt)
-    // Algunos servidores fallan si se envía como texto "123" en lugar de número 123
+    // INTENTAMOS ABRIR LA CARPETA CORRECTA
+    try {
+      await connection.openBox(folderSystemName);
+    } catch (err) {
+      // Fallback por si acaso
+      if (folder === "sent") await connection.openBox("Sent");
+      else if (folder === "trash") await connection.openBox("Trash");
+      else await connection.openBox("INBOX");
+    }
+
     const searchCriteria = [["UID", parseInt(uid, 10)]];
     const fetchOptions = { bodies: [""], markSeen: true };
 
     const messages = await connection.search(searchCriteria, fetchOptions);
 
     if (!messages.length) {
-      console.log("[EMAIL DEBUG] Error: Mensaje no encontrado en INBOX");
       connection.end();
-      return res.status(404).send("Correo no encontrado");
+      return res.status(404).send("Correo no encontrado en esta carpeta");
     }
 
-    console.log("[EMAIL DEBUG] Mensaje encontrado. Descargando contenido...");
-
-    // Buscamos la parte del cuerpo (body) que solicitamos
     const all = messages[0].parts.find((part) => part.which === "");
-
-    // Parseamos el contenido crudo a HTML/Texto legible
     const parsed = await simpleParser(all.body);
 
     connection.end();
@@ -1034,22 +1065,25 @@ app.get("/api/email/mensaje/:uid", verifyToken, async (req, res) => {
     res.json({
       asunto: parsed.subject,
       de: parsed.from?.text,
+      para: parsed.to?.text, // Agregamos 'para' que es útil en enviados
       fecha: parsed.date,
-      // Usamos html si existe, si no textAsHtml, si no texto plano
       html: parsed.html || parsed.textAsHtml || parsed.text,
-      // Agregamos adjuntos básicos por si quisieras mostrarlos luego
-      adjuntos: parsed.attachments ? parsed.attachments.length : 0,
     });
   } catch (error) {
-    console.error("ERROR CRÍTICO AL ABRIR MENSAJE:", error);
-    res.status(500).send("Error al procesar el contenido del correo.");
+    console.error("ERROR MENSAJE:", error);
+    res.status(500).send("Error al abrir el correo");
   }
 });
 
 // 3. ENVIAR (Ruta Universal: /api/email/enviar)
+// 3. ENVIAR CORREO (Y GUARDAR COPIA EN ENVIADOS)
 app.post("/api/email/enviar", verifyToken, async (req, res) => {
+  const { destinatario, asunto, mensaje } = req.body;
+
   try {
     const mailConfig = await getUserEmailCredentials(req.user.id);
+
+    // PASO A: ENVIAR EL CORREO (SMTP)
     let transporter = nodemailer.createTransport({
       host: mailConfig.host,
       port: mailConfig.smtpPort,
@@ -1057,13 +1091,61 @@ app.post("/api/email/enviar", verifyToken, async (req, res) => {
       auth: { user: mailConfig.user, pass: mailConfig.password },
       tls: { rejectUnauthorized: false },
     });
+
     await transporter.sendMail({
       from: `"Universidad Siglo XXI" <${mailConfig.user}>`,
-      to: req.body.destinatario,
-      subject: req.body.asunto,
-      html: req.body.mensaje,
+      to: destinatario,
+      subject: asunto,
+      html: mensaje,
     });
-    res.json({ message: "Enviado correctamente" });
+
+    // PASO B: GUARDAR COPIA EN "ENVIADOS" (IMAP)
+    // Esto es lo que faltaba: Creamos el archivo "físico" del correo para guardarlo
+    try {
+      const mail = new MailComposer({
+        from: `"${mailConfig.user}" <${mailConfig.user}>`,
+        to: destinatario,
+        subject: asunto,
+        html: mensaje,
+        date: new Date(), // Importante para que salga con fecha de hoy
+      });
+
+      const message = await mail.compile().build(); // Convertimos a formato crudo
+
+      // Nos conectamos solo para guardar
+      const config = {
+        imap: {
+          user: mailConfig.user,
+          password: mailConfig.password,
+          host: mailConfig.host,
+          port: mailConfig.imapPort,
+          tls: true,
+          authTimeout: 10000,
+          tlsOptions: { rejectUnauthorized: false },
+        },
+      };
+
+      const connection = await imaps.connect(config);
+
+      // Intentamos guardar en "INBOX.Sent" (Estándar cPanel) o "Sent"
+      try {
+        await connection.append(message, { mailbox: "INBOX.Sent" });
+        console.log("[EMAIL DEBUG] Guardado en INBOX.Sent");
+      } catch (err) {
+        console.log("[EMAIL DEBUG] INBOX.Sent falló, probando Sent...");
+        await connection.append(message, { mailbox: "Sent" });
+      }
+
+      connection.end();
+    } catch (saveError) {
+      console.error(
+        "El correo se envió, pero falló al guardarse en Enviados:",
+        saveError,
+      );
+      // No devolvemos error al usuario porque el correo SÍ salió.
+    }
+
+    res.json({ message: "Enviado y guardado correctamente" });
   } catch (error) {
     console.error("Error envío:", error.message);
     res.status(500).send("Error al enviar");
