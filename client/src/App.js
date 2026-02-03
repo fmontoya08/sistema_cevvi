@@ -751,7 +751,7 @@ const AdminLayout = () => {
           </div>
         </header>
 
-        {/* ÁREA DE CONTENIDO (CON SCROLL INDEPENDIENTE) */}
+        {/* ÁREA DE CONTENIDO (CON SCROLL INDEPENDITE) */}
         <div className="flex-1 overflow-y-auto p-4 md:p-8 pb-20 bg-gray-50">
           <Outlet />
         </div>
