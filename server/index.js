@@ -107,15 +107,12 @@ async function enviarCredenciales(
   try {
     // 1. CONFIGURACIÓN DEL SERVIDOR (Tus credenciales reales)
     let transporter = nodemailer.createTransport({
-      host: "svgt326.serverneubox.com.mx",
+      host: "smtp.gmail.com",
       port: 465,
-      secure: true,
+      secure: true, // true para 465
       auth: {
-        user: "controlescolar@universidadsigloxxi.com", // Tu usuario real
-        pass: "8nw3Xqq9FCS.k#n", // Tu contraseña real
-      },
-      tls: {
-        rejectUnauthorized: false,
+        user: "franksnake08@gmail.com", // <--- Pon tu Gmail aquí (el mismo donde creaste la clave)
+        pass: "yipfsxwwmoikajlu", // <--- PEGA AQUÍ LAS 16 LETRAS QUE TE DIO GOOGLE
       },
     });
 
