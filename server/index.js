@@ -1248,8 +1248,8 @@ app.post("/api/email/enviar", verifyToken, async (req, res) => {
 });
 
 // --- RUTAS DE ADMIN ---
-// const adminRouter = express.Router();
-// adminRouter.use(isAdmin); // ¡Importante! 'isAdmin' se aplica a todas las rutas de 'adminRouter'
+const adminRouter = express.Router();
+adminRouter.use(isAdmin); // ¡Importante! 'isAdmin' se aplica a todas las rutas de 'adminRouter'
 // ==============================================================
 // MÓDULO DE CORREO DINÁMICO (Multiusuario) - CON DEPURACIÓN
 // ==============================================================
