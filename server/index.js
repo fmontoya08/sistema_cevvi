@@ -301,18 +301,18 @@ app.post("/api/public/registro-aspirante", async (req, res) => {
     await connection.commit();
 
     // 6. Enviar Correo
-    try {
-      await enviarCredenciales(
-        email_personal,
-        nombre,
-        finalMatricula,
-        passwordPlataforma,
-        emailInstitucional,
-        passwordCorreoStrong,
-      );
-    } catch (e) {
-      console.error("Error correo:", e);
-    }
+    // try {
+    //   await enviarCredenciales(
+    //     email_personal,
+    //     nombre,
+    //     finalMatricula,
+    //     passwordPlataforma,
+    //     emailInstitucional,
+    //     passwordCorreoStrong,
+    //   );
+    // } catch (e) {
+    //   console.error("Error correo:", e);
+    // }
 
     res.status(201).send({
       message: "Registro exitoso.",
