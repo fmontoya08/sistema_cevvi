@@ -33,7 +33,7 @@ const RegistroPage = () => {
     try {
       // Enviamos los datos a la ruta pública
       const res = await axios.post(
-        "http://localhost:3001/api/public/registro-aspirante",
+        "https://api-universidad-c5o8.onrender.com/api/public/registro-aspirante",
         form,
       );
       setCredenciales(res.data.credenciales);

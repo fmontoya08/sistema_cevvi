@@ -38,7 +38,7 @@ const CorreoPage = () => {
 
   const token = localStorage.getItem("token");
   const authHeaders = { headers: { Authorization: `Bearer ${token}` } };
-  const API_URL = "http://localhost:3001/api/email";
+  const API_URL = "https://api-universidad-c5o8.onrender.com/api/email";
 
   useEffect(() => {
     verificarEstado();
