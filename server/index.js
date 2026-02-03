@@ -82,8 +82,8 @@ const nodemailer = require("nodemailer"); // <--- AGREGAR AL INICIO
 // --- CONFIGURACIÓN DEL CORREO (SMTP PROPIO) ---
 const transporter = nodemailer.createTransport({
   host: "mail.puntocerodigital.com.mx", // <--- PONE AQUÍ TU SERVIDOR SMTP
-  port: 465, // <--- PUERTO (465 es seguro SSL, 587 es TLS)
-  secure: true, // <--- Pon TRUE si usas puerto 465. Pon FALSE si usas 587.
+  port: 587, // <--- PUERTO (465 es seguro SSL, 587 es TLS)
+  secure: false, // <--- Pon TRUE si usas puerto 465. Pon FALSE si usas 587.
   auth: {
     user: "contacto@puntocerodigital.com.mx", // <--- Tu correo completo
     pass: "8T&=0Y)4w6C-+Bn&", // <--- La contraseña de ese correo
