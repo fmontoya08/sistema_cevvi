@@ -127,7 +127,7 @@ const BRAND = {
 
 // --- CONFIGURACIÓN DE AXIOS ---
 const api = axios.create({
-  baseURL: "http://localhost:https://universidadsigloxxi.com/api",
+  baseURL: "https://api-universidad-c5o8.onrender.com/api",
 });
 
 api.interceptors.request.use(
@@ -737,7 +737,7 @@ const AdminLayout = () => {
               <div className="w-10 h-10 rounded-full bg-gray-100 border border-gray-200 overflow-hidden group-hover:border-[#a72a34] transition-colors">
                 {user?.foto_perfil ? (
                   <img
-                    src={`https://universidadsigloxxi.com/uploads/perfiles/${user.foto_perfil}`}
+                    src={`https://api-universidad-c5o8.onrender.com/uploads/perfiles/${user.foto_perfil}`}
                     className="w-full h-full object-cover"
                     alt="Perfil"
                   />
@@ -919,7 +919,7 @@ const DocenteLayout = () => {
               <div className="w-10 h-10 rounded-full bg-gray-100 border border-gray-200 overflow-hidden group-hover:border-[#a72a34] transition-colors">
                 {user?.foto_perfil ? (
                   <img
-                    src={`https://universidadsigloxxi.com/uploads/perfiles/${user.foto_perfil}`}
+                    src={`https://api-universidad-c5o8.onrender.com/uploads/perfiles/${user.foto_perfil}`}
                     className="w-full h-full object-cover"
                     alt="Perfil"
                   />
@@ -1099,7 +1099,7 @@ const AlumnoLayout = () => {
               <div className="w-10 h-10 rounded-full bg-gray-100 border border-gray-200 overflow-hidden group-hover:border-[#a72a34] transition-colors">
                 {user?.foto_perfil ? (
                   <img
-                    src={`https://universidadsigloxxi.com/uploads/perfiles/${user.foto_perfil}`}
+                    src={`https://api-universidad-c5o8.onrender.com/uploads/perfiles/${user.foto_perfil}`}
                     className="w-full h-full object-cover"
                     alt="Perfil"
                   />
@@ -1174,7 +1174,7 @@ const AspiranteLayout = () => {
                 // Construye la URL de la foto o usa placeholder
                 src={
                   user?.foto_perfil
-                    ? `https://universidadsigloxxi.com/uploads/perfiles/${user.foto_perfil}`
+                    ? `https://api-universidad-c5o8.onrender.com/uploads/perfiles/${user.foto_perfil}`
                     : `https://ui-avatars.com/api/?name=${encodeURIComponent(
                         user?.nombre || "?",
                       )}+${encodeURIComponent(
@@ -2046,7 +2046,7 @@ const UsuariosPage = () => {
                       <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center font-bold overflow-hidden border">
                         {u.foto_perfil ? (
                           <img
-                            src={`https://universidadsigloxxi.com/uploads/perfiles/${u.foto_perfil}`}
+                            src={`https://api-universidad-c5o8.onrender.com/uploads/perfiles/${u.foto_perfil}`}
                             className="w-full h-full object-cover"
                           />
                         ) : (
@@ -2611,7 +2611,7 @@ const UserDetailModal = ({ user, onClose }) => {
             <div className="w-24 h-24 bg-white rounded-full border-4 border-white/30 flex items-center justify-center text-4xl font-bold text-[#a72a34] shadow-lg overflow-hidden shrink-0">
               {user.foto_perfil ? (
                 <img
-                  src={`https://universidadsigloxxi.com/uploads/perfiles/${user.foto_perfil}`}
+                  src={`https://api-universidad-c5o8.onrender.com/uploads/perfiles/${user.foto_perfil}`}
                   className="w-full h-full object-cover"
                   alt="Perfil"
                 />
@@ -10497,7 +10497,7 @@ const DetalleAspirantePage = () => {
                 </td>
                 <td className="px-4 py-2">
                   <a
-                    href={`https://universidadsigloxxi.com/uploads/${doc.ruta_archivo}`}
+                    href={`https://api-universidad-c5o8.onrender.com/uploads/${doc.ruta_archivo}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center text-blue-600 hover:underline"
@@ -10684,7 +10684,7 @@ const AspiranteDashboardPage = () => {
                 </td>
                 <td className="px-4 py-2">
                   <a
-                    href={`https://universidadsigloxxi.com/uploads/${doc.ruta_archivo}`}
+                    href={`https://api-universidad-c5o8.onrender.com/uploads/${doc.ruta_archivo}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center text-blue-600 hover:underline"
@@ -11210,7 +11210,7 @@ const AulaVirtualPage = () => {
           const Icono = isEnlace ? LinkIcon : Paperclip;
           const url = isEnlace
             ? recurso.ruta_o_url
-            : `https://universidadsigloxxi.com/uploads/recursos/${recurso.ruta_o_url}`;
+            : `https://api-universidad-c5o8.onrender.com/uploads/recursos/${recurso.ruta_o_url}`;
           return (
             <div
               key={recurso.id}
@@ -12043,7 +12043,7 @@ const CalificarEntregaModal = ({
         <div className="bg-gray-50 p-4 rounded-md my-4 border">
           <h4 className="font-semibold text-gray-700">Archivo del Alumno</h4>
           <a
-            href={`https://universidadsigloxxi.com/uploads/tareas/tarea_${entrega.tarea_id}/${entrega.ruta_archivo}`}
+            href={`https://api-universidad-c5o8.onrender.com/uploads/tareas/tarea_${entrega.tarea_id}/${entrega.ruta_archivo}`}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center text-blue-600 hover:underline my-2"
@@ -12772,7 +12772,7 @@ const DetalleTareaDocentePage = () => {
                 <td className="px-4 py-2">
                   {entrega.entrega_id ? (
                     <a
-                      href={`https://universidadsigloxxi.com/uploads/tareas/tarea_${tarea.id}/${entrega.ruta_archivo}`}
+                      href={`https://api-universidad-c5o8.onrender.com/uploads/tareas/tarea_${tarea.id}/${entrega.ruta_archivo}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex items-center text-blue-600 hover:underline"
@@ -13085,7 +13085,7 @@ const MiPerfilPage = () => {
             <div className="w-48 h-48 rounded-full p-1 border-4 border-[#bb9a5a] overflow-hidden bg-gray-100 shadow-xl">
               {user?.foto_perfil ? (
                 <img
-                  src={`https://universidadsigloxxi.com/uploads/perfiles/${user.foto_perfil}`}
+                  src={`https://api-universidad-c5o8.onrender.com/uploads/perfiles/${user.foto_perfil}`}
                   className="w-full h-full object-cover"
                   alt="Perfil"
                 />
@@ -13353,7 +13353,7 @@ const InfoItem = ({ label, value, capitalize = false }) => (
 // --- COMPONENTE PRINCIPAL DE LA APP ---
 function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename="/plataforma">
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<LoginPage />} />

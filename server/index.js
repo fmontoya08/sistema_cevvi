@@ -130,7 +130,7 @@ async function enviarCredenciales(
           </div>
           
           <p style="text-align: center; margin-top: 30px;">
-            <a href="http://tudominio.com/login" style="background-color: #a72a34; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold;">Iniciar Sesión</a>
+            <a href="https://www.universidadsigloxxi.com/login" style="background-color: #a72a34; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold;">Iniciar Sesión</a>
           </p>
         </div>
       </div>
@@ -402,11 +402,16 @@ const uploadPerfil = multer({
 // --- TERMINA NUEVO CÓDIGO ---
 // --- TERMINA NUEVO CÓDIGO ---
 // --- CONFIGURACIÓN DE LA BASE DE DATOS ---
+// --- CONFIGURACIÓN DE LA BASE DE DATOS (MODO NUBE) ---
 const dbConfig = {
-  host: "localhost",
-  user: "root",
-  password: "root",
-  database: "universidad_db",
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASS,
+  database: process.env.DB_NAME,
+  port: process.env.DB_PORT || 4000, // <--- AQUÍ ESTÁ EL CAMBIO CLAVE
+  ssl: {
+    rejectUnauthorized: false, // <--- ESTO ES OBLIGATORIO PARA TiDB
+  },
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
