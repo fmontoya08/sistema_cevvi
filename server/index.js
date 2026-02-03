@@ -108,8 +108,8 @@ async function enviarCredenciales(
     // 1. CONFIGURACIÓN DEL SERVIDOR (Tus credenciales reales)
     let transporter = nodemailer.createTransport({
       host: "smtp.gmail.com",
-      port: 465,
-      secure: true, // true para 465
+      port: 587,
+      secure: false, // true para 465
       auth: {
         user: "franksnake08@gmail.com", // <--- Pon tu Gmail aquí (el mismo donde creaste la clave)
         pass: "yipfsxwwmoikajlu", // <--- PEGA AQUÍ LAS 16 LETRAS QUE TE DIO GOOGLE
@@ -146,8 +146,8 @@ async function enviarCredenciales(
 
     // 3. ENVÍO (AQUÍ ESTABA EL ERROR ANTES)
     await transporter.sendMail({
-      from: '"Control Escolar Siglo XXI" <controlescolar@universidadsigloxxi.com>', // <--- AHORA COINCIDE PERFECTO
-      to: destinatario, // Aquí va el correo personal (Gmail/Hotmail)
+      from: '"Universidad Siglo XXI" <franksnake08@gmail.com>', // Gmail forzará que salga de tu correo real, así que mejor ponlo aquí para evitar confusiones.
+      to: destinatario,
       subject: "🎓 ¡Bienvenido! Tus Accesos Oficiales",
       html: htmlContent,
     });
@@ -1248,8 +1248,8 @@ app.post("/api/email/enviar", verifyToken, async (req, res) => {
 });
 
 // --- RUTAS DE ADMIN ---
-const adminRouter = express.Router();
-adminRouter.use(isAdmin); // ¡Importante! 'isAdmin' se aplica a todas las rutas de 'adminRouter'
+// const adminRouter = express.Router();
+// adminRouter.use(isAdmin); // ¡Importante! 'isAdmin' se aplica a todas las rutas de 'adminRouter'
 // ==============================================================
 // MÓDULO DE CORREO DINÁMICO (Multiusuario) - CON DEPURACIÓN
 // ==============================================================
@@ -1363,10 +1363,10 @@ adminRouter.get("/email/mensaje/:uid", async (req, res) => {
 
     const config = {
       imap: {
-        user: mailConfig.user,
-        password: mailConfig.password,
-        host: mailConfig.host,
-        port: mailConfig.imapPort,
+        user: mailConfig.user, // <--- CAMBIA mailConfig POR mailConfig
+        password: mailConfig.password, // <--- CAMBIA mailConfig POR mailConfig
+        host: mailConfig.host, // <--- CAMBIA mailConfig POR mailConfig
+        port: mailConfig.imapPort, // <--- CAMBIA mailConfig POR mailConfig
         tls: true,
         authTimeout: 10000,
         tlsOptions: { rejectUnauthorized: false },
@@ -6699,7 +6699,7 @@ app.get("/api/alumno/finanzas/resumen", verificarAlumno, async (req, res) => {
 // ==========================================
 
 // Configuración para IMAP (Leer correos)
-const emailConfig = {
+const mailConfig = {
   user: "controlescolar@universidadsigloxxi.com",
   password: "_(Wx!5CSLI9jmof#", // Tu contraseña real
   host: "mail.universidadsigloxxi.com",
@@ -6711,10 +6711,10 @@ const emailConfig = {
 adminRouter.get("/email/inbox", async (req, res) => {
   const config = {
     imap: {
-      user: emailConfig.user,
-      password: emailConfig.password,
-      host: emailConfig.host,
-      port: emailConfig.imapPort,
+      user: mailConfig.user,
+      password: mailConfig.password,
+      host: mailConfig.host,
+      port: mailConfig.imapPort,
       tls: true,
       authTimeout: 3000,
     },
@@ -6771,7 +6771,7 @@ adminRouter.post("/email/enviar", async (req, res) => {
     // Reutilizamos el transporter que ya tienes configurado más arriba en tu archivo
     // Asegúrate de que tu variable 'transporter' esté creada antes de esto
     await transporter.sendMail({
-      from: `"Control Escolar" <${emailConfig.user}>`,
+      from: `"Control Escolar" <${mailConfig.user}>`,
       to: destinatario,
       subject: asunto,
       html: mensaje,
