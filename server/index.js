@@ -9,7 +9,7 @@ const jwt = require("jsonwebtoken");
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
-const fetch = require("node-fetch");
+// const fetch = require("node-fetch");
 const MailComposer = require("nodemailer/lib/mail-composer");
 
 const app = express();
@@ -235,11 +235,9 @@ app.post("/api/public/registro-aspirante", async (req, res) => {
     );
     if (existing.length > 0) {
       await connection.rollback();
-      return res
-        .status(400)
-        .send({
-          message: "Esta CURP ya está registrada. Intenta iniciar sesión.",
-        });
+      return res.status(400).send({
+        message: "Esta CURP ya está registrada. Intenta iniciar sesión.",
+      });
     }
 
     // 2. Generar Matrícula
@@ -318,11 +316,9 @@ app.post("/api/public/registro-aspirante", async (req, res) => {
   } catch (error) {
     await connection.rollback();
     console.error("Error registro público:", error);
-    res
-      .status(500)
-      .send({
-        message: "Error al registrar: " + (error.sqlMessage || error.message),
-      });
+    res.status(500).send({
+      message: "Error al registrar: " + (error.sqlMessage || error.message),
+    });
   } finally {
     connection.release();
   }
