@@ -9,12 +9,23 @@ const jwt = require("jsonwebtoken");
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
-// const fetch = require("node-fetch");
 const MailComposer = require("nodemailer/lib/mail-composer");
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+let db;
+
+async function connectToDatabase() {
+  try {
+    db = await mysql.createPool(dbConfig);
+    console.log("Conectado exitosamente a la base de datos MySQL.");
+  } catch (err) {
+    console.error("Error al conectar a la base de datos:", err);
+    process.exit(1);
+  }
+}
 
 const JWT_SECRET = "tu_clave_secreta_super_segura_y_larga";
 const CURP_REGEX =
@@ -416,18 +427,6 @@ const dbConfig = {
   connectionLimit: 10,
   queueLimit: 0,
 };
-
-let db;
-
-async function connectToDatabase() {
-  try {
-    db = await mysql.createPool(dbConfig);
-    console.log("Conectado exitosamente a la base de datos MySQL.");
-  } catch (err) {
-    console.error("Error al conectar a la base de datos:", err);
-    process.exit(1);
-  }
-}
 
 connectToDatabase();
 
@@ -2047,7 +2046,6 @@ adminRouter.put("/solicitudes/:id/estatus", async (req, res) => {
 
 // ... (Aquí continúan las otras rutas del adminRouter que ya tenías)
 
-// ... (justo después de const adminRouter = express.Router();)
 // ... (y de adminRouter.use(isAdmin);)
 
 // --- INICIO: NUEVAS RUTAS DE ANALÍTICAS ---
@@ -5920,7 +5918,7 @@ apiRouter.use("/foro", foroRouter);
 // --- TERMINA NUEVO CÓDIGO (RUTAS FORO) ---
 
 // --- RUTAS DE DOCENTE --- (Ahora estas líneas van después del bloque del foro)
-// const docenteRouter = express.Router();
+
 // docenteRouter.use(isDocente);
 // // ... (resto de rutas de docente) ...
 // apiRouter.use("/docente", docenteRouter);
