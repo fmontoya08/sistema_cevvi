@@ -4,7 +4,11 @@ import { UserPlus, CheckCircle, AlertTriangle, Mail } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const RegistroPage = () => {
-  // Estado inicial limpio (Igual al del Admin)
+  // CONFIGURACIÓN: URL DE PRODUCCIÓN
+  // Asegúrate de que tu Backend en Render ya tenga el cambio de "password_correo" subido.
+  const API_URL = "https://api-universidad-c5o8.onrender.com";
+
+  // Estado del formulario
   const [form, setForm] = useState({
     nombre: "",
     apellido_paterno: "",
@@ -12,14 +16,12 @@ const RegistroPage = () => {
     email_personal: "",
     telefono: "",
     domicilio: "",
-    // --- PEGAR ESTO ---
     colonia: "",
     edad: "",
     modalidad: "Escolarizada",
     escuela_procedencia: "",
     contacto_emergencia_nombre: "",
     contacto_emergencia_telefono: "",
-    // ------------------
     genero: "H",
     curp: "",
     fecha_nacimiento: "",
@@ -42,15 +44,12 @@ const RegistroPage = () => {
     try {
       // Enviamos los datos a la ruta pública
       const res = await axios.post(
-        "https://api-universidad-c5o8.onrender.com/api/public/registro-aspirante",
+        `${API_URL}/api/public/registro-aspirante`,
         form,
       );
-      // const res = await axios.post(
-      //   "http://localhost:3001/api/public/registro-aspirante", // <--- APUNTA A TU MÁQUINA
-      //   form,
-      // );
       setCredenciales(res.data.credenciales);
     } catch (err) {
+      console.error(err);
       setError(
         err.response?.data?.message || "Error al conectar con el servidor.",
       );
@@ -59,51 +58,82 @@ const RegistroPage = () => {
     }
   };
 
-  // --- VISTA DE ÉXITO (Muestra Credenciales) ---
+  // --- VISTA DE RESULTADO (CREDENCIALES) ---
   if (credenciales) {
     return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center border-t-8 border-green-500 animate-in fade-in zoom-in duration-300">
-          <div className="mx-auto bg-green-100 w-20 h-20 rounded-full flex items-center justify-center mb-4">
-            <CheckCircle size={40} className="text-green-600" />
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-xl p-8 max-w-lg w-full text-center border-t-8 border-green-500 animate-in fade-in zoom-in duration-300">
+          <div className="mx-auto bg-green-100 w-16 h-16 rounded-full flex items-center justify-center mb-4">
+            <CheckCircle size={32} className="text-green-600" />
           </div>
-          <h2 className="text-3xl font-bold text-gray-800 mb-2">
+
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">
             ¡Registro Exitoso!
           </h2>
-          <p className="text-gray-600 mb-6">
-            Hemos enviado tus claves a:{" "}
-            <strong className="text-blue-600">{form.email_personal}</strong>
+          <p className="text-gray-500 text-sm mb-6">
+            Captura esta pantalla. Estos son tus accesos oficiales:
           </p>
 
-          <div className="bg-gray-50 p-6 rounded-xl border border-dashed border-gray-300 text-left space-y-4 mb-6">
-            <div>
-              <p className="text-xs text-gray-500 uppercase font-bold">
-                Usuario / Matrícula
-              </p>
-              <p className="text-xl font-mono font-bold text-gray-900">
-                {credenciales.usuario}
-              </p>
+          <div className="text-left space-y-4 mb-8">
+            {/* 1. DATOS PLATAFORMA */}
+            <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 shadow-sm relative overflow-hidden">
+              <div className="absolute top-0 right-0 bg-gray-200 text-gray-600 text-[10px] font-bold px-2 py-1 rounded-bl-lg">
+                PLATAFORMA
+              </div>
+              <div className="grid grid-cols-2 gap-4 mt-2">
+                <div>
+                  <p className="text-[10px] text-gray-400 uppercase font-bold">
+                    Usuario / Matrícula
+                  </p>
+                  <p className="text-xl font-mono font-bold text-gray-900 truncate">
+                    {credenciales.usuario}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-gray-400 uppercase font-bold">
+                    Contraseña
+                  </p>
+                  <p className="text-xl font-mono font-bold text-gray-900 truncate">
+                    {credenciales.password}
+                  </p>
+                </div>
+              </div>
             </div>
-            <div>
-              <p className="text-xs text-gray-500 uppercase font-bold">
-                Contraseña
-              </p>
-              <p className="text-lg font-mono font-bold text-blue-700">
-                {credenciales.password}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500 uppercase font-bold">
-                Correo Institucional
-              </p>
-              <p className="text-sm font-medium text-gray-700">
-                {credenciales.correo}
-              </p>
+
+            {/* 2. DATOS CORREO INSTITUCIONAL */}
+            <div className="bg-blue-50 p-4 rounded-xl border border-blue-200 shadow-sm relative overflow-hidden">
+              <div className="absolute top-0 right-0 bg-blue-200 text-blue-800 text-[10px] font-bold px-2 py-1 rounded-bl-lg">
+                CORREO OFICIAL
+              </div>
+              <div className="space-y-3 mt-2">
+                <div>
+                  <p className="text-[10px] text-blue-400 uppercase font-bold">
+                    Correo Institucional
+                  </p>
+                  <p className="text-sm font-mono font-bold text-gray-800 break-all select-all">
+                    {credenciales.correo}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-blue-400 uppercase font-bold">
+                    Contraseña del Correo
+                  </p>
+                  <div className="mt-1">
+                    <span className="text-lg font-mono font-bold text-blue-700 bg-white border border-blue-100 px-3 py-1 rounded-md select-all inline-block">
+                      {credenciales.password_correo || "Revisar Backend"}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-blue-400 mt-1 italic">
+                    * Úsala para entrar a Gmail o Outlook.
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
+
           <Link
             to="/login"
-            className="block w-full bg-[#a72a34] text-white py-3 rounded-xl font-bold hover:bg-[#8f242c] transition shadow-lg"
+            className="block w-full bg-[#1e293b] text-white py-3 rounded-xl font-bold hover:bg-black transition shadow-lg transform active:scale-95"
           >
             Ir a Iniciar Sesión
           </Link>
@@ -112,7 +142,7 @@ const RegistroPage = () => {
     );
   }
 
-  // --- VISTA FORMULARIO (CAMPOS EXACTOS DEL ADMIN) ---
+  // --- VISTA FORMULARIO ---
   return (
     <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl overflow-hidden">
@@ -128,13 +158,13 @@ const RegistroPage = () => {
 
         <div className="p-8">
           {error && (
-            <div className="mb-6 bg-red-50 text-red-700 p-4 rounded-lg flex items-center gap-2 border border-red-200">
+            <div className="mb-6 bg-red-50 text-red-700 p-4 rounded-lg flex items-center gap-2 border border-red-200 animate-pulse">
               <AlertTriangle size={20} /> {error}
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* 1. CORREO PERSONAL (Importante para el envío) */}
+            {/* SECCIÓN 1: CONTACTO CLAVE */}
             <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
               <label className="block text-xs font-bold text-blue-800 uppercase mb-1 flex items-center gap-1">
                 <Mail size={14} /> Correo Personal
@@ -148,9 +178,12 @@ const RegistroPage = () => {
                 onChange={handleChange}
                 className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
               />
+              <p className="text-[10px] text-blue-600 mt-1">
+                * Aquí te enviaremos una copia de tus accesos.
+              </p>
             </div>
 
-            {/* 2. DATOS GENERALES (Grid de 2 columnas) */}
+            {/* SECCIÓN 2: DATOS GENERALES */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="label-form">Nombre(s) *</label>
@@ -192,41 +225,39 @@ const RegistroPage = () => {
                   className="input-form"
                 />
               </div>
+
               <div className="md:col-span-2">
                 <label className="label-form">Domicilio Completo *</label>
                 <input
                   required
                   name="domicilio"
-                  placeholder="Calle, Número, Colonia y Código Postal"
+                  placeholder="Calle, Número, Cruzamientos"
                   value={form.domicilio}
                   onChange={handleChange}
                   className="input-form"
                 />
               </div>
-              {/* --- NUEVOS CAMPOS --- */}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="label-form">Colonia *</label>
-                  <input
-                    required
-                    name="colonia"
-                    value={form.colonia}
-                    onChange={handleChange}
-                    className="input-form"
-                  />
-                </div>
-                <div>
-                  <label className="label-form">Edad *</label>
-                  <input
-                    required
-                    type="number"
-                    name="edad"
-                    value={form.edad}
-                    onChange={handleChange}
-                    className="input-form"
-                  />
-                </div>
+              <div>
+                <label className="label-form">Colonia *</label>
+                <input
+                  required
+                  name="colonia"
+                  value={form.colonia}
+                  onChange={handleChange}
+                  className="input-form"
+                />
+              </div>
+              <div>
+                <label className="label-form">Edad *</label>
+                <input
+                  required
+                  type="number"
+                  name="edad"
+                  value={form.edad}
+                  onChange={handleChange}
+                  className="input-form"
+                />
               </div>
 
               <div className="md:col-span-2">
@@ -234,7 +265,7 @@ const RegistroPage = () => {
                 <input
                   required
                   name="escuela_procedencia"
-                  placeholder="Bachillerato de origen"
+                  placeholder="Nombre de tu Bachillerato"
                   value={form.escuela_procedencia}
                   onChange={handleChange}
                   className="input-form"
@@ -249,14 +280,15 @@ const RegistroPage = () => {
                   onChange={handleChange}
                   className="input-form bg-white"
                 >
-                  <option value="Presencial">Presencial</option>
-                  <option value="Vitual">Vitual</option>
+                  <option value="Escolarizada">Escolarizada</option>
+                  <option value="Sabatina">Sabatina / Ejecutiva</option>
+                  <option value="Online">Online</option>
                 </select>
               </div>
 
-              {/* SECCIÓN EMERGENCIA */}
-              <div className="bg-red-50 p-4 rounded-lg border border-red-100 mt-4">
-                <p className="text-xs font-bold text-red-800 uppercase mb-3">
+              {/* EMERGENCIA */}
+              <div className="md:col-span-2 bg-red-50 p-4 rounded-lg border border-red-100">
+                <p className="text-xs font-bold text-red-800 uppercase mb-3 border-b border-red-200 pb-1">
                   En caso de emergencia
                 </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -287,7 +319,7 @@ const RegistroPage = () => {
                   </div>
                 </div>
               </div>
-              {/* --------------------- */}
+
               <div>
                 <label className="label-form">CURP *</label>
                 <input
@@ -333,9 +365,12 @@ const RegistroPage = () => {
                   onChange={handleChange}
                   className="input-form bg-white"
                 >
-                  <option value="1">Licenciatura en Pedagogía</option>
-                  <option value="2">Licenciatura en Psicología</option>
-                  {/* Ajusta tus carreras aquí */}
+                  <option value="1">
+                    Ingeniería en Desarrollo de Software
+                  </option>
+                  <option value="2">Licenciatura en Derecho</option>
+                  <option value="3">Licenciatura en Administración</option>
+                  {/* Agrega más opciones aquí */}
                 </select>
               </div>
             </div>
@@ -345,17 +380,16 @@ const RegistroPage = () => {
               type="submit"
               className="w-full bg-[#a72a34] hover:bg-[#8f242c] text-white py-4 rounded-xl font-bold text-lg shadow-xl mt-6 transition transform hover:scale-[1.01]"
             >
-              {cargando ? "Registrando..." : "REGISTRARME"}
+              {cargando ? "Procesando Registro..." : "FINALIZAR REGISTRO"}
             </button>
           </form>
         </div>
       </div>
 
-      {/* Estilos simples */}
       <style>{`
         .label-form { display: block; font-size: 0.75rem; font-weight: 700; color: #6b7280; text-transform: uppercase; margin-bottom: 0.25rem; }
         .input-form { width: 100%; padding: 0.75rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; outline: none; transition: all 0.2s; }
-        .input-form:focus { ring: 2px; ring-color: #a72a34; border-color: #a72a34; }
+        .input-form:focus { ring: 2px; ring-color: #a72a34; border-color: #a72a34; background-color: #fff; box-shadow: 0 0 0 4px rgba(167, 42, 52, 0.1); }
       `}</style>
     </div>
   );

@@ -322,6 +322,7 @@ app.post("/api/public/registro-aspirante", async (req, res) => {
         usuario: finalMatricula,
         correo: emailInstitucional,
         password: finalMatricula,
+        password_correo: passwordCorreoStrong,
       },
     });
   } catch (error) {
@@ -3497,12 +3498,12 @@ adminRouter.post("/usuarios", async (req, res) => {
     }
 
     res.status(201).send({
-      message: "Usuario creado.",
+      message: "Registro exitoso.",
       credenciales: {
         usuario: finalMatricula,
         correo: emailInstitucional,
-        password: passwordPlataforma,
-        password_correo: passwordCorreoStrong,
+        password: finalMatricula, // Contraseña Plataforma (Matrícula)
+        password_correo: passwordCorreoStrong, // <--- ¡AGREGA ESTA LÍNEA EXACTA!
       },
     });
   } catch (error) {
