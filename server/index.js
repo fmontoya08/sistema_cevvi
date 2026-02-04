@@ -327,11 +327,9 @@ app.post("/api/public/registro-aspirante", async (req, res) => {
   } catch (error) {
     await connection.rollback();
     console.error("Error registro público:", error);
-    res
-      .status(500)
-      .send({
-        message: "Error al registrar: " + (error.sqlMessage || error.message),
-      });
+    res.status(500).send({
+      message: "Error al registrar: " + (error.sqlMessage || error.message),
+    });
   } finally {
     connection.release();
   }
@@ -3504,6 +3502,7 @@ adminRouter.post("/usuarios", async (req, res) => {
         usuario: finalMatricula,
         correo: emailInstitucional,
         password: passwordPlataforma,
+        password_correo: passwordCorreoStrong,
       },
     });
   } catch (error) {
