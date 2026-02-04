@@ -217,6 +217,7 @@ app.post("/api/public/registro-aspirante", async (req, res) => {
     apellido_materno,
     email_personal, // <--- Este es el importante para el correo
     telefono,
+    domicilio,
     genero,
     curp,
     fecha_nacimiento,
@@ -276,8 +277,8 @@ app.post("/api/public/registro-aspirante", async (req, res) => {
 
     const sql = `
       INSERT INTO usuarios 
-      (nombre, apellido_paterno, apellido_materno, email, email_personal, password, password_email, telefono, genero, curp, fecha_nacimiento, rol, carrera_id, sede_id, matricula, activo) 
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+      (nombre, apellido_paterno, apellido_materno, email, email_personal, password, password_email, telefono, domicilio, genero, curp, fecha_nacimiento, rol, carrera_id, sede_id, matricula, activo) 
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
     `;
 
     await connection.query(sql, [

@@ -11,6 +11,7 @@ const RegistroPage = () => {
     apellido_materno: "",
     email_personal: "", // Campo clave para enviar las claves
     telefono: "",
+    domicilio: "",
     genero: "H",
     curp: "",
     fecha_nacimiento: "",
@@ -178,6 +179,17 @@ const RegistroPage = () => {
                   name="telefono"
                   type="tel"
                   value={form.telefono}
+                  onChange={handleChange}
+                  className="input-form"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="label-form">Domicilio Completo *</label>
+                <input
+                  required
+                  name="domicilio"
+                  placeholder="Calle, Número, Colonia y Código Postal"
+                  value={form.domicilio}
                   onChange={handleChange}
                   className="input-form"
                 />
