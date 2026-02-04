@@ -33,8 +33,15 @@ const RegistroPage = () => {
   const [credenciales, setCredenciales] = useState(null);
   const [error, setError] = useState("");
 
-  const handleChange = (e) =>
-    setForm({ ...form, [e.target.name]: e.target.value });
+  // --- CORRECCIÓN AQUÍ: Forzar mayúsculas al escribir en CURP ---
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setForm({
+      ...form,
+      [name]: name === "curp" ? value.toUpperCase() : value,
+    });
+  };
+  // -------------------------------------------------------------
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -132,7 +139,7 @@ const RegistroPage = () => {
           </div>
 
           <Link
-            to="/login"
+            to="plataforma/login"
             className="block w-full bg-[#1e293b] text-white py-3 rounded-xl font-bold hover:bg-black transition shadow-lg transform active:scale-95"
           >
             Ir a Iniciar Sesión
@@ -178,9 +185,6 @@ const RegistroPage = () => {
                 onChange={handleChange}
                 className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
               />
-              <p className="text-[10px] text-blue-600 mt-1">
-                * Aquí te enviaremos una copia de tus accesos.
-              </p>
             </div>
 
             {/* SECCIÓN 2: DATOS GENERALES */}
@@ -280,9 +284,8 @@ const RegistroPage = () => {
                   onChange={handleChange}
                   className="input-form bg-white"
                 >
-                  <option value="Escolarizada">Escolarizada</option>
-                  <option value="Sabatina">Sabatina / Ejecutiva</option>
-                  <option value="Online">Online</option>
+                  <option value="Presencial">Presencial</option>
+                  <option value="Virtual">Virtual</option>
                 </select>
               </div>
 
@@ -365,11 +368,8 @@ const RegistroPage = () => {
                   onChange={handleChange}
                   className="input-form bg-white"
                 >
-                  <option value="1">
-                    Ingeniería en Desarrollo de Software
-                  </option>
-                  <option value="2">Licenciatura en Derecho</option>
-                  <option value="3">Licenciatura en Administración</option>
+                  <option value="1">Licenciatura en Pedagogía</option>
+                  <option value="2">Licenciatura en Psicología</option>
                   {/* Agrega más opciones aquí */}
                 </select>
               </div>

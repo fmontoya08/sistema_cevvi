@@ -230,30 +230,36 @@ app.post("/api/public/registro-aspirante", async (req, res) => {
     sede_id,
   } = req.body;
 
+  // --- CORRECCIÓN: LIMPIEZA DE CURP (SEGURIDAD) ---
+  // Esto asegura que aunque el frontend envíe minúsculas, aquí las convertimos
+  const curpSanitized = curp ? curp.toUpperCase().trim() : "";
+  // ------------------------------------------------
+
   const rol = "aspirante";
   const connection = await db.getConnection();
 
   try {
     await connection.beginTransaction();
 
-    // 1. Validaciones
-    if (curp && !CURP_REGEX.test(curp)) {
+    // 1. Validaciones (Usando curpSanitized)
+    if (curpSanitized && !CURP_REGEX.test(curpSanitized)) {
       await connection.rollback();
       return res
         .status(400)
         .send({ message: "El formato de la CURP es inválido." });
     }
 
+    // 2. Chequeo de duplicados (Usando curpSanitized)
     const [existing] = await connection.query(
       "SELECT curp FROM usuarios WHERE curp = ?",
-      [curp],
+      [curpSanitized],
     );
     if (existing.length > 0) {
       await connection.rollback();
       return res.status(400).send({ message: "Esta CURP ya está registrada." });
     }
 
-    // 2. Generar Matrícula
+    // 3. Generar Matrícula
     const currentYear = new Date().getFullYear().toString();
     const [lastUser] = await connection.query(
       "SELECT matricula FROM usuarios WHERE matricula LIKE ? ORDER BY CAST(matricula AS UNSIGNED) DESC LIMIT 1",
@@ -266,18 +272,17 @@ app.post("/api/public/registro-aspirante", async (req, res) => {
     }
     const finalMatricula = `${currentYear}${nextSequence.toString().padStart(4, "0")}`;
 
-    // 3. Generar Credenciales
+    // 4. Generar Credenciales
     const emailInstitucional = `${finalMatricula}@${CPANEL_CONFIG.domain}`;
     const passwordCorreoStrong = `Siglo.${finalMatricula}!`;
     const passwordHash = await bcrypt.hash(finalMatricula, 10);
 
-    // 4. Crear en cPanel (¡ACTIVADO!)
-    // IMPORTANTE: Esto debe ir antes de guardar en BD para asegurar que se crea
+    // 5. Crear en cPanel (¡ACTIVADO!)
     await crearCorreoCpanel(finalMatricula, passwordCorreoStrong);
 
     const fechaFinal = fecha_nacimiento === "" ? null : fecha_nacimiento;
 
-    // 5. Guardar en BD con los NUEVOS CAMPOS
+    // 6. Guardar en BD (Usando curpSanitized)
     const sql = `
       INSERT INTO usuarios 
       (nombre, apellido_paterno, apellido_materno, email, email_personal, password, password_email, telefono, domicilio, colonia, edad, modalidad, escuela_procedencia, contacto_emergencia_nombre, contacto_emergencia_telefono, genero, curp, fecha_nacimiento, rol, carrera_id, sede_id, matricula, activo) 
@@ -303,7 +308,7 @@ app.post("/api/public/registro-aspirante", async (req, res) => {
       contacto_emergencia_telefono || null,
       // ----------------------
       genero,
-      curp,
+      curpSanitized, // <--- AQUÍ SE USA LA CURP LIMPIA
       fechaFinal,
       rol,
       carrera_id || 1,
@@ -313,7 +318,7 @@ app.post("/api/public/registro-aspirante", async (req, res) => {
 
     await connection.commit();
 
-    // 6. Enviar Correo de Bienvenida (Opcional, si tienes configurado Gmail)
+    // 7. Enviar Correo de Bienvenida (Opcional, si tienes configurado Gmail)
     // await enviarCredenciales(email_personal, nombre, finalMatricula, finalMatricula, emailInstitucional, passwordCorreoStrong);
 
     res.status(201).send({
