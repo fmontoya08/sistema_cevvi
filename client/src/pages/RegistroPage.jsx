@@ -37,6 +37,10 @@ const RegistroPage = () => {
         "https://api-universidad-c5o8.onrender.com/api/public/registro-aspirante",
         form,
       );
+      // const res = await axios.post(
+      //   "http://localhost:3001/api/public/registro-aspirante", // <--- APUNTA A TU MÁQUINA
+      //   form,
+      // );
       setCredenciales(res.data.credenciales);
     } catch (err) {
       setError(

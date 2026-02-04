@@ -290,6 +290,7 @@ app.post("/api/public/registro-aspirante", async (req, res) => {
       passwordHash,
       passwordCorreoStrong,
       telefono,
+      domicilio || null,
       genero,
       curp,
       fechaFinal,
