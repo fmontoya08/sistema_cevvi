@@ -217,11 +217,11 @@ app.post("/api/public/registro-aspirante", async (req, res) => {
     domicilio,
     // --- NUEVOS CAMPOS ---
     colonia,
-    contacto_emergencia_nombre,
-    contacto_emergencia_telefono,
-    escuela_procedencia,
     edad,
     modalidad,
+    escuela_procedencia,
+    contacto_emergencia_nombre,
+    contacto_emergencia_telefono,
     // ---------------------
     genero,
     curp,
@@ -271,15 +271,16 @@ app.post("/api/public/registro-aspirante", async (req, res) => {
     const passwordCorreoStrong = `Siglo.${finalMatricula}!`;
     const passwordHash = await bcrypt.hash(finalMatricula, 10);
 
-    // 4. Crear en cPanel (Descomenta cuando Neubox funcione)
-    // await crearCorreoCpanel(finalMatricula, passwordCorreoStrong);
+    // 4. Crear en cPanel (¡ACTIVADO!)
+    // IMPORTANTE: Esto debe ir antes de guardar en BD para asegurar que se crea
+    await crearCorreoCpanel(finalMatricula, passwordCorreoStrong);
 
     const fechaFinal = fecha_nacimiento === "" ? null : fecha_nacimiento;
 
-    // --- SQL ACTUALIZADO CON LOS NUEVOS CAMPOS ---
+    // 5. Guardar en BD con los NUEVOS CAMPOS
     const sql = `
       INSERT INTO usuarios 
-      (nombre, apellido_paterno, apellido_materno, email, email_personal, password, password_email, telefono, domicilio, colonia, contacto_emergencia_nombre, contacto_emergencia_telefono, escuela_procedencia, edad, modalidad, genero, curp, fecha_nacimiento, rol, carrera_id, sede_id, matricula, activo) 
+      (nombre, apellido_paterno, apellido_materno, email, email_personal, password, password_email, telefono, domicilio, colonia, edad, modalidad, escuela_procedencia, contacto_emergencia_nombre, contacto_emergencia_telefono, genero, curp, fecha_nacimiento, rol, carrera_id, sede_id, matricula, activo) 
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
     `;
 
@@ -295,11 +296,11 @@ app.post("/api/public/registro-aspirante", async (req, res) => {
       domicilio || null,
       // --- VALORES NUEVOS ---
       colonia || null,
+      edad || null,
+      modalidad || "Escolarizada",
+      escuela_procedencia || null,
       contacto_emergencia_nombre || null,
       contacto_emergencia_telefono || null,
-      escuela_procedencia || null,
-      edad || null,
-      modalidad || null,
       // ----------------------
       genero,
       curp,
@@ -311,6 +312,9 @@ app.post("/api/public/registro-aspirante", async (req, res) => {
     ]);
 
     await connection.commit();
+
+    // 6. Enviar Correo de Bienvenida (Opcional, si tienes configurado Gmail)
+    // await enviarCredenciales(email_personal, nombre, finalMatricula, finalMatricula, emailInstitucional, passwordCorreoStrong);
 
     res.status(201).send({
       message: "Registro exitoso.",
