@@ -207,17 +207,22 @@ async function crearCorreoCpanel(usuario, passwordCorreo) {
   }
 }
 
-// ==========================================
-// RUTA PÚBLICA DE AUTO-REGISTRO (VERSIÓN SIMPLE)
-// ==========================================
 app.post("/api/public/registro-aspirante", async (req, res) => {
   const {
     nombre,
     apellido_paterno,
     apellido_materno,
-    email_personal, // <--- Este es el importante para el correo
+    email_personal,
     telefono,
     domicilio,
+    // --- NUEVOS CAMPOS ---
+    colonia,
+    contacto_emergencia_nombre,
+    contacto_emergencia_telefono,
+    escuela_procedencia,
+    edad,
+    modalidad,
+    // ---------------------
     genero,
     curp,
     fecha_nacimiento,
@@ -245,9 +250,7 @@ app.post("/api/public/registro-aspirante", async (req, res) => {
     );
     if (existing.length > 0) {
       await connection.rollback();
-      return res.status(400).send({
-        message: "Esta CURP ya está registrada. Intenta iniciar sesión.",
-      });
+      return res.status(400).send({ message: "Esta CURP ya está registrada." });
     }
 
     // 2. Generar Matrícula
@@ -266,31 +269,38 @@ app.post("/api/public/registro-aspirante", async (req, res) => {
     // 3. Generar Credenciales
     const emailInstitucional = `${finalMatricula}@${CPANEL_CONFIG.domain}`;
     const passwordCorreoStrong = `Siglo.${finalMatricula}!`;
-    const passwordPlataforma = finalMatricula;
-    const passwordHash = await bcrypt.hash(passwordPlataforma, 10);
+    const passwordHash = await bcrypt.hash(finalMatricula, 10);
 
-    // 4. Crear en cPanel
-    await crearCorreoCpanel(finalMatricula, passwordCorreoStrong);
+    // 4. Crear en cPanel (Descomenta cuando Neubox funcione)
+    // await crearCorreoCpanel(finalMatricula, passwordCorreoStrong);
 
-    // 5. Guardar en BD (SOLO CAMPOS BÁSICOS)
     const fechaFinal = fecha_nacimiento === "" ? null : fecha_nacimiento;
 
+    // --- SQL ACTUALIZADO CON LOS NUEVOS CAMPOS ---
     const sql = `
       INSERT INTO usuarios 
-      (nombre, apellido_paterno, apellido_materno, email, email_personal, password, password_email, telefono, domicilio, genero, curp, fecha_nacimiento, rol, carrera_id, sede_id, matricula, activo) 
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+      (nombre, apellido_paterno, apellido_materno, email, email_personal, password, password_email, telefono, domicilio, colonia, contacto_emergencia_nombre, contacto_emergencia_telefono, escuela_procedencia, edad, modalidad, genero, curp, fecha_nacimiento, rol, carrera_id, sede_id, matricula, activo) 
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
     `;
 
     await connection.query(sql, [
       nombre,
       apellido_paterno,
       apellido_materno || null,
-      emailInstitucional, // Login interno
-      email_personal, // Para recuperar / notificaciones
+      emailInstitucional,
+      email_personal,
       passwordHash,
       passwordCorreoStrong,
       telefono,
       domicilio || null,
+      // --- VALORES NUEVOS ---
+      colonia || null,
+      contacto_emergencia_nombre || null,
+      contacto_emergencia_telefono || null,
+      escuela_procedencia || null,
+      edad || null,
+      modalidad || null,
+      // ----------------------
       genero,
       curp,
       fechaFinal,
@@ -302,34 +312,22 @@ app.post("/api/public/registro-aspirante", async (req, res) => {
 
     await connection.commit();
 
-    // 6. Enviar Correo
-    // try {
-    //   await enviarCredenciales(
-    //     email_personal,
-    //     nombre,
-    //     finalMatricula,
-    //     passwordPlataforma,
-    //     emailInstitucional,
-    //     passwordCorreoStrong,
-    //   );
-    // } catch (e) {
-    //   console.error("Error correo:", e);
-    // }
-
     res.status(201).send({
       message: "Registro exitoso.",
       credenciales: {
         usuario: finalMatricula,
         correo: emailInstitucional,
-        password: passwordPlataforma,
+        password: finalMatricula,
       },
     });
   } catch (error) {
     await connection.rollback();
     console.error("Error registro público:", error);
-    res.status(500).send({
-      message: "Error al registrar: " + (error.sqlMessage || error.message),
-    });
+    res
+      .status(500)
+      .send({
+        message: "Error al registrar: " + (error.sqlMessage || error.message),
+      });
   } finally {
     connection.release();
   }

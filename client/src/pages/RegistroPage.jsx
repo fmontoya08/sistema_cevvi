@@ -9,9 +9,17 @@ const RegistroPage = () => {
     nombre: "",
     apellido_paterno: "",
     apellido_materno: "",
-    email_personal: "", // Campo clave para enviar las claves
+    email_personal: "",
     telefono: "",
     domicilio: "",
+    // --- PEGAR ESTO ---
+    colonia: "",
+    edad: "",
+    modalidad: "Escolarizada",
+    escuela_procedencia: "",
+    contacto_emergencia_nombre: "",
+    contacto_emergencia_telefono: "",
+    // ------------------
     genero: "H",
     curp: "",
     fecha_nacimiento: "",
@@ -129,7 +137,7 @@ const RegistroPage = () => {
             {/* 1. CORREO PERSONAL (Importante para el envío) */}
             <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
               <label className="block text-xs font-bold text-blue-800 uppercase mb-1 flex items-center gap-1">
-                <Mail size={14} /> Correo Personal (Gmail/Outlook) *
+                <Mail size={14} /> Correo Personal
               </label>
               <input
                 required
@@ -140,9 +148,6 @@ const RegistroPage = () => {
                 onChange={handleChange}
                 className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
               />
-              <p className="text-xs text-blue-600 mt-1">
-                Te enviaremos tus claves de acceso aquí.
-              </p>
             </div>
 
             {/* 2. DATOS GENERALES (Grid de 2 columnas) */}
@@ -198,7 +203,91 @@ const RegistroPage = () => {
                   className="input-form"
                 />
               </div>
+              {/* --- NUEVOS CAMPOS --- */}
 
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="label-form">Colonia *</label>
+                  <input
+                    required
+                    name="colonia"
+                    value={form.colonia}
+                    onChange={handleChange}
+                    className="input-form"
+                  />
+                </div>
+                <div>
+                  <label className="label-form">Edad *</label>
+                  <input
+                    required
+                    type="number"
+                    name="edad"
+                    value={form.edad}
+                    onChange={handleChange}
+                    className="input-form"
+                  />
+                </div>
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="label-form">Escuela de Procedencia *</label>
+                <input
+                  required
+                  name="escuela_procedencia"
+                  placeholder="Bachillerato de origen"
+                  value={form.escuela_procedencia}
+                  onChange={handleChange}
+                  className="input-form"
+                />
+              </div>
+
+              <div>
+                <label className="label-form">Modalidad *</label>
+                <select
+                  name="modalidad"
+                  value={form.modalidad}
+                  onChange={handleChange}
+                  className="input-form bg-white"
+                >
+                  <option value="Presencial">Presencial</option>
+                  <option value="Vitual">Vitual</option>
+                </select>
+              </div>
+
+              {/* SECCIÓN EMERGENCIA */}
+              <div className="bg-red-50 p-4 rounded-lg border border-red-100 mt-4">
+                <p className="text-xs font-bold text-red-800 uppercase mb-3">
+                  En caso de emergencia
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="label-form text-red-900">
+                      Nombre Contacto *
+                    </label>
+                    <input
+                      required
+                      name="contacto_emergencia_nombre"
+                      value={form.contacto_emergencia_nombre}
+                      onChange={handleChange}
+                      className="input-form border-red-200"
+                    />
+                  </div>
+                  <div>
+                    <label className="label-form text-red-900">
+                      Teléfono Contacto *
+                    </label>
+                    <input
+                      required
+                      type="tel"
+                      name="contacto_emergencia_telefono"
+                      value={form.contacto_emergencia_telefono}
+                      onChange={handleChange}
+                      className="input-form border-red-200"
+                    />
+                  </div>
+                </div>
+              </div>
+              {/* --------------------- */}
               <div>
                 <label className="label-form">CURP *</label>
                 <input
@@ -244,11 +333,8 @@ const RegistroPage = () => {
                   onChange={handleChange}
                   className="input-form bg-white"
                 >
-                  <option value="1">
-                    Ingeniería en Desarrollo de Software
-                  </option>
-                  <option value="2">Licenciatura en Derecho</option>
-                  <option value="3">Licenciatura en Administración</option>
+                  <option value="1">Licenciatura en Pedagogía</option>
+                  <option value="2">Licenciatura en Psicología</option>
                   {/* Ajusta tus carreras aquí */}
                 </select>
               </div>
