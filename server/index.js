@@ -302,7 +302,7 @@ app.post("/api/public/registro-aspirante", async (req, res) => {
       // --- VALORES NUEVOS ---
       colonia || null,
       edad || null,
-      modalidad || "Escolarizada",
+      modalidad || "",
       escuela_procedencia || null,
       contacto_emergencia_nombre || null,
       contacto_emergencia_telefono || null,
@@ -5021,16 +5021,23 @@ docenteRouter.get(
   },
 );
 
-// POST (Docente): Crear una nueva tarea
+// POST (Docente): Crear tarea + Notificaciones (Versión "Asistencia" Confirmada)
+// POST (Docente): Crear tarea (Versión Depuración + Corrección de Fecha)
+// POST (Docente): Crear tarea + Notificaciones (Versión CORREGIDA: usuario_id)
 docenteRouter.post(
   "/aula-virtual/:grupoId/:asignaturaId/tareas",
   async (req, res) => {
+    console.log("➡️ INICIO: Creando tarea...");
     try {
       const { grupoId, asignaturaId } = req.params;
       const { titulo, descripcion, fecha_limite } = req.body;
       const docente_id = req.user.id;
 
-      // Validamos que el docente da esta clase
+      // 1. Corrección de fecha (para evitar error si viene vacía)
+      const fechaFinal =
+        fecha_limite && fecha_limite !== "" ? fecha_limite : null;
+
+      // 2. Validar permiso
       const [[curso]] = await db.query(
         "SELECT * FROM grupo_asignaturas_docentes WHERE grupo_id = ? AND asignatura_id = ? AND docente_id = ?",
         [grupoId, asignaturaId, docente_id],
@@ -5039,88 +5046,83 @@ docenteRouter.post(
         return res.status(403).send({ message: "No tienes permiso." });
       }
 
+      // 3. Insertar Tarea
       const [result] = await db.query(
-        "INSERT INTO tareas (grupo_id, asignatura_id, docente_id, titulo, descripcion, fecha_limite) VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO tareas (grupo_id, asignatura_id, docente_id, titulo, descripcion, fecha_limite, fecha_creacion) VALUES (?, ?, ?, ?, ?, ?, NOW())",
         [
           grupoId,
           asignaturaId,
           docente_id,
           titulo,
           descripcion || null,
-          fecha_limite || null,
+          fechaFinal,
         ],
       );
-
       const newTaskId = result.insertId;
+      console.log(`✅ Tarea creada con ID: ${newTaskId}`);
 
-      // --- INICIA CÓDIGO DE NOTIFICACIÓN (NUEVO) ---
+      // 4. NOTIFICACIONES (Bloque Blindado)
       try {
-        // 1. Obtener el nombre de la asignatura
-        const [[asignatura]] = await db.query(
+        // A) Datos para el mensaje
+        const [[materia]] = await db.query(
           "SELECT nombre_asignatura FROM asignaturas WHERE id = ?",
           [asignaturaId],
         );
-        const nombreAsignatura = asignatura
-          ? asignatura.nombre_asignatura
-          : "del curso";
+        const nombreMateria = materia ? materia.nombre_asignatura : "Clase";
 
-        // 2. Definir mensaje y URL
-        const mensaje = `Nueva tarea: '${titulo}' en ${nombreAsignatura}`;
+        const mensaje = `Nueva tarea en ${nombreMateria}: "${titulo}"`;
         const urlDestino = `/alumno/grupo/${grupoId}/asignatura/${asignaturaId}/aula`;
 
-        // 3. Obtener todos los alumnos del grupo
+        // B) Obtener alumnos
         const [alumnos] = await db.query(
           "SELECT alumno_id FROM grupo_alumnos WHERE grupo_id = ?",
           [grupoId],
         );
-        const alumnoIds = alumnos.map((a) => a.alumno_id);
 
-        if (alumnoIds.length > 0) {
-          // 4. Crear notificaciones de campanita (web)
-          const notifData = alumnos.map((a) => [
-            a.alumno_id,
-            mensaje,
-            urlDestino,
-          ]);
+        // C) BUCLE DE ENVÍO (Usando 'usuario_id')
+        for (const alumno of alumnos) {
+          const idAlumno = alumno.alumno_id;
+
+          // 1. Insertar en Campanita (CORREGIDO: usuario_id)
           await db.query(
-            "INSERT INTO notificaciones (user_id, mensaje, url_destino) VALUES ?",
-            [notifData],
+            "INSERT INTO notificaciones (usuario_id, mensaje, url_destino, leido, fecha, tipo) VALUES (?, ?, ?, 0, NOW(), 'tarea')",
+            [idAlumno, mensaje, urlDestino],
           );
 
-          // 5. Enviar Notificaciones Push (móvil)
+          // 2. Enviar Push a Android
           const [tokens] = await db.query(
-            "SELECT token FROM push_tokens WHERE user_id IN (?)",
-            [alumnoIds],
+            "SELECT token FROM push_tokens WHERE user_id = ?",
+            [idAlumno],
           );
+
           if (tokens.length > 0) {
-            const messages = tokens.map((t) => ({
+            const expoMessages = tokens.map((t) => ({
               to: t.token,
               sound: "default",
-              title: "¡Nueva Tarea! 📝",
+              title: "Nueva Tarea 📚",
               body: mensaje,
+              data: { url: urlDestino },
             }));
-            await fetch("https://exp.host/--/api/v2/push/send", {
+
+            fetch("https://exp.host/--/api/v2/push/send", {
               method: "POST",
-              headers: {
-                Accept: "application/json",
-                "Accept-encoding": "gzip, deflate",
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify(messages),
-            });
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(expoMessages),
+            }).catch((e) => console.error("Error push:", e));
           }
         }
-        console.log(`Notificaciones de tarea creadas para el grupo ${grupoId}`);
       } catch (notifError) {
-        // Si falla la notificación, no detenemos la creación de la tarea
-        console.error("Error al crear notificaciones de tarea:", notifError);
+        console.error("⚠️ Error en notificación:", notifError.message);
       }
-      // --- TERMINA CÓDIGO DE NOTIFICACIÓN ---
 
-      res.status(201).send({ message: "Tarea creada", newTaskId: newTaskId });
+      res
+        .status(201)
+        .send({ message: "Tarea creada correctamente", newTaskId });
     } catch (error) {
-      console.error("Error al crear tarea:", error);
-      res.status(500).send({ message: "Error en el servidor." });
+      console.error("🔥 Error al crear tarea:", error);
+      res
+        .status(500)
+        .send({ message: "Error en el servidor: " + error.message });
     }
   },
 );

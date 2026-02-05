@@ -18,7 +18,7 @@ const RegistroPage = () => {
     domicilio: "",
     colonia: "",
     edad: "",
-    modalidad: "Escolarizada",
+    modalidad: "",
     escuela_procedencia: "",
     contacto_emergencia_nombre: "",
     contacto_emergencia_telefono: "",
