@@ -5275,10 +5275,10 @@ docenteRouter.get("/aula-virtual/tarea/:tareaId/entregas", async (req, res) => {
 });
 // --- INICIA NUEVO CÓDIGO (AGREGAR) ---
 
-// POST (Docente): Subir un RECURSO de tipo ARCHIVO
+// POST (Docente): Subir Recurso (ARCHIVO) + Notificación
 docenteRouter.post(
   "/aula-virtual/:grupoId/:asignaturaId/recurso-archivo",
-  uploadRecurso.single("archivo_recurso"), // <-- Usamos el nuevo multer
+  uploadRecurso.single("archivo_recurso"),
   async (req, res) => {
     try {
       const { grupoId, asignaturaId } = req.params;
@@ -5291,9 +5291,17 @@ docenteRouter.post(
           .send({ message: "Se requiere un título y un archivo." });
       }
 
-      // Construimos la ruta relativa para guardarla en la BD
-      const rutaRelativa = `curso_G${grupoId}_A${asignaturaId}/${req.file.filename}`;
+      // 1. Validar Permiso
+      const [[curso]] = await db.query(
+        "SELECT * FROM grupo_asignaturas_docentes WHERE grupo_id = ? AND asignatura_id = ? AND docente_id = ?",
+        [grupoId, asignaturaId, docente_id],
+      );
+      if (!curso) {
+        return res.status(403).send({ message: "No tienes permiso." });
+      }
 
+      // 2. Guardar Recurso en BD
+      const rutaRelativa = `curso_G${grupoId}_A${asignaturaId}/${req.file.filename}`;
       await db.query(
         "INSERT INTO recursos_clase (grupo_id, asignatura_id, docente_id, titulo, tipo_recurso, ruta_o_url, nombre_original) VALUES (?, ?, ?, ?, 'archivo', ?, ?)",
         [
@@ -5306,49 +5314,67 @@ docenteRouter.post(
         ],
       );
 
-      // --- INICIA EL NUEVO CÓDIGO DE NOTIFICACIÓN ---
+      // --- 3. NOTIFICACIONES (Igual que Tareas) ---
       try {
-        const docenteNombre = `${req.user.nombre} ${req.user.apellido_paterno}`;
-        const mensaje = `${docenteNombre} agregó un nuevo recurso (archivo): '${titulo}'`;
+        // A) Nombre de la materia
+        const [[materia]] = await db.query(
+          "SELECT nombre_asignatura FROM asignaturas WHERE id = ?",
+          [asignaturaId],
+        );
+        const nombreMateria = materia ? materia.nombre_asignatura : "Clase";
+
+        const mensaje = `Nuevo material en ${nombreMateria}: "${titulo}"`;
         const urlDestino = `/alumno/grupo/${grupoId}/asignatura/${asignaturaId}/aula`;
 
-        // 1. Obtener alumnos del grupo
+        // B) Obtener Alumnos
         const [alumnos] = await db.query(
           "SELECT alumno_id FROM grupo_alumnos WHERE grupo_id = ?",
           [grupoId],
         );
 
-        if (alumnos.length > 0) {
-          // 2. Preparar notificaciones
-          const notificacionesParaInsertar = alumnos.map((alumno) => [
-            alumno.alumno_id,
-            mensaje,
-            urlDestino,
-          ]);
+        // C) Bucle de Notificación
+        for (const alumno of alumnos) {
+          const idAlumno = alumno.alumno_id;
 
-          // 3. Insertar
+          // Campanita
           await db.query(
-            "INSERT INTO notificaciones (user_id, mensaje, url_destino) VALUES ?",
-            [notificacionesParaInsertar],
+            "INSERT INTO notificaciones (usuario_id, mensaje, url_destino, leido, fecha, tipo) VALUES (?, ?, ?, 0, NOW(), 'recurso')",
+            [idAlumno, mensaje, urlDestino],
           );
+
+          // Push Android
+          const [tokens] = await db.query(
+            "SELECT token FROM push_tokens WHERE user_id = ?",
+            [idAlumno],
+          );
+          if (tokens.length > 0) {
+            const messages = tokens.map((t) => ({
+              to: t.token,
+              sound: "default",
+              title: "Nuevo Material 📎", // Icono de clip para archivos
+              body: mensaje,
+              data: { url: urlDestino },
+            }));
+            fetch("https://exp.host/--/api/v2/push/send", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(messages),
+            }).catch((e) => console.error("Error push:", e));
+          }
         }
       } catch (notifError) {
-        console.error(
-          "Error al crear notificaciones de recurso (archivo):",
-          notifError,
-        );
+        console.error("Error en notificaciones de recurso:", notifError);
       }
-      // --- TERMINA EL NUEVO CÓDIGO DE NOTIFICACIÓN ---
 
-      res.status(201).send({ message: "Archivo subido con éxito." });
+      res.status(201).send({ message: "Archivo subido y notificado." });
     } catch (error) {
-      console.error("Error al subir recurso archivo:", error);
+      console.error("Error al subir recurso:", error);
       res.status(500).send({ message: "Error en el servidor." });
     }
   },
 );
 
-// POST (Docente): Agregar un RECURSO de tipo ENLACE
+// POST (Docente): Subir Recurso (ENLACE) + Notificación
 docenteRouter.post(
   "/aula-virtual/:grupoId/:asignaturaId/recurso-enlace",
   async (req, res) => {
@@ -5363,48 +5389,73 @@ docenteRouter.post(
           .send({ message: "Se requiere un título y una URL." });
       }
 
+      // 1. Validar Permiso
+      const [[curso]] = await db.query(
+        "SELECT * FROM grupo_asignaturas_docentes WHERE grupo_id = ? AND asignatura_id = ? AND docente_id = ?",
+        [grupoId, asignaturaId, docente_id],
+      );
+      if (!curso) {
+        return res.status(403).send({ message: "No tienes permiso." });
+      }
+
+      // 2. Guardar Enlace en BD
       await db.query(
         "INSERT INTO recursos_clase (grupo_id, asignatura_id, docente_id, titulo, tipo_recurso, ruta_o_url) VALUES (?, ?, ?, ?, 'enlace', ?)",
         [grupoId, asignaturaId, docente_id, titulo, url],
       );
 
-      // --- INICIA EL NUEVO CÓDIGO DE NOTIFICACIÓN ---
+      // --- 3. NOTIFICACIONES ---
       try {
-        const docenteNombre = `${req.user.nombre} ${req.user.apellido_paterno}`;
-        const mensaje = `${docenteNombre} agregó un nuevo recurso (enlace): '${titulo}'`;
+        const [[materia]] = await db.query(
+          "SELECT nombre_asignatura FROM asignaturas WHERE id = ?",
+          [asignaturaId],
+        );
+        const nombreMateria = materia ? materia.nombre_asignatura : "Clase";
+
+        const mensaje = `Nuevo enlace en ${nombreMateria}: "${titulo}"`;
         const urlDestino = `/alumno/grupo/${grupoId}/asignatura/${asignaturaId}/aula`;
 
-        // 1. Obtener alumnos del grupo
         const [alumnos] = await db.query(
           "SELECT alumno_id FROM grupo_alumnos WHERE grupo_id = ?",
           [grupoId],
         );
 
-        if (alumnos.length > 0) {
-          // 2. Preparar notificaciones
-          const notificacionesParaInsertar = alumnos.map((alumno) => [
-            alumno.alumno_id,
-            mensaje,
-            urlDestino,
-          ]);
+        for (const alumno of alumnos) {
+          const idAlumno = alumno.alumno_id;
 
-          // 3. Insertar
+          // Campanita
           await db.query(
-            "INSERT INTO notificaciones (user_id, mensaje, url_destino) VALUES ?",
-            [notificacionesParaInsertar],
+            "INSERT INTO notificaciones (usuario_id, mensaje, url_destino, leido, fecha, tipo) VALUES (?, ?, ?, 0, NOW(), 'recurso')",
+            [idAlumno, mensaje, urlDestino],
           );
+
+          // Push Android
+          const [tokens] = await db.query(
+            "SELECT token FROM push_tokens WHERE user_id = ?",
+            [idAlumno],
+          );
+          if (tokens.length > 0) {
+            const messages = tokens.map((t) => ({
+              to: t.token,
+              sound: "default",
+              title: "Nuevo Enlace 🔗", // Icono de link para enlaces
+              body: mensaje,
+              data: { url: urlDestino },
+            }));
+            fetch("https://exp.host/--/api/v2/push/send", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(messages),
+            }).catch((e) => console.error("Error push:", e));
+          }
         }
       } catch (notifError) {
-        console.error(
-          "Error al crear notificaciones de recurso (enlace):",
-          notifError,
-        );
+        console.error("Error en notificaciones de enlace:", notifError);
       }
-      // --- TERMINA EL NUEVO CÓDIGO DE NOTIFICACIÓN ---
 
-      res.status(201).send({ message: "Enlace guardado con éxito." });
+      res.status(201).send({ message: "Enlace guardado y notificado." });
     } catch (error) {
-      console.error("Error al guardar recurso enlace:", error);
+      console.error("Error al guardar enlace:", error);
       res.status(500).send({ message: "Error en el servidor." });
     }
   },
@@ -5730,88 +5781,114 @@ foroRouter.get(
   },
 );
 
-// POST /api/foro/:grupoId/:asignaturaId/hilos - Crear un nuevo hilo
+// POST: Crear un nuevo hilo en el foro + Notificar a todos
 foroRouter.post(
   "/:grupoId/:asignaturaId/hilos",
   canAccessForo,
   async (req, res) => {
     try {
       const { titulo, mensaje_original } = req.body;
+      const { grupoId, asignaturaId } = req.params;
+      const creadorId = req.user.id; // Quién escribe
+
       if (!titulo || !mensaje_original) {
         return res
           .status(400)
           .send({ message: "El título y el mensaje son requeridos." });
       }
+
+      // 1. Guardar el Hilo
       const [result] = await db.query(
-        "INSERT INTO foros_hilos (grupo_id, asignatura_id, titulo, mensaje_original, creado_por_usuario_id) VALUES (?, ?, ?, ?, ?)",
-        [
-          req.params.grupoId,
-          req.params.asignaturaId,
-          titulo,
-          mensaje_original,
-          req.user.id,
-        ],
+        "INSERT INTO foros_hilos (grupo_id, asignatura_id, titulo, mensaje_original, creado_por_usuario_id, fecha_creacion) VALUES (?, ?, ?, ?, ?, NOW())",
+        [grupoId, asignaturaId, titulo, mensaje_original, creadorId],
       );
 
-      // --- INICIA EL NUEVO CÓDIGO DE NOTIFICACIÓN ---
-      try {
-        const newHiloId = result.insertId;
-        const creadorId = req.user.id;
-        const creadorNombre = `${req.user.nombre} ${req.user.apellido_paterno}`;
-        const mensaje = `${creadorNombre} inició un nuevo hilo: '${titulo}'`;
-        const urlBase = `/grupo/${req.params.grupoId}/asignatura/${req.params.asignaturaId}/foro/hilo/${newHiloId}`;
+      const newHiloId = result.insertId;
 
-        // 1. Obtener docente del curso
+      // --- 2. NOTIFICACIONES MASIVAS (A todo el salón) ---
+      try {
+        const nombreCreador = `${req.user.nombre} ${req.user.apellido_paterno}`;
+
+        // Buscamos el nombre de la materia para que el mensaje sea claro
+        const [[materia]] = await db.query(
+          "SELECT nombre_asignatura FROM asignaturas WHERE id = ?",
+          [asignaturaId],
+        );
+        const nombreMateria = materia ? materia.nombre_asignatura : "la clase";
+
+        const mensajeNotif = `${nombreCreador} abrió un debate en ${nombreMateria}: "${titulo}"`;
+
+        // URL universal: sirve tanto para el alumno como para el docente (el frontend redirige según el rol)
+        // Ojo: Asegúrate que tu frontend maneje esta ruta o ajústala.
+        // Si tu frontend separa rutas, el alumno va a /alumno/... y el docente a /docente/...
+        // Para simplificar, guardaremos la ruta "base" y dejamos que el usuario navegue.
+        // Pero para ser precisos, construiremos la URL según a quién le avisamos abajo.
+
+        // A) Obtener al Docente del curso
         const [[docente]] = await db.query(
           "SELECT docente_id FROM grupo_asignaturas_docentes WHERE grupo_id = ? AND asignatura_id = ?",
-          [req.params.grupoId, req.params.asignaturaId],
+          [grupoId, asignaturaId],
         );
 
-        // 2. Obtener alumnos del grupo
+        // B) Obtener a todos los Alumnos del grupo
         const [alumnos] = await db.query(
           "SELECT alumno_id FROM grupo_alumnos WHERE grupo_id = ?",
-          [req.params.grupoId],
+          [grupoId],
         );
 
-        const notificacionesParaInsertar = [];
+        // Juntamos a todos los destinatarios en una lista única
+        let destinatarios = [];
 
-        // 3. Notificar al docente (si no es el creador)
-        if (docente && docente.docente_id !== creadorId) {
-          notificacionesParaInsertar.push([
-            docente.docente_id,
-            mensaje,
-            `/docente${urlBase}`, // URL para el docente
-          ]);
-        }
+        // Agregamos alumnos
+        alumnos.forEach((a) =>
+          destinatarios.push({ id: a.alumno_id, rol: "alumno" }),
+        );
+        // Agregamos docente (si existe)
+        if (docente)
+          destinatarios.push({ id: docente.docente_id, rol: "docente" });
 
-        // 4. Notificar a los alumnos (que no sean el creador)
-        for (const alumno of alumnos) {
-          if (alumno.alumno_id !== creadorId) {
-            notificacionesParaInsertar.push([
-              alumno.alumno_id,
-              mensaje,
-              `/alumno${urlBase}`, // URL para el alumno
-            ]);
+        // C) Bucle de envío
+        for (const persona of destinatarios) {
+          // NO notificar al que acaba de crear el hilo
+          if (persona.id === creadorId) continue;
+
+          // Definimos la URL correcta según el rol de quien recibe la alerta
+          const urlDestino = `/${persona.rol}/grupo/${grupoId}/asignatura/${asignaturaId}/foro/hilo/${newHiloId}`;
+
+          // 1. Campanita (BD)
+          await db.query(
+            "INSERT INTO notificaciones (usuario_id, mensaje, url_destino, leido, fecha, tipo) VALUES (?, ?, ?, 0, NOW(), 'foro')",
+            [persona.id, mensajeNotif, urlDestino],
+          );
+
+          // 2. Push Android
+          const [tokens] = await db.query(
+            "SELECT token FROM push_tokens WHERE user_id = ?",
+            [persona.id],
+          );
+          if (tokens.length > 0) {
+            const messages = tokens.map((t) => ({
+              to: t.token,
+              sound: "default",
+              title: "Nuevo Tema en el Foro 💬",
+              body: mensajeNotif,
+              data: { url: urlDestino },
+            }));
+
+            fetch("https://exp.host/--/api/v2/push/send", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(messages),
+            }).catch((e) => console.error("Error Push Foro:", e));
           }
         }
-
-        // 5. Insertar todas las notificaciones
-        if (notificacionesParaInsertar.length > 0) {
-          await db.query(
-            "INSERT INTO notificaciones (user_id, mensaje, url_destino) VALUES ?",
-            [notificacionesParaInsertar],
-          );
-        }
-        console.log(`Notificaciones creadas para nuevo hilo ${newHiloId}`);
-      } catch (notifError) {
-        console.error("Error al crear notificaciones de hilo:", notifError);
-        // No detener la respuesta principal por esto
+      } catch (e) {
+        console.error("Error notificando hilo:", e);
       }
-      // --- TERMINA EL NUEVO CÓDIGO DE NOTIFICACIÓN ---
 
       res
         .status(201)
-        .json({ message: "Hilo creado con éxito.", hiloId: result.insertId });
+        .json({ message: "Hilo creado con éxito.", hiloId: newHiloId });
     } catch (error) {
       console.error("Error al crear hilo:", error);
       res.status(500).send({ message: "Error en el servidor." });
@@ -5850,73 +5927,92 @@ foroRouter.get("/hilo/:hiloId", canAccessForo, async (req, res) => {
   }
 });
 
-// POST /api/foro/hilo/:hiloId/respuestas - Publicar una respuesta
+// POST: Responder a un hilo + Notificar
 foroRouter.post("/hilo/:hiloId/respuestas", canAccessForo, async (req, res) => {
   try {
     const { mensaje } = req.body;
+    const { hiloId } = req.params;
+    const quienRespondeId = req.user.id;
+    const nombreResponde = `${req.user.nombre} ${req.user.apellido_paterno}`;
+
     if (!mensaje) {
       return res.status(400).send({ message: "El mensaje es requerido." });
     }
+
+    // 1. Guardar Respuesta
     await db.query(
-      "INSERT INTO foros_respuestas (hilo_id, mensaje, creado_por_usuario_id) VALUES (?, ?, ?)",
-      [req.params.hiloId, mensaje, req.user.id],
+      "INSERT INTO foros_respuestas (hilo_id, mensaje, creado_por_usuario_id, fecha_creacion) VALUES (?, ?, ?, NOW())",
+      [hiloId, mensaje, quienRespondeId],
     );
 
-    // --- INICIA EL NUEVO CÓDIGO DE NOTIFICACIÓN ---
+    // --- 2. NOTIFICACIONES (Aquí avisamos que alguien contestó) ---
     try {
-      const { hiloId } = req.params;
-      const replierId = req.user.id;
-      const replierNombre = `${req.user.nombre} ${req.user.apellido_paterno}`;
-
-      // 1. Obtener info del hilo (grupo, asignatura, título)
+      // Necesitamos saber de qué grupo/materia es este hilo para buscar a la gente
       const [[hilo]] = await db.query(
         "SELECT grupo_id, asignatura_id, titulo FROM foros_hilos WHERE id = ?",
         [hiloId],
       );
 
-      if (!hilo) throw new Error("Hilo no encontrado para notificar");
+      if (hilo) {
+        const { grupo_id, asignatura_id, titulo } = hilo;
+        const mensajeNotif = `${nombreResponde} respondió en: "${titulo}"`;
 
-      const { grupo_id, asignatura_id, titulo } = hilo;
-      const mensaje = `${replierNombre} respondió en el hilo: '${titulo}'`;
-      const urlBase = `/grupo/${grupo_id}/asignatura/${asignatura_id}/foro/hilo/${hiloId}`;
+        // A) Buscar participantes (Docente + Alumnos)
+        const [[docente]] = await db.query(
+          "SELECT docente_id FROM grupo_asignaturas_docentes WHERE grupo_id = ? AND asignatura_id = ?",
+          [grupo_id, asignatura_id],
+        );
+        const [alumnos] = await db.query(
+          "SELECT alumno_id FROM grupo_alumnos WHERE grupo_id = ?",
+          [grupo_id],
+        );
 
-      // 2. Obtener todos los participantes (docente y alumnos)
-      const [participantes] = await db.query(
-        `(SELECT docente_id as user_id, 'docente' as rol FROM grupo_asignaturas_docentes WHERE grupo_id = ? AND asignatura_id = ?)
-         UNION
-         (SELECT alumno_id as user_id, 'alumno' as rol FROM grupo_alumnos WHERE grupo_id = ?)`,
-        [grupo_id, asignatura_id, grupo_id],
-      );
+        let destinatarios = [];
+        alumnos.forEach((a) =>
+          destinatarios.push({ id: a.alumno_id, rol: "alumno" }),
+        );
+        if (docente)
+          destinatarios.push({ id: docente.docente_id, rol: "docente" });
 
-      const notificacionesParaInsertar = [];
-      const notifiedUserIds = new Set();
-      notifiedUserIds.add(replierId); // No notificar a quien respondió
+        // B) Bucle de envío
+        for (const persona of destinatarios) {
+          // NO notificar al que está escribiendo la respuesta
+          if (persona.id === quienRespondeId) continue;
 
-      // 3. Iterar y construir notificaciones para todos los demás
-      for (const p of participantes) {
-        // Usamos Set.has() para asegurar que no notificamos al mismo usuario dos veces
-        if (!notifiedUserIds.has(p.user_id)) {
-          const urlDestino = `/${p.rol}${urlBase}`; // Crea la URL correcta (ej. /docente/... o /alumno/...)
-          notificacionesParaInsertar.push([p.user_id, mensaje, urlDestino]);
-          notifiedUserIds.add(p.user_id);
+          const urlDestino = `/${persona.rol}/grupo/${grupo_id}/asignatura/${asignatura_id}/foro/hilo/${hiloId}`;
+
+          // Campanita
+          await db.query(
+            "INSERT INTO notificaciones (usuario_id, mensaje, url_destino, leido, fecha, tipo) VALUES (?, ?, ?, 0, NOW(), 'foro')",
+            [persona.id, mensajeNotif, urlDestino],
+          );
+
+          // Push Android
+          const [tokens] = await db.query(
+            "SELECT token FROM push_tokens WHERE user_id = ?",
+            [persona.id],
+          );
+          if (tokens.length > 0) {
+            const messages = tokens.map((t) => ({
+              to: t.token,
+              sound: "default",
+              title: "Nueva Respuesta en Foro 🗣️",
+              body: mensajeNotif,
+              data: { url: urlDestino },
+            }));
+            fetch("https://exp.host/--/api/v2/push/send", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(messages),
+            }).catch((e) => console.error(e));
+          }
         }
       }
-
-      // 4. Insertar todas las notificaciones
-      if (notificacionesParaInsertar.length > 0) {
-        await db.query(
-          "INSERT INTO notificaciones (user_id, mensaje, url_destino) VALUES ?",
-          [notificacionesParaInsertar],
-        );
-      }
-      console.log(`Notificaciones creadas para respuesta en hilo ${hiloId}`);
-    } catch (notifError) {
-      console.error("Error al crear notificaciones de respuesta:", notifError);
-      // No detener la respuesta principal por esto
+    } catch (e) {
+      console.error("Error notificando respuesta:", e);
     }
-    // --- TERMINA EL NUEVO CÓDIGO DE NOTIFICACIÓN ---
 
-    res.status(201).json({ message: "Respuesta publicada con éxito." });
+    res.status(201).json({ message: "Respuesta publicada." });
   } catch (error) {
     console.error("Error al publicar respuesta:", error);
     res.status(500).send({ message: "Error en el servidor." });
