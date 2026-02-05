@@ -6325,21 +6325,24 @@ alumnoRouter.get(
 // --- INICIA NUEVO CÓDIGO (AGREGAR) ---
 
 // POST (Alumno): Entregar una tarea
+// POST (Alumno): Entregar una tarea (CORREGIDO Y BLINDADO)
 alumnoRouter.post(
   "/aula-virtual/tarea/:tareaId/entregar",
-  uploadTarea.single("archivo_tarea"), // <-- Usamos el multer de tareas
+  uploadTarea.single("archivo_tarea"), // <--- IMPORTANTE: Tu frontend manda el archivo como "archivo_tarea"
   async (req, res) => {
     try {
       const { tareaId } = req.params;
       const { comentario_alumno } = req.body;
       const alumno_id = req.user.id;
 
+      // 1. Validar archivo
       if (!req.file) {
         return res.status(400).send({ message: "No se subió ningún archivo." });
       }
 
       const { filename, originalname } = req.file;
 
+      // 2. Guardar entrega en BD
       const sql = `
         INSERT INTO tareas_entregas 
           (tarea_id, alumno_id, ruta_archivo, nombre_original, comentario_alumno, fecha_entrega)
@@ -6361,61 +6364,50 @@ alumnoRouter.post(
         comentario_alumno || null,
       ]);
 
-      // --- INICIA CÓDIGO DE NOTIFICACIÓN (NUEVO) ---
+      // --- 3. NOTIFICACIÓN AL DOCENTE ---
       try {
-        // 1. Obtener datos de la tarea (título, docente, ids)
+        // A) Buscar datos de la tarea y el docente
         const [[tarea]] = await db.query(
           "SELECT titulo, docente_id, grupo_id, asignatura_id FROM tareas WHERE id = ?",
           [tareaId],
         );
 
         if (tarea && tarea.docente_id) {
-          // 2. Definir mensaje y URL
           const alumnoNombre = `${req.user.nombre} ${req.user.apellido_paterno}`;
           const mensaje = `Entrega de: '${alumnoNombre}' en la tarea '${tarea.titulo}'`;
-          // (Eventualmente esta URL llevará a la página de calificación)
           const urlDestino = `/docente/grupo/${tarea.grupo_id}/asignatura/${tarea.asignatura_id}/aula`;
 
-          // 3. Crear notificación de campanita (web)
+          // B) Insertar en Campanita (USANDO TUS COLUMNAS REALES: usuario_id, leido, fecha, tipo)
           await db.query(
-            "INSERT INTO notificaciones (user_id, mensaje, url_destino) VALUES (?, ?, ?)",
+            "INSERT INTO notificaciones (usuario_id, mensaje, url_destino, leido, fecha, tipo) VALUES (?, ?, ?, 0, NOW(), 'tarea')",
             [tarea.docente_id, mensaje, urlDestino],
           );
 
-          // 4. Enviar Notificación Push (móvil)
+          // C) Enviar Push a Android
           const [tokens] = await db.query(
             "SELECT token FROM push_tokens WHERE user_id = ?",
             [tarea.docente_id],
           );
+
           if (tokens.length > 0) {
             const messages = tokens.map((t) => ({
               to: t.token,
               sound: "default",
               title: "¡Tarea Entregada! 📥",
               body: mensaje,
+              data: { url: urlDestino },
             }));
-            await fetch("https://exp.host/--/api/v2/push/send", {
+
+            fetch("https://exp.host/--/api/v2/push/send", {
               method: "POST",
-              headers: {
-                Accept: "application/json",
-                "Accept-encoding": "gzip, deflate",
-                "Content-Type": "application/json",
-              },
+              headers: { "Content-Type": "application/json" },
               body: JSON.stringify(messages),
-            });
+            }).catch((e) => console.error("Error push docente:", e));
           }
-          console.log(
-            `Notificación de entrega enviada al docente ${tarea.docente_id}`,
-          );
         }
       } catch (notifError) {
-        // Si falla la notificación, no detenemos la entrega
-        console.error(
-          "Error al notificar al docente sobre la entrega:",
-          notifError,
-        );
+        console.error("Error al notificar docente:", notifError);
       }
-      // --- TERMINA CÓDIGO DE NOTIFICACIÓN ---
 
       res.send({ message: "Tarea entregada con éxito." });
     } catch (error) {
