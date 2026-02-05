@@ -5128,28 +5128,23 @@ docenteRouter.post(
 );
 // --- INICIA NUEVO CÓDIGO (AGREGAR) ---
 
-// POST (Docente): Calificar una entrega
+// POST (Docente): Calificar o Re-Calificar una entrega
 docenteRouter.post(
   "/aula-virtual/entrega/:entregaId/calificar",
   async (req, res) => {
     try {
       const { entregaId } = req.params;
       const { calificacion, comentario_docente } = req.body;
-      const docente_id = req.user.id; // El docente que está calificando
+      const docente_id = req.user.id;
 
-      if (!calificacion) {
+      if (!calificacion && calificacion !== 0) {
         return res
           .status(400)
           .send({ message: "La calificación es requerida." });
       }
       const calNum = parseFloat(calificacion);
-      if (isNaN(calNum) || calNum < 0 || calNum > 100) {
-        return res.status(400).send({
-          message: "La calificación debe ser un número entre 0 y 100.",
-        });
-      }
 
-      // 1. Verificamos que el docente tenga permiso sobre esta entrega
+      // 1. Obtener datos PREVIOS de la entrega (para saber si ya estaba calificada)
       const [[entrega]] = await db.query(
         `SELECT te.*, t.docente_id, t.titulo, t.grupo_id, t.asignatura_id
          FROM tareas_entregas te
@@ -5162,64 +5157,71 @@ docenteRouter.post(
         return res.status(404).send({ message: "Entrega no encontrada." });
       }
       if (entrega.docente_id !== docente_id) {
-        return res
-          .status(403)
-          .send({ message: "No tienes permiso para calificar esta tarea." });
+        return res.status(403).send({ message: "No tienes permiso." });
       }
 
-      // 2. Actualizamos la calificación en la BD
+      // Verificamos si ya tenía nota antes
+      const esRecalificacion = entrega.calificacion !== null;
+
+      // 2. Actualizar en BD
       await db.query(
         "UPDATE tareas_entregas SET calificacion = ?, comentario_docente = ? WHERE id = ?",
         [calNum, comentario_docente || null, entregaId],
       );
 
-      // --- 3. Notificar al Alumno ---
+      // --- 3. NOTIFICAR AL ALUMNO ---
       try {
-        const mensaje = `¡Calificación recibida! (${calNum}/100) en la tarea '${entrega.titulo}'`;
+        let mensaje = "";
+        let tituloPush = "";
+
+        if (esRecalificacion) {
+          mensaje = `Tu calificación en '${entrega.titulo}' ha sido actualizada a: ${calNum}/100`;
+          tituloPush = "Calificación Modificada 📝";
+        } else {
+          mensaje = `¡Calificación recibida! (${calNum}/100) en la tarea '${entrega.titulo}'`;
+          tituloPush = "¡Tarea Calificada! 💯";
+        }
+
         const urlDestino = `/alumno/grupo/${entrega.grupo_id}/asignatura/${entrega.asignatura_id}/aula`;
 
-        // Notificación de campanita (web)
+        // Campanita
         await db.query(
-          "INSERT INTO notificaciones (user_id, mensaje, url_destino) VALUES (?, ?, ?)",
+          "INSERT INTO notificaciones (usuario_id, mensaje, url_destino, leido, fecha, tipo) VALUES (?, ?, ?, 0, NOW(), 'calificacion')",
           [entrega.alumno_id, mensaje, urlDestino],
         );
 
-        // Notificación Push (móvil)
+        // Push Android
         const [tokens] = await db.query(
           "SELECT token FROM push_tokens WHERE user_id = ?",
           [entrega.alumno_id],
         );
+
         if (tokens.length > 0) {
           const messages = tokens.map((t) => ({
             to: t.token,
             sound: "default",
-            title: "¡Tarea Calificada! 💯",
+            title: tituloPush,
             body: mensaje,
+            data: { url: urlDestino },
           }));
-          await fetch("https://exp.host/--/api/v2/push/send", {
-            method: "POST",
-            headers: {
-              Accept: "application/json",
-              "Accept-encoding": "gzip, deflate",
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(messages),
-          });
-        }
-        console.log(
-          `Notificación de calificación enviada al alumno ${entrega.alumno_id}`,
-        );
-      } catch (notifError) {
-        console.error(
-          "Error al notificar al alumno sobre calificación:",
-          notifError,
-        );
-      }
-      // --- Fin de Notificación ---
 
-      res.send({ message: "Calificación guardada con éxito." });
+          fetch("https://exp.host/--/api/v2/push/send", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(messages),
+          }).catch((e) => console.error("Error push alumno:", e));
+        }
+      } catch (notifError) {
+        console.error("Error notificación calificación:", notifError);
+      }
+
+      res.send({
+        message: esRecalificacion
+          ? "Calificación actualizada."
+          : "Calificación guardada.",
+      });
     } catch (error) {
-      console.error("Error al calificar entrega:", error);
+      console.error("Error al calificar:", error);
       res.status(500).send({ message: "Error en el servidor." });
     }
   },
@@ -6324,25 +6326,32 @@ alumnoRouter.get(
 );
 // --- INICIA NUEVO CÓDIGO (AGREGAR) ---
 
-// POST (Alumno): Entregar una tarea
-// POST (Alumno): Entregar una tarea (CORREGIDO Y BLINDADO)
+// POST (Alumno): Entregar o Actualizar tarea
 alumnoRouter.post(
   "/aula-virtual/tarea/:tareaId/entregar",
-  uploadTarea.single("archivo_tarea"), // <--- IMPORTANTE: Tu frontend manda el archivo como "archivo_tarea"
+  uploadTarea.single("archivo_tarea"),
   async (req, res) => {
     try {
       const { tareaId } = req.params;
       const { comentario_alumno } = req.body;
       const alumno_id = req.user.id;
 
-      // 1. Validar archivo
       if (!req.file) {
         return res.status(400).send({ message: "No se subió ningún archivo." });
       }
 
       const { filename, originalname } = req.file;
 
-      // 2. Guardar entrega en BD
+      // 1. VERIFICAR ESTADO ANTERIOR (Para saber si es actualización)
+      // Buscamos si ya existe una entrega de este alumno para esta tarea
+      const [[entregaPrevia]] = await db.query(
+        "SELECT id FROM tareas_entregas WHERE tarea_id = ? AND alumno_id = ?",
+        [tareaId, alumno_id],
+      );
+
+      const esActualizacion = !!entregaPrevia; // True si ya existía, False si es nueva
+
+      // 2. GUARDAR O ACTUALIZAR EN BD
       const sql = `
         INSERT INTO tareas_entregas 
           (tarea_id, alumno_id, ruta_archivo, nombre_original, comentario_alumno, fecha_entrega)
@@ -6366,7 +6375,6 @@ alumnoRouter.post(
 
       // --- 3. NOTIFICACIÓN AL DOCENTE ---
       try {
-        // A) Buscar datos de la tarea y el docente
         const [[tarea]] = await db.query(
           "SELECT titulo, docente_id, grupo_id, asignatura_id FROM tareas WHERE id = ?",
           [tareaId],
@@ -6374,16 +6382,28 @@ alumnoRouter.post(
 
         if (tarea && tarea.docente_id) {
           const alumnoNombre = `${req.user.nombre} ${req.user.apellido_paterno}`;
-          const mensaje = `Entrega de: '${alumnoNombre}' en la tarea '${tarea.titulo}'`;
+
+          // Lógica del mensaje dinámico
+          let mensaje = "";
+          let tituloPush = "";
+
+          if (esActualizacion) {
+            mensaje = `Actualización de entrega: '${alumnoNombre}' modificó su tarea en '${tarea.titulo}'`;
+            tituloPush = "Tarea Actualizada 🔄";
+          } else {
+            mensaje = `Entrega de: '${alumnoNombre}' en la tarea '${tarea.titulo}'`;
+            tituloPush = "¡Tarea Entregada! 📥";
+          }
+
           const urlDestino = `/docente/grupo/${tarea.grupo_id}/asignatura/${tarea.asignatura_id}/aula`;
 
-          // B) Insertar en Campanita (USANDO TUS COLUMNAS REALES: usuario_id, leido, fecha, tipo)
+          // A) Campanita
           await db.query(
             "INSERT INTO notificaciones (usuario_id, mensaje, url_destino, leido, fecha, tipo) VALUES (?, ?, ?, 0, NOW(), 'tarea')",
             [tarea.docente_id, mensaje, urlDestino],
           );
 
-          // C) Enviar Push a Android
+          // B) Push Android
           const [tokens] = await db.query(
             "SELECT token FROM push_tokens WHERE user_id = ?",
             [tarea.docente_id],
@@ -6393,7 +6413,7 @@ alumnoRouter.post(
             const messages = tokens.map((t) => ({
               to: t.token,
               sound: "default",
-              title: "¡Tarea Entregada! 📥",
+              title: tituloPush,
               body: mensaje,
               data: { url: urlDestino },
             }));
@@ -6409,15 +6429,18 @@ alumnoRouter.post(
         console.error("Error al notificar docente:", notifError);
       }
 
-      res.send({ message: "Tarea entregada con éxito." });
+      res.send({
+        message: esActualizacion
+          ? "Tarea actualizada correctamente."
+          : "Tarea entregada con éxito.",
+      });
     } catch (error) {
       console.error("Error al entregar tarea:", error);
       res.status(500).send({ message: "Error en el servidor." });
     }
   },
 );
-// --- INICIA NUEVO CÓDIGO (AGREGAR) ---
-// GET (Alumno): Obtener todos los recursos
+
 alumnoRouter.get(
   "/aula-virtual/:grupoId/:asignaturaId/recursos",
   getRecursosClase, // <-- Reutilizamos la misma función
