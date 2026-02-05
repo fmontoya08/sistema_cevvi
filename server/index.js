@@ -4890,14 +4890,12 @@ docenteRouter.get(
   },
 );
 
-// PUT (Docente): Actualizar la config del aula virtual
-// PUT (Docente): Actualizar la config del aula virtual
+// PUT (Docente): Actualizar config del aula (DETECTA SI HABILITÓ CLASE ONLINE)
 docenteRouter.put(
   "/aula-virtual/:grupoId/:asignaturaId/config",
   async (req, res) => {
     try {
       const { grupoId, asignaturaId } = req.params;
-      // Extraemos los nuevos campos del body
       const {
         enlace_videollamada,
         descripcion_curso,
@@ -4906,19 +4904,31 @@ docenteRouter.put(
         horario,
         contacto_docente,
       } = req.body;
+      const docente_id = req.user.id;
 
-      // Validar que el docente da esta clase (igual que antes)
+      // 1. Validar Permiso
       const [[curso]] = await db.query(
         "SELECT * FROM grupo_asignaturas_docentes WHERE grupo_id = ? AND asignatura_id = ? AND docente_id = ?",
-        [grupoId, asignaturaId, req.user.id],
+        [grupoId, asignaturaId, docente_id],
       );
       if (!curso) {
-        return res
-          .status(403)
-          .send({ message: "No tienes permiso sobre este curso." });
+        return res.status(403).send({ message: "No tienes permiso." });
       }
 
-      // Actualizamos la query INSERT...ON DUPLICATE KEY UPDATE
+      // 2. OBTENER CONFIG ACTUAL (Para comparar si cambió el link)
+      const [[configPrevia]] = await db.query(
+        "SELECT enlace_videollamada FROM aula_virtual_config WHERE grupo_id = ? AND asignatura_id = ?",
+        [grupoId, asignaturaId],
+      );
+
+      const linkAnterior = configPrevia ? configPrevia.enlace_videollamada : "";
+      const linkNuevo = enlace_videollamada || "";
+
+      // Detectamos si HUBO UN CAMBIO en el link (y no está vacío)
+      // Esto significa que el profe "Habilitó" o "Actualizó" el botón de la clase
+      const seHabilitoClase = linkNuevo !== "" && linkNuevo !== linkAnterior;
+
+      // 3. ACTUALIZAR EN BD
       const sql = `
         INSERT INTO aula_virtual_config (
           grupo_id, asignatura_id, enlace_videollamada, descripcion_curso, 
@@ -4934,8 +4944,7 @@ docenteRouter.put(
           contacto_docente = VALUES(contacto_docente)
       `;
 
-      // Añadimos los nuevos valores al array de parámetros
-      const params = [
+      await db.query(sql, [
         grupoId,
         asignaturaId,
         enlace_videollamada || null,
@@ -4944,44 +4953,89 @@ docenteRouter.put(
         evaluacion || null,
         horario || null,
         contacto_docente || null,
-      ];
+      ]);
 
-      await db.query(sql, params);
-
-      // --- INICIA EL NUEVO CÓDIGO DE NOTIFICACIÓN ---
+      // --- 4. NOTIFICACIONES INTELIGENTES ---
       try {
         const docenteNombre = `${req.user.nombre} ${req.user.apellido_paterno}`;
-        const mensaje = `${docenteNombre} actualizó la información del curso.`;
-        // (grupoId y asignaturaId están disponibles en req.params)
+
+        // Obtenemos nombre de la materia
+        const [[materia]] = await db.query(
+          "SELECT nombre_asignatura FROM asignaturas WHERE id = ?",
+          [asignaturaId],
+        );
+        const nombreMateria = materia ? materia.nombre_asignatura : "Clase";
         const urlDestino = `/alumno/grupo/${grupoId}/asignatura/${asignaturaId}/aula`;
 
-        // 1. Obtener alumnos del grupo
+        // Definimos el mensaje según qué pasó
+        let mensaje = "";
+        let tituloPush = "";
+        let tipoNotif = "info"; // Por defecto
+
+        if (seHabilitoClase) {
+          // CASO 1: Se habilitó la clase online
+          mensaje = `🔴 ¡Clase en línea habilitada! El docente inició la sesión en ${nombreMateria}.`;
+          tituloPush = "¡Clase en Vivo Iniciada! 📹";
+          tipoNotif = "videollamada"; // Para poner un icono de camarita si quieres
+        } else {
+          // CASO 2: Solo actualizó información general
+          mensaje = `${docenteNombre} actualizó la información general de ${nombreMateria}.`;
+          tituloPush = "Información Actualizada ℹ️";
+        }
+
+        // Obtener alumnos
         const [alumnos] = await db.query(
           "SELECT alumno_id FROM grupo_alumnos WHERE grupo_id = ?",
           [grupoId],
         );
 
         if (alumnos.length > 0) {
-          // 2. Preparar notificaciones
-          const notificacionesParaInsertar = alumnos.map((alumno) => [
-            alumno.alumno_id,
+          // A) Campanita (Masivo)
+          const datosCampanita = alumnos.map((a) => [
+            a.alumno_id,
             mensaje,
             urlDestino,
+            0,
+            new Date(),
+            tipoNotif,
           ]);
 
-          // 3. Insertar
           await db.query(
-            "INSERT INTO notificaciones (user_id, mensaje, url_destino) VALUES ?",
-            [notificacionesParaInsertar],
+            "INSERT INTO notificaciones (usuario_id, mensaje, url_destino, leido, fecha, tipo) VALUES ?",
+            [datosCampanita],
           );
+
+          // B) Push Android (Masivo)
+          // Si se habilitó la clase, esto es CRÍTICO, así que mandamos el push sí o sí
+          const alumnoIds = alumnos.map((a) => a.alumno_id);
+          const [tokens] = await db.query(
+            "SELECT token FROM push_tokens WHERE user_id IN (?)",
+            [alumnoIds],
+          );
+
+          if (tokens.length > 0) {
+            const messages = tokens.map((t) => ({
+              to: t.token,
+              sound: "default",
+              title: tituloPush,
+              body: mensaje,
+              data: { url: urlDestino },
+            }));
+
+            fetch("https://exp.host/--/api/v2/push/send", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(messages),
+            }).catch((e) => console.error("Error push config:", e));
+          }
         }
       } catch (notifError) {
-        console.error("Error al crear notificaciones de config:", notifError);
+        console.error("Error notificaciones config:", notifError);
       }
-      // --- TERMINA EL NUEVO CÓDIGO DE NOTIFICACIÓN ---
 
-      res.send({ message: "Aula virtual actualizada con éxito." });
+      res.send({ message: "Configuración guardada y alumnos notificados." });
     } catch (error) {
+      console.error("Error al actualizar config:", error);
       res.status(500).send({ message: "Error en el servidor." });
     }
   },
