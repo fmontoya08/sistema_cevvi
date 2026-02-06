@@ -1,14 +1,17 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react"; // <--- IMPORTANTE: Agregamos useEffect
 import axios from "axios";
 import { UserPlus, CheckCircle, AlertTriangle, Mail } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const RegistroPage = () => {
-  // CONFIGURACIÓN: URL DE PRODUCCIÓN
-  // Asegúrate de que tu Backend en Render ya tenga el cambio de "password_correo" subido.
   const API_URL = "https://api-universidad-c5o8.onrender.com";
 
-  // Estado del formulario
+  // Estado para guardar las listas que vienen de la BD
+  const [catalogos, setCatalogos] = useState({
+    sedes: [],
+    carreras: [],
+  });
+
   const [form, setForm] = useState({
     nombre: "",
     apellido_paterno: "",
@@ -18,22 +21,45 @@ const RegistroPage = () => {
     domicilio: "",
     colonia: "",
     edad: "",
-    modalidad: "",
+    modalidad: "Presencial", // <--- Valor por defecto correcto
     escuela_procedencia: "",
     contacto_emergencia_nombre: "",
     contacto_emergencia_telefono: "",
     genero: "H",
     curp: "",
     fecha_nacimiento: "",
-    carrera_id: "1",
-    sede_id: "1",
+    carrera_id: "", // Se llenará dinámicamente
+    sede_id: "", // Se llenará dinámicamente
   });
 
   const [cargando, setCargando] = useState(false);
   const [credenciales, setCredenciales] = useState(null);
   const [error, setError] = useState("");
 
-  // --- CORRECCIÓN AQUÍ: Forzar mayúsculas al escribir en CURP ---
+  // --- NUEVO: Cargar Sedes y Carreras al iniciar ---
+  useEffect(() => {
+    const fetchCatalogos = async () => {
+      try {
+        const res = await axios.get(`${API_URL}/api/public/catalogos`);
+        setCatalogos(res.data);
+
+        // Pre-seleccionar la primera opción si existe para evitar errores
+        setForm((prev) => ({
+          ...prev,
+          carrera_id:
+            res.data.carreras.length > 0 ? res.data.carreras[0].id : "",
+          sede_id: res.data.sedes.length > 0 ? res.data.sedes[0].id : "",
+        }));
+      } catch (err) {
+        console.error("Error cargando listas", err);
+        setError(
+          "No se pudieron cargar las carreras y sedes. Intenta recargar.",
+        );
+      }
+    };
+    fetchCatalogos();
+  }, []);
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm({
@@ -41,7 +67,6 @@ const RegistroPage = () => {
       [name]: name === "curp" ? value.toUpperCase() : value,
     });
   };
-  // -------------------------------------------------------------
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -49,7 +74,6 @@ const RegistroPage = () => {
     setError("");
 
     try {
-      // Enviamos los datos a la ruta pública
       const res = await axios.post(
         `${API_URL}/api/public/registro-aspirante`,
         form,
@@ -65,7 +89,6 @@ const RegistroPage = () => {
     }
   };
 
-  // --- VISTA DE RESULTADO (CREDENCIALES) ---
   if (credenciales) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
@@ -73,7 +96,6 @@ const RegistroPage = () => {
           <div className="mx-auto bg-green-100 w-16 h-16 rounded-full flex items-center justify-center mb-4">
             <CheckCircle size={32} className="text-green-600" />
           </div>
-
           <h2 className="text-2xl font-bold text-gray-800 mb-2">
             ¡Registro Exitoso!
           </h2>
@@ -82,11 +104,7 @@ const RegistroPage = () => {
           </p>
 
           <div className="text-left space-y-4 mb-8">
-            {/* 1. DATOS PLATAFORMA */}
             <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 shadow-sm relative overflow-hidden">
-              <div className="absolute top-0 right-0 bg-gray-200 text-gray-600 text-[10px] font-bold px-2 py-1 rounded-bl-lg">
-                PLATAFORMA
-              </div>
               <div className="grid grid-cols-2 gap-4 mt-2">
                 <div>
                   <p className="text-[10px] text-gray-400 uppercase font-bold">
@@ -107,11 +125,7 @@ const RegistroPage = () => {
               </div>
             </div>
 
-            {/* 2. DATOS CORREO INSTITUCIONAL */}
             <div className="bg-blue-50 p-4 rounded-xl border border-blue-200 shadow-sm relative overflow-hidden">
-              <div className="absolute top-0 right-0 bg-blue-200 text-blue-800 text-[10px] font-bold px-2 py-1 rounded-bl-lg">
-                CORREO OFICIAL
-              </div>
               <div className="space-y-3 mt-2">
                 <div>
                   <p className="text-[10px] text-blue-400 uppercase font-bold">
@@ -125,22 +139,16 @@ const RegistroPage = () => {
                   <p className="text-[10px] text-blue-400 uppercase font-bold">
                     Contraseña del Correo
                   </p>
-                  <div className="mt-1">
-                    <span className="text-lg font-mono font-bold text-blue-700 bg-white border border-blue-100 px-3 py-1 rounded-md select-all inline-block">
-                      {credenciales.password_correo || "Revisar Backend"}
-                    </span>
-                  </div>
-                  <p className="text-[10px] text-blue-400 mt-1 italic">
-                    * Úsala para entrar a Gmail o Outlook.
-                  </p>
+                  <span className="text-lg font-mono font-bold text-blue-700 bg-white border border-blue-100 px-3 py-1 rounded-md select-all inline-block">
+                    {credenciales.password_correo}
+                  </span>
                 </div>
               </div>
             </div>
           </div>
-
           <Link
             to="plataforma/login"
-            className="block w-full bg-[#1e293b] text-white py-3 rounded-xl font-bold hover:bg-black transition shadow-lg transform active:scale-95"
+            className="block w-full bg-[#1e293b] text-white py-3 rounded-xl font-bold hover:bg-black transition"
           >
             Ir a Iniciar Sesión
           </Link>
@@ -149,11 +157,9 @@ const RegistroPage = () => {
     );
   }
 
-  // --- VISTA FORMULARIO ---
   return (
     <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl overflow-hidden">
-        {/* Encabezado */}
         <div className="bg-[#a72a34] p-6 text-white text-center">
           <h1 className="text-2xl font-bold uppercase tracking-wide flex justify-center items-center gap-2">
             <UserPlus /> Registro de Aspirantes
@@ -171,7 +177,6 @@ const RegistroPage = () => {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* SECCIÓN 1: CONTACTO CLAVE */}
             <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
               <label className="block text-xs font-bold text-blue-800 uppercase mb-1 flex items-center gap-1">
                 <Mail size={14} /> Correo Personal
@@ -187,7 +192,6 @@ const RegistroPage = () => {
               />
             </div>
 
-            {/* SECCIÓN 2: DATOS GENERALES */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="label-form">Nombre(s) *</label>
@@ -229,7 +233,6 @@ const RegistroPage = () => {
                   className="input-form"
                 />
               </div>
-
               <div className="md:col-span-2">
                 <label className="label-form">Domicilio Completo *</label>
                 <input
@@ -241,7 +244,6 @@ const RegistroPage = () => {
                   className="input-form"
                 />
               </div>
-
               <div>
                 <label className="label-form">Colonia *</label>
                 <input
@@ -263,7 +265,6 @@ const RegistroPage = () => {
                   className="input-form"
                 />
               </div>
-
               <div className="md:col-span-2">
                 <label className="label-form">Escuela de Procedencia *</label>
                 <input
@@ -276,6 +277,7 @@ const RegistroPage = () => {
                 />
               </div>
 
+              {/* --- AQUÍ ESTÁ EL CAMBIO DE MODALIDAD --- */}
               <div>
                 <label className="label-form">Modalidad *</label>
                 <select
@@ -284,12 +286,12 @@ const RegistroPage = () => {
                   onChange={handleChange}
                   className="input-form bg-white"
                 >
+                  {/* Estas son las únicas opciones que se enviarán a la BD */}
                   <option value="Presencial">Presencial</option>
                   <option value="Virtual">Virtual</option>
                 </select>
               </div>
 
-              {/* EMERGENCIA */}
               <div className="md:col-span-2 bg-red-50 p-4 rounded-lg border border-red-100">
                 <p className="text-xs font-bold text-red-800 uppercase mb-3 border-b border-red-200 pb-1">
                   En caso de emergencia
@@ -360,17 +362,41 @@ const RegistroPage = () => {
                 </select>
               </div>
 
+              {/* --- SELECCIÓN DINÁMICA DE CARRERA --- */}
               <div>
                 <label className="label-form">Carrera de Interés *</label>
                 <select
+                  required
                   name="carrera_id"
                   value={form.carrera_id}
                   onChange={handleChange}
                   className="input-form bg-white"
                 >
-                  <option value="1">Licenciatura en Pedagogía</option>
-                  <option value="2">Licenciatura en Psicología</option>
-                  {/* Agrega más opciones aquí */}
+                  <option value="">-- Selecciona --</option>
+                  {catalogos.carreras.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.nombre_carrera}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* --- SELECCIÓN DINÁMICA DE SEDE --- */}
+              <div>
+                <label className="label-form">Sede *</label>
+                <select
+                  required
+                  name="sede_id"
+                  value={form.sede_id}
+                  onChange={handleChange}
+                  className="input-form bg-white"
+                >
+                  <option value="">-- Selecciona --</option>
+                  {catalogos.sedes.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.nombre_sede}
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -385,7 +411,6 @@ const RegistroPage = () => {
           </form>
         </div>
       </div>
-
       <style>{`
         .label-form { display: block; font-size: 0.75rem; font-weight: 700; color: #6b7280; text-transform: uppercase; margin-bottom: 0.25rem; }
         .input-form { width: 100%; padding: 0.75rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; outline: none; transition: all 0.2s; }

@@ -207,6 +207,24 @@ async function crearCorreoCpanel(usuario, passwordCorreo) {
   }
 }
 
+// --- NUEVA RUTA PÚBLICA PARA LLENAR LOS SELECTS ---
+app.get("/api/public/catalogos", async (req, res) => {
+  try {
+    // Obtenemos Sedes y Carreras activas
+    const [sedes] = await db.query(
+      "SELECT id, nombre_sede FROM sedes WHERE activo = 1",
+    );
+    const [carreras] = await db.query(
+      "SELECT id, nombre_carrera FROM carreras WHERE activo = 1",
+    );
+
+    res.json({ sedes, carreras });
+  } catch (error) {
+    console.error("Error al obtener catálogos públicos:", error);
+    res.status(500).send({ message: "Error al cargar listas." });
+  }
+});
+
 app.post("/api/public/registro-aspirante", async (req, res) => {
   const {
     nombre,

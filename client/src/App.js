@@ -82,6 +82,7 @@ import {
   Camera,
   BookOpen,
   AlertCircle,
+  Loader,
 } from "lucide-react";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
@@ -165,7 +166,7 @@ api.interceptors.response.use(
       // Usamos window.location.href para forzar una recarga completa
       // y limpiar el estado de React.
       if (window.location.pathname !== "/login") {
-        window.location.href = "/login";
+        window.location.href = "plataforma/login";
       }
     }
     // Retornamos el error para que otras partes (como el login) puedan manejarlo
@@ -1216,60 +1217,149 @@ const AspiranteLayout = () => {
 
 // --- PÁGINAS ---
 
+// --- LOGIN PAGE CON FUNCIÓN "RECORDARME" ---
 const LoginPage = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+
+  // 1. ESTADOS NUEVOS (Carga y Recordar)
+  const [loading, setLoading] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
+
   const { login } = useAuth();
+
+  // 2. EFECTO: Buscar si hay un correo guardado al entrar
+  useEffect(() => {
+    const savedEmail = localStorage.getItem("rememberedEmail");
+    if (savedEmail) {
+      setEmail(savedEmail);
+      setRememberMe(true);
+    }
+  }, []);
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setError("");
+    setLoading(true); // Activar carga
+
     try {
       const response = await api.post("/login", { email, password });
+
+      // 3. LÓGICA: Guardar o Borrar el correo según el checkbox
+      if (rememberMe) {
+        localStorage.setItem("rememberedEmail", email);
+      } else {
+        localStorage.removeItem("rememberedEmail");
+      }
+
       login(response.data.user, response.data.token);
     } catch (err) {
       setError(err.response?.data?.message || "Error al iniciar sesión");
+    } finally {
+      setLoading(false); // Desactivar carga siempre
     }
   };
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100">
-      <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md">
-        <h2 className="text-3xl font-bold text-center text-gray-900">
-          Iniciar Sesión
-        </h2>
+      {/* Tarjeta del Login */}
+      <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-xl shadow-lg border border-gray-200">
+        {/* --- SECCIÓN LOGO --- */}
+        <div className="text-center">
+          <img
+            src="/logo.png"
+            alt="Logo Universidad"
+            className="mx-auto h-20 w-auto object-contain mb-4"
+            onError={(e) => {
+              e.target.style.display = "none";
+            }}
+          />
+          <h2 className="text-3xl font-bold text-gray-900">Iniciar Sesión</h2>
+          <p className="text-sm text-gray-500 mt-2">Plataforma Institucional</p>
+        </div>
+
         <form onSubmit={handleLogin} className="space-y-6">
+          {/* Input Email */}
           <div>
-            <label className="text-sm font-medium text-gray-700">Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-principal focus:border-principal"
-            />
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Correo Electrónico
+            </label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <User className="h-5 w-5 text-gray-400" />
+              </div>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                placeholder="ej. 2026001"
+                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-[#a72a34] focus:border-[#a72a34] transition-all"
+              />
+            </div>
           </div>
+
+          {/* Input Password */}
           <div>
-            <label className="text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
               Contraseña
             </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-principal focus:border-principal"
-            />
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Lock className="h-5 w-5 text-gray-400" />
+              </div>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                placeholder="••••••••"
+                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-[#a72a34] focus:border-[#a72a34] transition-all"
+              />
+            </div>
           </div>
-          {error && <p className="text-sm text-red-600">{error}</p>}
+
+          {/* 4. CHECKBOX RECORDARME (NUEVO) */}
+          <div className="flex items-center">
+            <input
+              id="remember-me"
+              type="checkbox"
+              checked={rememberMe}
+              onChange={(e) => setRememberMe(e.target.checked)}
+              className="h-4 w-4 text-[#a72a34] focus:ring-[#a72a34] border-gray-300 rounded cursor-pointer"
+            />
+            <label
+              htmlFor="remember-me"
+              className="ml-2 block text-sm text-gray-700 cursor-pointer"
+            >
+              Recordar mi usuario
+            </label>
+          </div>
+
+          {/* Mensaje de Error */}
+          {error && (
+            <div className="p-3 bg-red-50 border-l-4 border-[#a72a34] text-red-700 text-sm rounded">
+              <p className="font-medium">Error de acceso</p>
+              <p>{error}</p>
+            </div>
+          )}
+
+          {/* Botón */}
           <button
             type="submit"
-            className="w-full px-4 py-2 font-semibold text-white bg-principal rounded-md hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-principal"
+            disabled={loading}
+            className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-bold text-white bg-[#a72a34] hover:bg-[#8f242d] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#a72a34] transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
           >
-            Entrar
+            {loading ? "Cargando..." : "Entrar"}
           </button>
         </form>
+
+        <div className="text-center mt-4">
+          <p className="text-xs text-gray-400">
+            © {new Date().getFullYear()} Centro Universitario Siglo XXI
+          </p>
+        </div>
       </div>
     </div>
   );
