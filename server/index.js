@@ -4788,6 +4788,70 @@ adminRouter.post("/migracion/ejecutar", async (req, res) => {
   }
 });
 
+// ==========================================
+// NUEVO: EXPLORADOR DE ARCHIVOS (ADMIN)
+// ==========================================
+adminRouter.get("/archivos/explorar", async (req, res) => {
+  try {
+    // 1. Obtenemos la ruta que queremos ver (si está vacía, es la raíz 'uploads')
+    const rutaSolicitada = req.query.ruta || "";
+
+    // SEGURIDAD CRÍTICA: Evitar que alguien ponga ".." para salir de uploads
+    if (rutaSolicitada.includes("..")) {
+      return res
+        .status(400)
+        .send({ message: "Acceso denegado: Ruta inválida." });
+    }
+
+    // 2. Construimos la ruta completa usando tu variable global 'uploadsDir'
+    // (uploadsDir ya está definida al inicio de tu index.js, línea 43)
+    const rutaCompleta = path.join(uploadsDir, rutaSolicitada);
+
+    // 3. Verificamos si existe
+    if (!fs.existsSync(rutaCompleta)) {
+      // Si no existe, mandamos lista vacía en vez de error para no romper el front
+      return res.json([]);
+    }
+
+    // 4. Leemos el contenido
+    const elementos = fs.readdirSync(rutaCompleta, { withFileTypes: true });
+
+    // 5. Formateamos la respuesta
+    const respuesta = elementos.map((dirent) => {
+      // Calculamos la ruta relativa para seguir navegando
+      // Ejemplo: si estamos en "perfiles" y vemos "foto.jpg", la ruta es "perfiles/foto.jpg"
+      const rutaItem = rutaSolicitada
+        ? path.join(rutaSolicitada, dirent.name)
+        : dirent.name;
+
+      // Corregimos las barras invertidas de Windows (\) por normales (/)
+      const rutaWeb = rutaItem.replace(/\\/g, "/");
+
+      return {
+        nombre: dirent.name,
+        tipo: dirent.isDirectory() ? "carpeta" : "archivo",
+        ruta: rutaWeb,
+        // URL para descargar/ver (apuntamos a tu carpeta estática /uploads)
+        url: `/uploads/${rutaWeb}`,
+      };
+    });
+
+    // Ordenamos: Carpetas primero, luego archivos alfabéticamente
+    respuesta.sort((a, b) => {
+      if (a.tipo === b.tipo) return a.nombre.localeCompare(b.nombre);
+      return a.tipo === "carpeta" ? -1 : 1;
+    });
+
+    res.json(respuesta);
+  } catch (error) {
+    console.error("Error en explorador:", error);
+    res.status(500).send({ message: "Error al leer archivos." });
+  }
+});
+
+// Esta es la línea que buscaste, el código va ARRIBA de esto:
+// apiRouter.use("/admin", adminRouter);
+
 apiRouter.use("/admin", adminRouter); // Registra el router de admin en /api/admin
 
 // --- AGREGA ESTA FUNCIÓN HELPER ---

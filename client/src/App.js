@@ -1,5 +1,6 @@
 import CorreoPage from "./pages/CorreoAdminPage";
 import RegistroPage from "./pages/RegistroPage";
+import ExploradorArchivos from "./pages/ExploradorArchivos";
 import React, {
   useState,
   useEffect,
@@ -83,6 +84,7 @@ import {
   BookOpen,
   AlertCircle,
   Loader,
+  Folder,
 } from "lucide-react";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
@@ -601,6 +603,7 @@ const AdminLayout = () => {
     { icon: GitBranch, label: "Migración", path: "/admin/migracion" },
     { icon: DollarSign, label: "Caja y Finanzas", path: "/admin/finanzas" },
     { icon: ClipboardEdit, label: "Solicitudes", path: "/admin/solicitudes" },
+    { icon: Folder, label: "Gestor de Archivos", path: "/admin/archivos" },
   ];
 
   return (
@@ -2145,7 +2148,7 @@ const UsuariosPage = () => {
                       </div>
                       <div>
                         <div className="font-bold text-gray-800">
-                          {u.nombre} {u.apellido_paterno}
+                          {u.nombre} {u.apellido_paterno} {u.apellido_materno}
                         </div>
                         <div className="text-xs text-gray-400 font-mono">
                           {u.matricula || "ID: " + u.id}
@@ -13472,6 +13475,7 @@ function App() {
               <Route path="/grupos" element={<GruposPage />} />
               <Route path="/grupos/:id" element={<DetalleGrupoPage />} />
               <Route path="/admin/migracion" element={<MigracionPage />} />
+              <Route path="/admin/archivos" element={<ExploradorArchivos />} />
               <Route path="/migrar-grupos" element={<MigracionGruposPage />} />
               <Route
                 path="/admin/grupos/:grupoId/asignatura/:asignaturaId/calificaciones"
