@@ -136,7 +136,7 @@ const ExploradorArchivos = () => {
                   } else {
                     // Abrir archivo en nueva pestaña
                     window.open(
-                      `https://tu-servidor-en-render.com${item.url}`,
+                      `https://api-universidad-c5o8.onrender.com${item.url}`,
                       "_blank",
                     );
                   }
@@ -151,7 +151,7 @@ const ExploradorArchivos = () => {
                     />
                   ) : esImagen(item.nombre) ? (
                     <img
-                      src={`https://tu-servidor-en-render.com${item.url}`}
+                      src={`https://api-universidad-c5o8.onrender.com${item.url}`}
                       alt="preview"
                       className="w-full h-full object-cover rounded-lg border border-gray-100"
                     />
@@ -173,7 +173,7 @@ const ExploradorArchivos = () => {
                 {/* Botón Descargar (Solo aparece en Hover para archivos) */}
                 {item.tipo === "archivo" && (
                   <a
-                    href={`https://tu-servidor-en-render.com${item.url}`}
+                    href={`https://api-universidad-c5o8.onrender.com${item.url}`}
                     download
                     onClick={(e) => e.stopPropagation()} // Evita abrir la preview al dar click en descargar
                     className="absolute top-2 right-2 p-1.5 bg-white rounded-full shadow opacity-0 group-hover:opacity-100 transition-opacity text-blue-600 hover:text-blue-800"

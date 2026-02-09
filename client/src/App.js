@@ -1,6 +1,7 @@
 import CorreoPage from "./pages/CorreoAdminPage";
 import RegistroPage from "./pages/RegistroPage";
 import ExploradorArchivos from "./pages/ExploradorArchivos";
+import MiDrivePage from "./pages/MiDrivePage";
 import React, {
   useState,
   useEffect,
@@ -604,6 +605,7 @@ const AdminLayout = () => {
     { icon: DollarSign, label: "Caja y Finanzas", path: "/admin/finanzas" },
     { icon: ClipboardEdit, label: "Solicitudes", path: "/admin/solicitudes" },
     { icon: Folder, label: "Gestor de Archivos", path: "/admin/archivos" },
+    { icon: UploadCloud, label: "Mi Nube (Drive)", path: "/admin/drive" },
   ];
 
   return (
@@ -13468,6 +13470,7 @@ function App() {
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/asignaturas" element={<AsignaturasPage />} />
               <Route path="/usuarios" element={<UsuariosPage />} />
+              <Route path="/admin/drive" element={<MiDrivePage />} />
               <Route
                 path="/usuarios/aspirante/:id"
                 element={<DetalleAspirantePage />}
@@ -13476,6 +13479,7 @@ function App() {
               <Route path="/grupos/:id" element={<DetalleGrupoPage />} />
               <Route path="/admin/migracion" element={<MigracionPage />} />
               <Route path="/admin/archivos" element={<ExploradorArchivos />} />
+              <Route path="/admin/drive" element={<MiDrivePage />} />
               <Route path="/migrar-grupos" element={<MigracionGruposPage />} />
               <Route
                 path="/admin/grupos/:grupoId/asignatura/:asignaturaId/calificaciones"
@@ -13570,6 +13574,7 @@ function App() {
                 element={<HiloPage />}
               />
             </Route>
+            <Route path="/docente/mi-nube" element={<MiDrivePage />} />
           </Route>
 
           {/* --- AÑADE ESTE BLOQUE COMPLETO --- */}
