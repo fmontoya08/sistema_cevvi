@@ -29,7 +29,7 @@ const MiDrivePage = () => {
     try {
       const token = localStorage.getItem("token");
       const res = await axios.get(
-        `https://tu-url-render.com/api/drive/list?ruta=${rutaActual}`,
+        `https://api-universidad-c5o8.onrender.com/api/drive/list?ruta=${rutaActual}`,
         {
           headers: { Authorization: `Bearer ${token}` },
         },
@@ -50,7 +50,7 @@ const MiDrivePage = () => {
     try {
       const token = localStorage.getItem("token");
       await axios.post(
-        "https://tu-url-render.com/api/drive/folder",
+        "https://api-universidad-c5o8.onrender.com/api/drive/folder",
         { nombre, rutaActual },
         { headers: { Authorization: `Bearer ${token}` } },
       );
@@ -71,12 +71,16 @@ const MiDrivePage = () => {
 
     try {
       const token = localStorage.getItem("token");
-      await axios.post("https://tu-url-render.com/api/drive/upload", formData, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "multipart/form-data",
+      await axios.post(
+        "https://api-universidad-c5o8.onrender.com/api/drive/upload",
+        formData,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "multipart/form-data",
+          },
         },
-      });
+      );
       cargarDrive();
     } catch (error) {
       alert("Error al subir archivo");
@@ -92,7 +96,7 @@ const MiDrivePage = () => {
     try {
       const token = localStorage.getItem("token");
       await axios.delete(
-        `https://tu-url-render.com/api/drive/item?ruta=${ruta}&tipo=${tipo}`,
+        `https://api-universidad-c5o8.onrender.com/api/drive/item?ruta=${ruta}&tipo=${tipo}`,
         {
           headers: { Authorization: `Bearer ${token}` },
         },
@@ -204,7 +208,7 @@ const MiDrivePage = () => {
                     item.tipo === "carpeta"
                       ? entrarCarpeta(item.nombre)
                       : window.open(
-                          `https://tu-url-render.com${item.url}`,
+                          `https://api-universidad-c5o8.onrender.com${item.url}`,
                           "_blank",
                         )
                   }
@@ -218,7 +222,7 @@ const MiDrivePage = () => {
                     ) : // Preview si es imagen
                     item.nombre.match(/\.(jpg|png|jpeg)$/i) ? (
                       <img
-                        src={`https://tu-url-render.com${item.url}`}
+                        src={`https://api-universidad-c5o8.onrender.com${item.url}`}
                         className="w-full h-full object-cover rounded"
                       />
                     ) : (

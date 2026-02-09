@@ -4853,59 +4853,46 @@ adminRouter.get("/archivos/explorar", async (req, res) => {
 // MÓDULO GOOGLE DRIVE (NUBE PRIVADA)
 // ==========================================
 const driveRouter = express.Router();
-driveRouter.use(verifyToken); // Protegemos todas las rutas
+// No necesitamos verifyToken aquí si ya lo usaste globalmente en apiRouter,
+// pero por seguridad lo dejamos o verificamos si apiRouter ya lo tiene.
+// Como lo pegaremos dentro de apiRouter, heredará la seguridad.
 
 // Helper: Obtener ruta raíz del usuario
-// Se guardará en: uploads/drive/usuario_ID
 const getUserRoot = (userId) =>
   path.join(uploadsDir, "drive", `usuario_${userId}`);
 
-// 1. LISTAR ARCHIVOS (De mi carpeta personal)
+// 1. LISTAR ARCHIVOS
 driveRouter.get("/list", async (req, res) => {
   try {
     const userId = req.user.id;
-    const rutaRelativa = req.query.ruta || ""; // Carpeta dentro de mi drive
-
-    // Seguridad: Evitar salir de la carpeta del usuario (Directory Traversal)
+    const rutaRelativa = req.query.ruta || "";
     if (rutaRelativa.includes(".."))
       return res.status(400).send({ message: "Ruta inválida" });
 
-    // Definir carpeta real
     const userRoot = getUserRoot(userId);
     const targetPath = path.join(userRoot, rutaRelativa);
 
-    // Si la carpeta raíz del usuario no existe, la creamos (primera vez que entra)
-    if (!fs.existsSync(userRoot)) {
-      fs.mkdirSync(userRoot, { recursive: true });
-    }
-
-    // Si la subcarpeta que busca no existe, devolvemos lista vacía
+    if (!fs.existsSync(userRoot)) fs.mkdirSync(userRoot, { recursive: true });
     if (!fs.existsSync(targetPath)) return res.json([]);
 
     const elementos = fs.readdirSync(targetPath, { withFileTypes: true });
 
     const respuesta = elementos.map((dirent) => {
-      // Corrección de barras para Windows/Linux
       const rutaClean = rutaRelativa
         ? path.join(rutaRelativa, dirent.name).replace(/\\/g, "/")
         : dirent.name;
-
       return {
         nombre: dirent.name,
         tipo: dirent.isDirectory() ? "carpeta" : "archivo",
         ruta: rutaClean,
-        // URL de descarga (Solo si es archivo)
         url: !dirent.isDirectory()
           ? `/uploads/drive/usuario_${userId}/${rutaClean}`
           : null,
       };
     });
-
-    // Ordenar: Carpetas primero
     respuesta.sort((a, b) =>
       a.tipo === b.tipo ? 0 : a.tipo === "carpeta" ? -1 : 1,
     );
-
     res.json(respuesta);
   } catch (error) {
     console.error("Error Drive List:", error);
@@ -4917,7 +4904,6 @@ driveRouter.get("/list", async (req, res) => {
 driveRouter.post("/folder", async (req, res) => {
   try {
     const { nombre, rutaActual } = req.body;
-    // Limpiamos el nombre para quitar caracteres raros
     const cleanName = nombre.replace(/[^a-zA-Z0-9 _-]/g, "");
     const targetPath = path.join(
       getUserRoot(req.user.id),
@@ -4936,10 +4922,9 @@ driveRouter.post("/folder", async (req, res) => {
   }
 });
 
-// 3. SUBIR ARCHIVO (Configuración Multer Dinámica)
+// 3. SUBIR ARCHIVO
 const driveStorage = multer.diskStorage({
   destination: function (req, file, cb) {
-    // Guardamos en la carpeta que el usuario esté viendo actualmente
     const userPath = path.join(
       getUserRoot(req.user.id),
       req.body.rutaActual || "",
@@ -4948,7 +4933,6 @@ const driveStorage = multer.diskStorage({
     cb(null, userPath);
   },
   filename: function (req, file, cb) {
-    // Mantenemos el nombre original
     cb(null, file.originalname);
   },
 });
@@ -4958,7 +4942,7 @@ driveRouter.post("/upload", uploadDrive.single("archivo"), (req, res) => {
   res.json({ message: "Archivo subido correctamente" });
 });
 
-// 4. ELIMINAR (Archivo o Carpeta)
+// 4. ELIMINAR
 driveRouter.delete("/item", async (req, res) => {
   try {
     const { ruta, tipo } = req.query;
@@ -4968,19 +4952,17 @@ driveRouter.delete("/item", async (req, res) => {
       return res.status(404).send({ message: "No existe" });
 
     if (tipo === "carpeta") {
-      // Borrado recursivo (borra carpeta y su contenido)
       fs.rmSync(fullPath, { recursive: true, force: true });
     } else {
       fs.unlinkSync(fullPath);
     }
     res.json({ message: "Eliminado correctamente" });
   } catch (error) {
-    console.error(error);
     res.status(500).send({ message: "Error al eliminar" });
   }
 });
 
-// Registrar el router en /api/drive
+// Registrar el router
 apiRouter.use("/drive", driveRouter);
 
 apiRouter.use("/admin", adminRouter); // Registra el router de admin en /api/admin

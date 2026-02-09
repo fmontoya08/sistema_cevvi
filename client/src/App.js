@@ -786,6 +786,7 @@ const DocenteLayout = () => {
   const navItems = [
     { icon: Home, label: "Mis Cursos", path: "/docente/dashboard" },
     { icon: Mail, label: "Correo Institucional", path: "/docente/correo" },
+    { icon: UploadCloud, label: "Mi Nube", path: "/docente/mi-nube" },
     // Puedes agregar más items aquí si el docente tiene más secciones
   ];
 
@@ -13545,6 +13546,7 @@ function App() {
                 element={<DocenteDashboardPage />}
               />
               <Route path="/docente/correo" element={<CorreoPage />} />
+              <Route path="/docente/mi-nube" element={<MiDrivePage />} />
               <Route
                 path="/docente/grupo/:grupoId/asignatura/:asignaturaId"
                 element={<DetalleCursoDocentePage />}
