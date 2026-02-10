@@ -13,7 +13,7 @@ import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 
 // --- IP DEL SERVIDOR (Verifica que sea correcta) ---
-const API_URL = "http://192.168.100.87:3001/api"; // O la IP actual de tu PC
+const API_URL = "https://api-universidad-c5o8.onrender.com/api"; // O la IP actual de tu PC
 
 const api = axios.create({
   baseURL: API_URL,
@@ -53,7 +53,7 @@ type AuthContextType = {
   loading: boolean;
   login: (
     email: string,
-    password: string
+    password: string,
   ) => Promise<{ success: boolean; user?: User; error?: string }>;
   logout: () => void;
   API_URL: string;
@@ -69,7 +69,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   // --- 3. FUNCIÓN PARA REGISTRAR EL TOKEN PUSH (con logs) ---
   async function registerForPushNotificationsAsync(
     userId: number,
-    apiInstance: AxiosInstance
+    apiInstance: AxiosInstance,
   ): Promise<string | null> {
     console.log("==> Iniciando registro de token push..."); // LOG A
     let token;
@@ -99,7 +99,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       console.error("==> ERROR obteniendo el push token:", e); // LOG H (Error)
       // El error de Firebase aparecerá aquí si google-services.json no está bien
       alert(
-        "Hubo un error al obtener el token para notificaciones. Asegúrate de tener conexión y los servicios de Google Play actualizados."
+        "Hubo un error al obtener el token para notificaciones. Asegúrate de tener conexión y los servicios de Google Play actualizados.",
       );
       return null;
     }
@@ -208,7 +208,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       API_URL,
       api,
     }),
-    [user, loading, login, logout]
+    [user, loading, login, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

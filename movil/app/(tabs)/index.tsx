@@ -1,245 +1,192 @@
-// Archivo: movil/app/(tabs)/index.tsx
-
-import React, { useState, useEffect, useCallback } from "react";
+import React from "react";
 import {
   StyleSheet,
   View,
   Text,
+  TouchableOpacity,
   ScrollView,
-  RefreshControl,
-  ActivityIndicator,
+  Image,
 } from "react-native";
+import { useRouter } from "expo-router";
 import { useAuth } from "../../context/AuthContext";
-import { Redirect, useNavigation } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import { SafeAreaView } from "react-native-safe-area-context"; // Importante para iOS
 
-// Tipos de datos actualizados
-interface Asignatura {
-  nombre_asignatura: string;
-  docente_nombre: string | null;
-  docente_apellido: string | null;
-  calificacion: number | null;
-  clave_asignatura: string;
-}
-interface GrupoInfo {
-  grupo: {
-    nombre_grupo: string;
-    nombre_ciclo: string;
-    modalidad: string; // Incluimos la modalidad del grupo
-  };
-  asignaturas: Asignatura[];
-}
+export default function HomeScreen() {
+  const { user } = useAuth();
+  const router = useRouter();
 
-export default function AlumnoDashboardScreen() {
-  const { user, api } = useAuth();
-  const [misGrupos, setMisGrupos] = useState<GrupoInfo[]>([]); // Estado es un array
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const navigation = useNavigation();
-
-  const fetchMiGrupo = useCallback(
-    async (isMounted: boolean) => {
-      if (!user || user.rol !== "alumno") {
-        if (isMounted) setLoading(false);
-        return;
-      }
-      try {
-        const response = await api.get<GrupoInfo[]>("/alumno/mi-grupo"); // Espera un array
-        if (isMounted) {
-          setMisGrupos(response.data);
-        }
-      } catch (error: any) {
-        console.error(
-          "Error al cargar la información del grupo:",
-          error.response?.data?.message || error.message
-        );
-        if (isMounted) {
-          setMisGrupos([]);
-        }
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-          setRefreshing(false);
-        }
-      }
-    },
-    [user, api]
-  );
-
-  useEffect(() => {
-    let isMounted = true;
-    if (user?.rol === "alumno") {
-      navigation.setOptions({ title: `Portal de ${user.nombre}` });
-      fetchMiGrupo(isMounted);
-    } else if (isMounted) {
-      setLoading(false);
-    }
-    return () => {
-      isMounted = false;
-    };
-  }, [user, navigation, fetchMiGrupo]);
-
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchMiGrupo(true);
-  };
-
-  if (loading && !refreshing) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" />
-      </View>
-    );
-  }
-
-  // Redirección si el rol no es alumno (protección extra)
-  if (user && user.rol !== "alumno") {
-    if (user.rol === "docente") return <Redirect href="/(tabs)/explore" />;
-    if (user.rol === "aspirante") return <Redirect href="/(tabs)/expediente" />;
-    // Si es admin, el layout superior ya lo redirige al login
-  }
+  // Si el usuario aún no carga, mostramos un nombre genérico
+  const nombreUsuario = user?.nombre || "Alumno";
 
   return (
-    <ScrollView
-      contentContainerStyle={styles.container}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-      }
-    >
-      {/* Revisamos el length y hacemos .map() */}
-      {misGrupos.length > 0 ? (
-        misGrupos.map((infoGrupo, index) => (
-          <View key={index} style={styles.card}>
-            <Text style={styles.cardTitle}>
-              Grupo: {infoGrupo.grupo.nombre_grupo} ({infoGrupo.grupo.modalidad}
-              )
-            </Text>
-            <Text style={styles.cardSubtitle}>
-              Ciclo Escolar: {infoGrupo.grupo.nombre_ciclo}
-            </Text>
+    // SafeAreaView protege el contenido de la "muesca" del iPhone
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView style={styles.container}>
+        {/* 1. Encabezado de Bienvenida */}
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.greeting}>¡Hola, {nombreUsuario}!</Text>
+            <Text style={styles.subGreeting}>Bienvenido a tu portal móvil</Text>
+          </View>
+          {/* Puedes cambiar esta imagen por tu logo real */}
+          <Image
+            source={require("../../assets/images/logo.png")}
+            style={styles.logo}
+          />
+        </View>
 
-            <View style={styles.tableHeader}>
-              <Text style={[styles.headerText, { flex: 2 }]}>Asignatura</Text>
-              <Text style={[styles.headerText, { flex: 2 }]}>Docente</Text>
-              <Text
-                style={[styles.headerText, { flex: 1, textAlign: "right" }]}
+        {/* 2. Sección de Accesos Rápidos */}
+        <View style={styles.sectionContainer}>
+          <Text style={styles.sectionTitle}>Servicios Escolares</Text>
+
+          {/* Fila 1: Pagos y Trámites */}
+          <View style={styles.grid}>
+            {/* Botón: Mis Pagos */}
+            <TouchableOpacity
+              style={styles.card}
+              onPress={() => router.push("/finanzas")}
+            >
+              <View
+                style={[styles.iconContainer, { backgroundColor: "#e0f2fe" }]}
               >
-                Cal.
+                <Ionicons name="card-outline" size={32} color="#0284c7" />
+              </View>
+              <Text style={styles.cardText}>Mis Pagos</Text>
+            </TouchableOpacity>
+
+            {/* Botón: Trámites */}
+            <TouchableOpacity
+              style={styles.card}
+              onPress={() => router.push("/solicitudes")}
+            >
+              <View
+                style={[styles.iconContainer, { backgroundColor: "#fef3c7" }]}
+              >
+                <Ionicons
+                  name="document-text-outline"
+                  size={32}
+                  color="#d97706"
+                />
+              </View>
+              <Text style={styles.cardText}>Trámites</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Fila 2: Mis Clases y Calendario */}
+          <View style={styles.grid}>
+            {/* Botón: Mis Clases (NUEVO) */}
+            <TouchableOpacity
+              style={styles.card}
+              onPress={() => router.push("/mis-cursos")}
+            >
+              <View
+                style={[styles.iconContainer, { backgroundColor: "#dcfce7" }]}
+              >
+                <Ionicons name="school-outline" size={32} color="#16a34a" />
+              </View>
+              <Text style={styles.cardText}>Mis Clases</Text>
+            </TouchableOpacity>
+
+            {/* Botón: Calendario */}
+            <TouchableOpacity
+              style={styles.card}
+              onPress={() => router.push("/calendario")}
+            >
+              <View
+                style={[styles.iconContainer, { backgroundColor: "#f3e8ff" }]}
+              >
+                <Ionicons name="calendar-outline" size={32} color="#9333ea" />
+              </View>
+              <Text style={styles.cardText}>Calendario</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* 3. Avisos o Novedades */}
+        <View style={styles.sectionContainer}>
+          <Text style={styles.sectionTitle}>Avisos Importantes</Text>
+          <View style={styles.noticeCard}>
+            <Ionicons
+              name="information-circle"
+              size={24}
+              color="#a72a34"
+              style={{ marginRight: 10 }}
+            />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.noticeTitle}>Reinscripciones Abiertas</Text>
+              <Text style={styles.noticeBody}>
+                Recuerda revisar tu fecha límite de pago para el próximo ciclo.
               </Text>
             </View>
-
-            {infoGrupo.asignaturas.map((asig: Asignatura, idx: number) => (
-              <View key={idx} style={styles.tableRow}>
-                <Text style={[styles.cellText, { flex: 2 }]}>
-                  {asig.nombre_asignatura}
-                </Text>
-                <Text style={[styles.cellText, { flex: 2 }]}>
-                  {asig.docente_nombre
-                    ? `${asig.docente_nombre} ${
-                        asig.docente_apellido || ""
-                      }`.trim()
-                    : "N/A"}
-                </Text>
-                <Text
-                  style={[styles.cellText, styles.calificacion, { flex: 1 }]}
-                >
-                  {asig.calificacion !== null ? asig.calificacion : "-"}
-                </Text>
-              </View>
-            ))}
           </View>
-        ))
-      ) : (
-        <View style={styles.centeredCard}>
-          <Text>No estás inscrito en ningún grupo.</Text>
         </View>
-      )}
-    </ScrollView>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flexGrow: 1,
-    backgroundColor: "#f0f0f7",
-    paddingVertical: 10,
-  },
-  centered: {
-    flex: 1,
-    justifyContent: "center",
+  safeArea: { flex: 1, backgroundColor: "#fff" }, // Fondo blanco seguro
+  container: { flex: 1, backgroundColor: "#f8f9fa" },
+
+  header: {
+    backgroundColor: "#fff",
+    padding: 25,
+    // paddingTop: 50, <--- YA NO ES NECESARIO GRACIAS A SAFEAREAVIEW
+    flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
-  },
-  centeredCard: {
-    backgroundColor: "white",
-    borderRadius: 10,
-    padding: 20,
-    margin: 15,
-    alignItems: "center",
-  },
-  card: {
-    backgroundColor: "white",
-    borderRadius: 10,
-    padding: 15,
-    margin: 15,
-    // Añadimos sombra para mejorar el diseño
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    elevation: 4,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
+    shadowRadius: 5,
   },
-  cardTitle: {
+  greeting: { fontSize: 22, fontWeight: "bold", color: "#a72a34" },
+  subGreeting: { fontSize: 14, color: "#666" },
+  logo: { width: 50, height: 50, resizeMode: "contain" },
+
+  sectionContainer: { padding: 20 },
+  sectionTitle: {
     fontSize: 18,
     fontWeight: "bold",
-    marginBottom: 5,
-    color: "#333", // Color más oscuro
-  },
-  cardSubtitle: {
-    fontSize: 14,
-    color: "#666", // Gris un poco más oscuro
+    color: "#333",
     marginBottom: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: "#eee",
-    paddingBottom: 10,
   },
-  // --- ESTILOS CORREGIDOS ---
-  tableHeader: {
-    flexDirection: "row", // Mantiene los elementos en fila
-    paddingBottom: 10,
-    marginBottom: 5,
-    paddingHorizontal: 5, // Añade padding horizontal
+
+  grid: { flexDirection: "row", gap: 15, marginBottom: 15 },
+
+  card: {
+    flex: 1,
+    backgroundColor: "#fff",
+    padding: 20,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
   },
-  headerText: {
-    fontWeight: "bold",
-    fontSize: 13, // Ligeramente más pequeño
-    color: "#444",
-    // Aseguramos que el flex se aplique correctamente
-    flexGrow: 1, // Permite que crezcan
-    flexShrink: 1, // Permite que se encojan si es necesario
-    // paddingHorizontal: 2, // Espacio entre cabeceras (opcional)
+  iconContainer: {
+    padding: 15,
+    borderRadius: 50,
+    marginBottom: 10,
   },
-  tableRow: {
+  cardText: { fontWeight: "600", color: "#444", fontSize: 14 },
+
+  noticeCard: {
+    backgroundColor: "#fff",
     flexDirection: "row",
-    paddingVertical: 12,
-    borderTopWidth: 1,
-    borderTopColor: "#f0f0f0",
-    alignItems: "center", // Centra verticalmente
-    paddingHorizontal: 5, // Añade padding horizontal
+    padding: 15,
+    borderRadius: 10,
+    alignItems: "center",
+    borderLeftWidth: 4,
+    borderLeftColor: "#a72a34",
+    elevation: 2,
   },
-  cellText: {
-    fontSize: 14,
-    color: "#555",
-    // Aseguramos que el flex se aplique correctamente
-    flexGrow: 1, // Permite que crezcan
-    flexShrink: 1, // Permite que se encojan
-    paddingRight: 8, // Espacio a la derecha antes de la siguiente celda
-  },
-  calificacion: {
-    fontWeight: "bold",
-    textAlign: "right", // Mantiene alineación derecha
-    flexGrow: 0, // No debe crecer más de lo necesario
-    flexShrink: 0, // No debe encogerse
-    minWidth: 40, // Ancho mínimo para la columna de calificación
-    paddingRight: 0, // Quitamos el padding extra a la derecha
-  },
-  // --- FIN ESTILOS CORREGIDOS ---
+  noticeTitle: { fontWeight: "bold", color: "#333", marginBottom: 2 },
+  noticeBody: { fontSize: 13, color: "#666" },
 });

@@ -6842,7 +6842,41 @@ alumnoRouter.get(
 );
 
 // --- TERMINA NUEVO CÓDIGO ---
-apiRouter.use("/alumno", alumnoRouter); // Registra el router de alumno en /api/alumno
+apiRouter.use("/alumno", alumnoRouter);
+// Registra el router de alumno en /api/alumno
+
+// --- AGREGA ESTO A TU INDEX.JS (DENTRO DE ALUMNO ROUTER) ---
+
+// GET (Alumno): Obtener detalle de una tarea específica por ID
+alumnoRouter.get("/aula-virtual/tareas/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const alumno_id = req.user.id;
+
+    // 1. Buscar la tarea por ID
+    const [tareas] = await db.query("SELECT * FROM tareas WHERE id = ?", [id]);
+
+    if (tareas.length === 0) {
+      return res.status(404).send({ message: "Tarea no encontrada." });
+    }
+    const tarea = tareas[0];
+
+    // 2. Verificar si el alumno ya subió algo (para saber si mostrar "Entregado")
+    const [entregas] = await db.query(
+      "SELECT * FROM tareas_entregas WHERE tarea_id = ? AND alumno_id = ?",
+      [id, alumno_id],
+    );
+
+    // 3. Adjuntar la entrega a la respuesta (si existe)
+    // Esto es vital porque tu App móvil usa "tarea.entrega_alumno" para cambiar la vista
+    tarea.entrega_alumno = entregas.length > 0 ? entregas[0] : null;
+
+    res.json(tarea);
+  } catch (error) {
+    console.error("Error al obtener detalle de tarea:", error);
+    res.status(500).send({ message: "Error en el servidor." });
+  }
+});
 
 // --- RUTAS DE ASPIRANTE ---
 const aspiranteRouter = express.Router();

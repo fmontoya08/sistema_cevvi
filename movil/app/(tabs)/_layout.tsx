@@ -1,79 +1,68 @@
-// Archivo: movil/app/(tabs)/_layout.tsx
-
 import React from "react";
-import { Redirect, Tabs } from "expo-router";
+import { Tabs, Redirect } from "expo-router";
 import { useAuth } from "../../context/AuthContext";
-import { TouchableOpacity, ActivityIndicator, View } from "react-native";
+import { View, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 export default function TabsLayout() {
-  const { user, loading, logout } = useAuth();
+  const { user, loading } = useAuth();
 
   if (loading) {
     return (
       <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-        <ActivityIndicator size="large" />
+        <ActivityIndicator size="large" color="#a72a34" />
       </View>
     );
   }
 
-  if (!user) {
-    return <Redirect href="/login" />;
-  }
-
-  // Solo el admin no entra a esta sección
-  if (user.rol === "admin") {
-    return <Redirect href="/login" />;
-  }
+  if (!user) return <Redirect href="/login" />;
 
   return (
     <Tabs
       screenOptions={{
-        headerRight: () => (
-          <TouchableOpacity onPress={logout} style={{ marginRight: 15 }}>
-            <Ionicons name="log-out-outline" size={24} color="red" />
-          </TouchableOpacity>
-        ),
+        tabBarActiveTintColor: "#a72a34", // Color vino activo
+        tabBarInactiveTintColor: "gray",
+        headerShown: true,
+        headerStyle: { backgroundColor: "#fff" },
+        headerTintColor: "#a72a34",
       }}
     >
-      {/* Pestaña del Alumno */}
+      {/* 1. Inicio (Tus grupos/calificaciones) */}
       <Tabs.Screen
-        name="index" // Corresponde a (tabs)/index.tsx
+        name="index"
         options={{
-          title: "Mi Portal",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home" color={color} size={size} />
+          title: "Inicio",
+          tabBarIcon: ({ color }) => (
+            <Ionicons name="home" size={24} color={color} />
           ),
-          // Usamos href: null para ocultar si no es alumno
-          href: user?.rol === "alumno" ? "/" : null,
         }}
       />
 
-      {/* Pestaña del Docente */}
+      {/* 2. Calendario (Nueva pantalla) */}
       <Tabs.Screen
-        name="explore" // Corresponde a (tabs)/explore.tsx
+        name="calendario"
         options={{
-          title: "Mis Cursos",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="book" color={color} size={size} />
+          title: "Calendario",
+          tabBarIcon: ({ color }) => (
+            <Ionicons name="calendar" size={24} color={color} />
           ),
-          // Usamos href: null para ocultar si no es docente
-          href: user?.rol === "docente" ? "/explore" : null,
         }}
       />
 
-      {/* Pestaña del Aspirante */}
+      {/* 3. Perfil (Nueva pantalla) */}
       <Tabs.Screen
-        name="expediente" // Corresponde a (tabs)/expediente.tsx
+        name="perfil"
         options={{
-          title: "Mi Expediente",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="file-tray-full" color={color} size={size} />
+          title: "Mi Perfil",
+          tabBarIcon: ({ color }) => (
+            <Ionicons name="person" size={24} color={color} />
           ),
-          // Usamos href: null para ocultar si no es aspirante
-          href: user?.rol === "aspirante" ? "/expediente" : null,
         }}
       />
+
+      {/* Ocultamos las pantallas que no queremos en el tab bar pero que existen */}
+      <Tabs.Screen name="explore" options={{ href: null }} />
+      <Tabs.Screen name="expediente" options={{ href: null }} />
     </Tabs>
   );
 }
