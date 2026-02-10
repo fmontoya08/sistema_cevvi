@@ -6841,6 +6841,36 @@ alumnoRouter.get(
   },
 );
 
+// --- RUTA FALTANTE: DETALLE DE TAREA (INDISPENSABLE PARA APP MÓVIL) ---
+alumnoRouter.get("/aula-virtual/tareas/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const alumno_id = req.user.id;
+
+    // 1. Buscar la tarea básica
+    const [tareas] = await db.query("SELECT * FROM tareas WHERE id = ?", [id]);
+
+    if (tareas.length === 0) {
+      return res.status(404).send({ message: "Tarea no encontrada." });
+    }
+    const tarea = tareas[0];
+
+    // 2. Buscar si el alumno ya la entregó (para pintar el estado "Entregado" en el móvil)
+    const [entregas] = await db.query(
+      "SELECT * FROM tareas_entregas WHERE tarea_id = ? AND alumno_id = ?",
+      [id, alumno_id],
+    );
+
+    // 3. Adjuntar la entrega al objeto tarea
+    tarea.entrega_alumno = entregas.length > 0 ? entregas[0] : null;
+
+    res.json(tarea);
+  } catch (error) {
+    console.error("Error al obtener detalle de tarea:", error);
+    res.status(500).send({ message: "Error en el servidor." });
+  }
+});
+
 // --- TERMINA NUEVO CÓDIGO ---
 apiRouter.use("/alumno", alumnoRouter);
 // Registra el router de alumno en /api/alumno
