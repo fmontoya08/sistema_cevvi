@@ -7130,12 +7130,12 @@ app.delete("/api/muro/:id", verifyToken, async (req, res) => {
 });
 
 // ==========================================
-// CONFIGURACIÓN CONSOLIDADA DE EXÁMENES
+// CONFIGURACIÓN CONSOLIDADA DE EXÁMENES (CORREGIDA Y ORDENADA)
 // ==========================================
-// OBTENER TODOS LOS EXÁMENES (Para que el docente los vea en su lista)
+
+// 1. OBTENER TODOS LOS EXÁMENES (Admin/Docente general)
 apiRouter.get("/examenes", verifyToken, async (req, res) => {
   try {
-    // Esta consulta trae los exámenes creados
     const [rows] = await db.query(
       "SELECT * FROM examenes ORDER BY fecha_creacion DESC",
     );
@@ -7146,25 +7146,21 @@ apiRouter.get("/examenes", verifyToken, async (req, res) => {
   }
 });
 
-// POST: CREAR EXAMEN (Asegurando que guarde grupo y materia)
+// 2. CREAR EXAMEN
 apiRouter.post("/examenes", verifyToken, async (req, res) => {
-  const { titulo, descripcion, grupo_id, asignatura_id, preguntas } = req.body; // Asegúrate de recibir grupo_id y asignatura_id
+  const { titulo, descripcion, grupo_id, asignatura_id, preguntas } = req.body;
   const docente_id = req.user.id;
-
   const connection = await db.getConnection();
   try {
     await connection.beginTransaction();
-
-    // 1. Insertar el examen con sus vínculos al grupo
     const [result] = await connection.query(
       "INSERT INTO examenes (titulo, descripcion, docente_id, grupo_id, asignatura_id, fecha_creacion) VALUES (?, ?, ?, ?, ?, NOW())",
       [titulo, descripcion, docente_id, grupo_id, asignatura_id],
     );
     const examenId = result.insertId;
 
-    // 2. Insertar las preguntas (tu lógica actual de preguntas va aquí)
-    // ... (Tu código de insertar preguntas y opciones) ...
-    // Si necesitas el código completo de insertar preguntas, avísame.
+    // Aquí iría tu lógica de guardar preguntas...
+    // (Asumiendo que ya la tienes implementada en tu backend o la agregarás)
 
     await connection.commit();
     res.status(201).json({ message: "Examen creado", examenId });
@@ -7177,27 +7173,7 @@ apiRouter.post("/examenes", verifyToken, async (req, res) => {
   }
 });
 
-// --- NUEVA RUTA: OBTENER EXÁMENES POR GRUPO Y MATERIA ---
-// Esta es la ruta que tu frontend está buscando y le daba 404
-apiRouter.get(
-  "/examenes/:grupoId/:asignaturaId",
-  verifyToken,
-  async (req, res) => {
-    const { grupoId, asignaturaId } = req.params;
-    try {
-      const [examenes] = await db.query(
-        "SELECT * FROM examenes WHERE grupo_id = ? AND asignatura_id = ? ORDER BY fecha_creacion DESC",
-        [grupoId, asignaturaId],
-      );
-      res.json(examenes);
-    } catch (error) {
-      console.error("Error al obtener exámenes del curso:", error);
-      res.status(500).send("Error al obtener exámenes");
-    }
-  },
-);
-
-// 1. OBTENER EXAMEN PARA RESOLVER (ALUMNO)
+// 3. OBTENER EXAMEN PARA RESOLVER (Ruta Específica - DEBE IR ANTES DE LA GENÉRICA)
 apiRouter.get("/examenes/:examenId/resolver", verifyToken, async (req, res) => {
   const { examenId } = req.params;
   try {
@@ -7228,7 +7204,28 @@ apiRouter.get("/examenes/:examenId/resolver", verifyToken, async (req, res) => {
   }
 });
 
-// 2. ENVIAR/GUARDAR EXAMEN (ALUMNO)
+// 4. VER RESULTADOS (Ruta Específica - DEBE IR ANTES DE LA GENÉRICA)
+apiRouter.get(
+  "/examenes/:examenId/resultados",
+  verifyToken,
+  async (req, res) => {
+    try {
+      const [rows] = await db.query(
+        `SELECT i.*, u.nombre, u.apellido_paterno 
+       FROM intentos_examen i
+       JOIN usuarios u ON i.alumno_id = u.id
+       WHERE i.examen_id = ? 
+       ORDER BY i.fecha_intento DESC`,
+        [req.params.examenId],
+      );
+      res.json(rows);
+    } catch (error) {
+      res.status(500).send("Error al obtener resultados");
+    }
+  },
+);
+
+// 5. ENTREGAR EXAMEN
 apiRouter.post(
   "/examenes/:examenId/entregar",
   verifyToken,
@@ -7289,29 +7286,31 @@ apiRouter.post(
   },
 );
 
-// 3. VER RESULTADOS DE UN EXAMEN (DOCENTE - LISTA DE ALUMNOS)
-apiRouter.get(
-  "/examenes/:examenId/resultados",
-  verifyToken,
-  async (req, res) => {
-    try {
-      const [rows] = await db.query(
-        `SELECT i.*, u.nombre, u.apellido_paterno 
-       FROM intentos_examen i
-       JOIN usuarios u ON i.alumno_id = u.id
-       WHERE i.examen_id = ? 
-       ORDER BY i.fecha_intento DESC`,
-        [req.params.examenId],
-      );
-      res.json(rows);
-    } catch (error) {
-      res.status(500).send("Error al obtener resultados");
-    }
-  },
-);
+// 6. CALIFICAR MANUALMENTE
+apiRouter.put("/examenes/calificar-pregunta", verifyToken, async (req, res) => {
+  const { respuestaId, puntosNuevos, intentoId } = req.body;
+  try {
+    await db.query(
+      "UPDATE respuestas_alumno SET puntos_obtenidos = ? WHERE id = ?",
+      [puntosNuevos, respuestaId],
+    );
 
-// 4. VER DETALLE DE UN INTENTO ESPECÍFICO (DOCENTE - PARA CALIFICAR)
-// Esta es la ruta que te daba pantalla en blanco
+    const [total] = await db.query(
+      "SELECT SUM(puntos_obtenidos) as cal FROM respuestas_alumno WHERE intento_id = ?",
+      [intentoId],
+    );
+
+    await db.query("UPDATE intentos_examen SET calificacion = ? WHERE id = ?", [
+      total[0].cal,
+      intentoId,
+    ]);
+    res.json({ message: "Calificación actualizada correctamente" });
+  } catch (error) {
+    res.status(500).send("Error al calificar");
+  }
+});
+
+// 7. VER DETALLE INTENTO
 apiRouter.get("/intentos/:intentoId", verifyToken, async (req, res) => {
   try {
     const [info] = await db.query(
@@ -7341,29 +7340,26 @@ apiRouter.get("/intentos/:intentoId", verifyToken, async (req, res) => {
   }
 });
 
-// 5. CALIFICAR MANUALMENTE PREGUNTAS ABIERTAS
-apiRouter.put("/examenes/calificar-pregunta", verifyToken, async (req, res) => {
-  const { respuestaId, puntosNuevos, intentoId } = req.body;
-  try {
-    await db.query(
-      "UPDATE respuestas_alumno SET puntos_obtenidos = ? WHERE id = ?",
-      [puntosNuevos, respuestaId],
-    );
-
-    const [total] = await db.query(
-      "SELECT SUM(puntos_obtenidos) as cal FROM respuestas_alumno WHERE intento_id = ?",
-      [intentoId],
-    );
-
-    await db.query("UPDATE intentos_examen SET calificacion = ? WHERE id = ?", [
-      total[0].cal,
-      intentoId,
-    ]);
-    res.json({ message: "Calificación actualizada correctamente" });
-  } catch (error) {
-    res.status(500).send("Error al calificar");
-  }
-});
+// 8. OBTENER EXÁMENES POR GRUPO Y MATERIA (Ruta Genérica)
+// --- ¡IMPORTANTE! ESTA RUTA DEBE IR AL FINAL DE TODAS LAS RUTAS DE EXÁMENES ---
+// Si la pones antes, se "comerá" las peticiones a /resolver o /resultados
+apiRouter.get(
+  "/examenes/:grupoId/:asignaturaId",
+  verifyToken,
+  async (req, res) => {
+    const { grupoId, asignaturaId } = req.params;
+    try {
+      const [examenes] = await db.query(
+        "SELECT * FROM examenes WHERE grupo_id = ? AND asignatura_id = ? ORDER BY fecha_creacion DESC",
+        [grupoId, asignaturaId],
+      );
+      res.json(examenes);
+    } catch (error) {
+      console.error("Error al obtener exámenes del curso:", error);
+      res.status(500).send("Error al obtener exámenes");
+    }
+  },
+);
 
 // --- INICIO DEL SERVIDOR ---
 const PORT = 3001;
