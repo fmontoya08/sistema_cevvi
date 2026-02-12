@@ -9,14 +9,18 @@ const ResultadosExamenPage = () => {
 
   useEffect(() => {
     const cargar = async () => {
-      const token = localStorage.getItem("token");
-      const res = await axios.get(
-        `https://api-universidad-c5o8.onrender.com/api/examenes/${examenId}/resultados`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        },
-      );
-      setResultados(res.data);
+      try {
+        const token = localStorage.getItem("token");
+        const res = await axios.get(
+          `https://api-universidad-c5o8.onrender.com/api/examenes/${examenId}/resultados`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          },
+        );
+        setResultados(res.data);
+      } catch (error) {
+        console.error("Error al cargar resultados");
+      }
     };
     cargar();
   }, [examenId]);
@@ -32,12 +36,13 @@ const ResultadosExamenPage = () => {
               <th className="p-4 text-left">Alumno</th>
               <th className="p-4 text-left">Fecha</th>
               <th className="p-4 text-left">Calificación</th>
-              <th className="p-4 text-right">Acción</th>
+              <th className="p-4 text-right">Acciones</th>
             </tr>
           </thead>
           <tbody>
             {resultados.map((res) => (
-              <tr key={res.id} className="border-b hover:bg-gray-50">
+              // CORRECCIÓN: Usamos res.id_intento
+              <tr key={res.id_intento} className="border-b hover:bg-gray-50">
                 <td className="p-4 flex items-center gap-3">
                   <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold">
                     <User size={16} />
@@ -51,8 +56,9 @@ const ResultadosExamenPage = () => {
                   {res.calificacion} pts
                 </td>
                 <td className="p-4 text-right">
+                  {/* CORRECCIÓN: Usamos res.id_intento en el link */}
                   <Link
-                    to={`/docente/examen/revisar/${res.id}`}
+                    to={`/docente/examen/revisar/${res.id_intento}`}
                     className="text-blue-600 font-medium hover:underline"
                   >
                     Revisar / Calificar

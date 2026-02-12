@@ -13613,53 +13613,41 @@ function App() {
               />
               <Route path="/docente/correo" element={<CorreoPage />} />
               <Route path="/docente/mi-nube" element={<MiDrivePage />} />
+              <Route path="/docente/mi-perfil" element={<MiPerfilPage />} />
+
+              {/* Gestión del Curso */}
               <Route
                 path="/docente/grupo/:grupoId/asignatura/:asignaturaId"
                 element={<DetalleCursoDocentePage />}
               />
-              <Route
-                path="/docente/grupo/:grupoId/asignatura/:asignaturaId"
-                element={<DetalleCursoDocentePage />}
-              />
-              {/* --- AGREGA ESTA LÍNEA (DOCENTE) --- */}
               <Route
                 path="/docente/grupo/:grupoId/asignatura/:asignaturaId/aula"
                 element={<AulaVirtualPage />}
               />
-              {/* --- AGREGA ESTA LÍNEA (DOCENTE) --- */}
-              <Route
-                path="/docente/grupo/:grupoId/asignatura/:asignaturaId/tarea/:tareaId"
-                element={<DetalleTareaDocentePage />}
-              />
-              {/* --- AGREGA ESTA LÍNEA (DOCENTE) --- */}
-              <Route
-                path="/docente/grupo/:grupoId/asignatura/:asignaturaId/asistencia/:sesionId"
-                element={<AsistenciaPage />}
-              />
-              <Route path="/docente/mi-perfil" element={<MiPerfilPage />} />
-              <Route
-                path="/docente/grupo/:grupoId/asignatura/:asignaturaId/foro/hilo/:hiloId"
-                element={<HiloPage />}
-              />
-              <Route
-                path="/docente/grupo/:grupoId/asignatura/:asignaturaId/examen/:examenId/resultados"
-                element={<ResultadosExamenPage />}
-              />
-
-              {/* RUTA 2: Pantalla para calificar un examen específico */}
-              <Route
-                path="/docente/examen/revisar/:intentoId"
-                element={<RevisarExamenPage />}
-              />
-              {/* --- RUTAS AGREGADAS PARA CLASSROOM 2.0 (DOCENTE) --- */}
-
-              {/* 1. Muro de Novedades (Stream) */}
               <Route
                 path="/docente/grupo/:grupoId/asignatura/:asignaturaId/muro"
                 element={<MuroDocentePage />}
               />
+              <Route
+                path="/docente/grupo/:grupoId/asignatura/:asignaturaId/analiticas"
+                element={<AnaliticasGrupoPage />}
+              />
 
-              {/* 2. Creación de Exámenes */}
+              {/* Tareas y Asistencia */}
+              <Route
+                path="/docente/grupo/:grupoId/asignatura/:asignaturaId/tarea/:tareaId"
+                element={<DetalleTareaDocentePage />}
+              />
+              <Route
+                path="/docente/grupo/:grupoId/asignatura/:asignaturaId/asistencia/:sesionId"
+                element={<AsistenciaPage />}
+              />
+              <Route
+                path="/docente/grupo/:grupoId/asignatura/:asignaturaId/foro/hilo/:hiloId"
+                element={<HiloPage />}
+              />
+
+              {/* EXÁMENES - Todo el flujo */}
               <Route
                 path="/docente/grupo/:grupoId/asignatura/:asignaturaId/examen/crear"
                 element={<CrearExamenPage />}
@@ -13668,22 +13656,17 @@ function App() {
                 path="/docente/grupo/:grupoId/asignatura/:asignaturaId/examen/editar/:examenId"
                 element={<EditarExamenPage />}
               />
+              {/* Lista de resultados de un examen */}
               <Route
                 path="/docente/grupo/:grupoId/asignatura/:asignaturaId/examen/:examenId/resultados"
                 element={<ResultadosExamenPage />}
               />
+              {/* Revisión individual (LA CORRECCIÓN ESTÁ AQUÍ) */}
               <Route
                 path="/docente/examen/revisar/:intentoId"
                 element={<RevisarExamenPage />}
               />
-
-              {/* 3. Analíticas de la Clase */}
-              <Route
-                path="/docente/grupo/:grupoId/asignatura/:asignaturaId/analiticas"
-                element={<AnaliticasGrupoPage />}
-              />
             </Route>
-            <Route path="/docente/mi-nube" element={<MiDrivePage />} />
           </Route>
 
           {/* --- AÑADE ESTE BLOQUE COMPLETO --- */}

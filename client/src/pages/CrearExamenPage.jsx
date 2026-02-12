@@ -21,7 +21,7 @@ const CrearExamenPage = () => {
   const [preguntas, setPreguntas] = useState([
     {
       id: 1,
-      tipo: "opcion_multiple", // Puede ser 'opcion_multiple' o 'abierta'
+      tipo: "opcion_multiple",
       texto: "",
       puntos: 1,
       opciones: [
@@ -49,209 +49,229 @@ const CrearExamenPage = () => {
     ]);
   };
 
-  const eliminarPregunta = (index) => {
-    const nuevas = [...preguntas];
-    nuevas.splice(index, 1);
-    setPreguntas(nuevas);
+  const eliminarPregunta = (id) => {
+    setPreguntas(preguntas.filter((p) => p.id !== id));
   };
 
-  const actualizarPregunta = (index, campo, valor) => {
-    const nuevas = [...preguntas];
-    nuevas[index][campo] = valor;
-
-    // Si cambia a 'abierta', limpiamos opciones (no las necesita)
-    if (campo === "tipo" && valor === "abierta") {
-      nuevas[index].opciones = [];
-    }
-    // Si regresa a 'opcion_multiple' y está vacía, le ponemos 2 por defecto
-    if (
-      campo === "tipo" &&
-      valor === "opcion_multiple" &&
-      nuevas[index].opciones.length === 0
-    ) {
-      nuevas[index].opciones = [
-        { texto: "", esCorrecta: false },
-        { texto: "", esCorrecta: false },
-      ];
-    }
-
-    setPreguntas(nuevas);
+  const actualizarPregunta = (id, campo, valor) => {
+    setPreguntas(
+      preguntas.map((p) => (p.id === id ? { ...p, [campo]: valor } : p)),
+    );
   };
 
-  // --- FUNCIONES SOLO PARA OPCIONES MÚLTIPLES ---
-
-  const actualizarOpcion = (idxPregunta, idxOpcion, valor) => {
-    const nuevas = [...preguntas];
-    nuevas[idxPregunta].opciones[idxOpcion].texto = valor;
-    setPreguntas(nuevas);
+  const agregarOpcion = (preguntaId) => {
+    setPreguntas(
+      preguntas.map((p) => {
+        if (p.id === preguntaId) {
+          return {
+            ...p,
+            opciones: [...p.opciones, { texto: "", esCorrecta: false }],
+          };
+        }
+        return p;
+      }),
+    );
   };
 
-  const marcarCorrecta = (idxPregunta, idxOpcion) => {
-    const nuevas = [...preguntas];
-    // Solo una correcta por pregunta
-    nuevas[idxPregunta].opciones.forEach((op) => (op.esCorrecta = false));
-    nuevas[idxPregunta].opciones[idxOpcion].esCorrecta = true;
-    setPreguntas(nuevas);
+  const actualizarOpcion = (preguntaId, idxOp, campo, valor) => {
+    setPreguntas(
+      preguntas.map((p) => {
+        if (p.id === preguntaId) {
+          const nuevasOpciones = [...p.opciones];
+          nuevasOpciones[idxOp][campo] = valor;
+          return { ...p, opciones: nuevasOpciones };
+        }
+        return p;
+      }),
+    );
   };
 
-  const agregarOpcion = (idxPregunta) => {
-    const nuevas = [...preguntas];
-    nuevas[idxPregunta].opciones.push({ texto: "", esCorrecta: false });
-    setPreguntas(nuevas);
+  const marcarCorrecta = (preguntaId, idxOp) => {
+    setPreguntas(
+      preguntas.map((p) => {
+        if (p.id === preguntaId) {
+          const nuevasOpciones = p.opciones.map((op, i) => ({
+            ...op,
+            esCorrecta: i === idxOp, // Solo una correcta
+          }));
+          return { ...p, opciones: nuevasOpciones };
+        }
+        return p;
+      }),
+    );
   };
 
-  const eliminarOpcion = (idxPregunta, idxOpcion) => {
-    const nuevas = [...preguntas];
-    nuevas[idxPregunta].opciones.splice(idxOpcion, 1);
-    setPreguntas(nuevas);
+  const eliminarOpcion = (preguntaId, idxOp) => {
+    setPreguntas(
+      preguntas.map((p) => {
+        if (p.id === preguntaId) {
+          return {
+            ...p,
+            opciones: p.opciones.filter((_, i) => i !== idxOp),
+          };
+        }
+        return p;
+      }),
+    );
   };
 
-  // --- GUARDAR ---
   const guardarExamen = async () => {
-    if (!titulo.trim()) return alert("Ponle un título al examen.");
+    if (!titulo.trim()) return alert("El título es obligatorio");
+    if (preguntas.length === 0)
+      return alert("Debes agregar al menos una pregunta");
+
+    // Validar que las preguntas tengan texto
+    for (const p of preguntas) {
+      if (!p.texto.trim())
+        return alert("Todas las preguntas deben tener texto.");
+      if (p.tipo === "opcion_multiple") {
+        if (p.opciones.length < 2)
+          return alert(
+            "Las preguntas múltiples deben tener al menos 2 opciones.",
+          );
+        const tieneCorrecta = p.opciones.some((op) => op.esCorrecta);
+        if (!tieneCorrecta)
+          return alert("Debes marcar una respuesta correcta en cada pregunta.");
+      }
+    }
 
     try {
       const token = localStorage.getItem("token");
-      // Asegúrate que la URL coincida con tu servidor
+      // CORRECCIÓN PRINCIPAL: URL sin "/crear"
       await axios.post(
-        "https://api-universidad-c5o8.onrender.com/api/examenes/crear",
+        "https://api-universidad-c5o8.onrender.com/api/examenes",
         {
-          grupo_id: grupoId,
-          asignatura_id: asignaturaId,
           titulo,
           descripcion,
+          grupo_id: grupoId,
+          asignatura_id: asignaturaId,
           preguntas,
         },
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        },
+        { headers: { Authorization: `Bearer ${token}` } },
       );
-
-      alert("¡Examen guardado correctamente!");
-      // Aquí podrías redirigir a la lista de exámenes
-      // navigate(`/docente/grupo/${grupoId}/asignatura/${asignaturaId}/examenes`);
+      alert("Examen creado exitosamente");
+      navigate(-1);
     } catch (error) {
       console.error(error);
-      alert("Error al guardar. Revisa la consola.");
+      alert("Error al crear el examen");
     }
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-6 bg-gray-50 min-h-screen">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">Crear Examen</h1>
-        <button
-          onClick={guardarExamen}
-          className="bg-green-600 text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-green-700 shadow-md"
-        >
-          <Save size={20} /> Guardar Examen
-        </button>
-      </div>
+    <div className="max-w-5xl mx-auto p-6 bg-gray-50 min-h-screen">
+      <h1 className="text-3xl font-bold mb-6 text-gray-800">Crear Examen</h1>
 
-      {/* Datos del Examen */}
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 mb-8">
+      {/* DATOS GENERALES */}
+      <div className="bg-white p-6 rounded-xl shadow-sm mb-6 border border-gray-200">
+        <label className="block text-sm font-bold text-gray-700 mb-2">
+          Título del Examen
+        </label>
         <input
-          type="text"
+          className="w-full p-3 border border-gray-300 rounded-lg mb-4 focus:ring-2 focus:ring-blue-500 outline-none"
+          placeholder="Ej. Parcial 1 Matemáticas"
           value={titulo}
           onChange={(e) => setTitulo(e.target.value)}
-          className="w-full p-3 border rounded-lg mb-4 text-xl font-bold focus:ring-2 focus:ring-blue-500 outline-none"
-          placeholder="Título (ej. Primer Parcial)"
         />
+        <label className="block text-sm font-bold text-gray-700 mb-2">
+          Descripción (Opcional)
+        </label>
         <textarea
+          className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+          placeholder="Instrucciones para el alumno..."
+          rows="3"
           value={descripcion}
           onChange={(e) => setDescripcion(e.target.value)}
-          className="w-full p-3 border rounded-lg h-20 resize-none focus:ring-blue-500 outline-none"
-          placeholder="Instrucciones..."
         />
       </div>
 
-      {/* Lista de Preguntas */}
+      {/* LISTA DE PREGUNTAS */}
       <div className="space-y-6">
         {preguntas.map((preg, idx) => (
           <div
             key={preg.id}
-            className="bg-white p-6 rounded-xl shadow-sm border border-l-4 border-l-blue-600 border-gray-200"
+            className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 relative group"
           >
-            {/* Cabecera: Tipo de Pregunta y Puntos */}
-            <div className="flex flex-wrap justify-between items-center mb-4 gap-4 bg-gray-50 p-3 rounded-lg">
-              <span className="font-bold text-gray-700">
+            <div className="flex justify-between items-start mb-4">
+              <span className="bg-blue-100 text-blue-700 font-bold px-3 py-1 rounded-full text-sm">
                 Pregunta {idx + 1}
               </span>
-
-              <div className="flex items-center gap-4">
+              <div className="flex gap-2">
                 <select
+                  className="p-2 border rounded-lg text-sm bg-gray-50"
                   value={preg.tipo}
                   onChange={(e) =>
-                    actualizarPregunta(idx, "tipo", e.target.value)
+                    actualizarPregunta(preg.id, "tipo", e.target.value)
                   }
-                  className="bg-white border border-gray-300 text-gray-700 text-sm rounded-lg p-2 font-medium"
                 >
                   <option value="opcion_multiple">Opción Múltiple</option>
                   <option value="abierta">Pregunta Abierta</option>
                 </select>
-
-                <div className="flex items-center gap-1">
-                  <input
-                    type="number"
-                    min="1"
-                    value={preg.puntos}
-                    onChange={(e) =>
-                      actualizarPregunta(
-                        idx,
-                        "puntos",
-                        parseInt(e.target.value),
-                      )
-                    }
-                    className="w-14 p-2 border border-gray-300 rounded-lg text-center"
-                  />
-                  <span className="text-sm text-gray-500">pts</span>
-                </div>
-
+                <input
+                  type="number"
+                  min="1"
+                  className="w-20 p-2 border rounded-lg text-sm"
+                  placeholder="Pts"
+                  value={preg.puntos}
+                  onChange={(e) =>
+                    actualizarPregunta(preg.id, "puntos", e.target.value)
+                  }
+                />
                 <button
-                  onClick={() => eliminarPregunta(idx)}
-                  className="text-gray-400 hover:text-red-500"
+                  onClick={() => eliminarPregunta(preg.id)}
+                  className="text-gray-400 hover:text-red-500 p-2"
                 >
-                  <Trash2 size={18} />
+                  <Trash2 size={20} />
                 </button>
               </div>
             </div>
 
-            {/* Texto de la Pregunta */}
-            <textarea
-              value={preg.texto}
-              onChange={(e) => actualizarPregunta(idx, "texto", e.target.value)}
-              className="w-full p-4 border border-gray-300 rounded-lg mb-4 bg-white text-lg focus:ring-2 focus:ring-blue-100 outline-none"
+            <input
+              className="w-full p-3 border-b-2 border-gray-100 mb-4 focus:border-blue-500 outline-none text-lg font-medium placeholder-gray-400"
               placeholder="Escribe la pregunta aquí..."
-              rows="2"
+              value={preg.texto}
+              onChange={(e) =>
+                actualizarPregunta(preg.id, "texto", e.target.value)
+              }
             />
 
-            {/* Renderizado Condicional: Opciones o Texto Abierto */}
+            {/* OPCIONES */}
             {preg.tipo === "opcion_multiple" ? (
-              <div className="space-y-3 pl-2">
-                {preg.opciones.map((opcion, idxOp) => (
+              <div className="space-y-3 pl-4">
+                {preg.opciones.map((op, idxOp) => (
                   <div key={idxOp} className="flex items-center gap-3">
                     <button
-                      onClick={() => marcarCorrecta(idx, idxOp)}
-                      className={`shrink-0 ${opcion.esCorrecta ? "text-green-600" : "text-gray-300 hover:text-gray-400"}`}
-                      title="Marcar correcta"
+                      onClick={() => marcarCorrecta(preg.id, idxOp)}
+                      className={`p-1 rounded-full ${
+                        op.esCorrecta
+                          ? "text-green-500"
+                          : "text-gray-300 hover:text-gray-400"
+                      }`}
                     >
-                      {opcion.esCorrecta ? (
+                      {op.esCorrecta ? (
                         <CheckCircle size={24} />
                       ) : (
                         <Circle size={24} />
                       )}
                     </button>
                     <input
-                      type="text"
-                      value={opcion.texto}
-                      onChange={(e) =>
-                        actualizarOpcion(idx, idxOp, e.target.value)
-                      }
-                      className={`flex-1 p-2 border-b border-gray-100 outline-none focus:border-blue-400 ${opcion.esCorrecta ? "text-green-700 font-medium bg-green-50" : "text-gray-600"}`}
+                      className={`flex-1 p-2 border rounded-lg outline-none ${
+                        op.esCorrecta
+                          ? "border-green-200 bg-green-50"
+                          : "border-gray-200"
+                      }`}
                       placeholder={`Opción ${idxOp + 1}`}
+                      value={op.texto}
+                      onChange={(e) =>
+                        actualizarOpcion(
+                          preg.id,
+                          idxOp,
+                          "texto",
+                          e.target.value,
+                        )
+                      }
                     />
                     <button
-                      onClick={() => eliminarOpcion(idx, idxOp)}
+                      onClick={() => eliminarOpcion(preg.id, idxOp)}
                       className="text-gray-300 hover:text-red-400"
                     >
                       <Trash2 size={16} />
@@ -259,7 +279,7 @@ const CrearExamenPage = () => {
                   </div>
                 ))}
                 <button
-                  onClick={() => agregarOpcion(idx)}
+                  onClick={() => agregarOpcion(preg.id)}
                   className="text-sm text-blue-600 font-bold mt-2 hover:bg-blue-50 px-3 py-1 rounded-md flex items-center gap-1 w-fit"
                 >
                   <PlusCircle size={16} /> Agregar opción
@@ -283,7 +303,17 @@ const CrearExamenPage = () => {
           onClick={agregarPregunta}
           className="bg-white border-2 border-dashed border-gray-300 text-gray-500 px-8 py-4 rounded-xl font-bold hover:border-blue-500 hover:text-blue-600 transition-all flex items-center gap-2 mx-auto"
         >
-          <PlusCircle size={24} /> Agregar Pregunta
+          <PlusCircle size={20} /> Agregar Nueva Pregunta
+        </button>
+      </div>
+
+      {/* BARRA FLOTANTE DE GUARDADO */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t p-4 flex justify-end shadow-lg z-50">
+        <button
+          onClick={guardarExamen}
+          className="bg-blue-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-blue-700 flex items-center gap-2"
+        >
+          <Save size={20} /> Guardar Examen
         </button>
       </div>
     </div>

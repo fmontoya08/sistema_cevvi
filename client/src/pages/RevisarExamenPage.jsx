@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
-import { ArrowLeft, Save } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 
 const RevisarExamenPage = () => {
   const { intentoId } = useParams();
@@ -13,14 +13,20 @@ const RevisarExamenPage = () => {
   }, [intentoId]);
 
   const cargarIntento = async () => {
-    const token = localStorage.getItem("token");
-    const res = await axios.get(
-      `https://api-universidad-c5o8.onrender.com/api/examenes/intento/${intentoId}`,
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      },
-    );
-    setData(res.data);
+    try {
+      const token = localStorage.getItem("token");
+      // CORRECCIÓN: Ruta correcta "/api/intentos"
+      const res = await axios.get(
+        `https://api-universidad-c5o8.onrender.com/api/intentos/${intentoId}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
+      setData(res.data);
+    } catch (error) {
+      console.error(error);
+      alert("Error al cargar la revisión");
+    }
   };
 
   const actualizarPuntos = async (respuestaId, puntosInput, maximos) => {
@@ -45,7 +51,8 @@ const RevisarExamenPage = () => {
     }
   };
 
-  if (!data) return <div>Cargando...</div>;
+  if (!data)
+    return <div className="p-10 text-center">Cargando revisión...</div>;
 
   return (
     <div className="max-w-4xl mx-auto p-6 bg-gray-50 min-h-screen">
@@ -58,6 +65,7 @@ const RevisarExamenPage = () => {
 
       <div className="bg-white p-6 rounded-xl shadow-sm border-l-4 border-blue-600 mb-6 flex justify-between items-center">
         <div>
+          {/* Usamos data.info para acceder a los detalles generales */}
           <h1 className="text-2xl font-bold">{data.info.titulo}</h1>
           <p className="text-gray-600">
             Alumno: {data.info.nombre} {data.info.apellido_paterno}
@@ -84,7 +92,7 @@ const RevisarExamenPage = () => {
                 Pregunta {idx + 1}: {resp.texto_pregunta}
               </h3>
               <span className="text-xs bg-gray-100 px-2 py-1 rounded">
-                Valor: {resp.puntos_maximos} pts
+                Valor Máximo: {resp.puntos} pts
               </span>
             </div>
 
@@ -94,7 +102,7 @@ const RevisarExamenPage = () => {
               </p>
               {resp.tipo === "opcion_multiple" ? (
                 <p className="font-medium text-gray-800">
-                  {resp.opcion_elegida_texto}
+                  {resp.texto_opcion || "(Sin respuesta válida)"}
                 </p>
               ) : (
                 <p className="font-medium text-gray-800 whitespace-pre-wrap">
@@ -112,12 +120,11 @@ const RevisarExamenPage = () => {
                 className="w-20 p-2 border rounded text-center font-bold"
                 defaultValue={resp.puntos_obtenidos}
                 onBlur={(e) =>
-                  actualizarPuntos(resp.id, e.target.value, resp.puntos_maximos)
+                  // Nota: resp.puntos es el valor máximo
+                  actualizarPuntos(resp.id, e.target.value, resp.puntos)
                 }
               />
-              <span className="text-gray-400 text-sm">
-                / {resp.puntos_maximos}
-              </span>
+              <span className="text-gray-400 text-sm">/ {resp.puntos}</span>
             </div>
           </div>
         ))}
