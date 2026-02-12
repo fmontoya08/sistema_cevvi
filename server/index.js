@@ -7845,23 +7845,27 @@ app.post("/api/examenes/:examenId/entregar", verifyToken, async (req, res) => {
   }
 });
 
-// 5. OBTENER RESULTADOS (Docente)
-app.get("/api/examenes/:examenId/resultados", verifyToken, async (req, res) => {
-  try {
-    const [rows] = await db.query(
-      `
-      SELECT i.*, u.nombre, u.apellido_paterno 
-      FROM intentos_examen i
-      JOIN usuarios u ON i.alumno_id = u.id
-      WHERE i.examen_id = ? ORDER BY i.fecha_intento DESC
-    `,
-      [req.params.examenId],
-    );
-    res.json(rows);
-  } catch (error) {
-    res.status(500).send("Error");
-  }
-});
+// Busca la función de resultados y asegúrate de que use apiRouter
+apiRouter.get(
+  "/examenes/:examenId/resultados",
+  verifyToken,
+  async (req, res) => {
+    try {
+      const [rows] = await db.query(
+        `SELECT i.*, u.nombre, u.apellido_paterno 
+       FROM intentos_examen i
+       JOIN usuarios u ON i.alumno_id = u.id
+       WHERE i.examen_id = ? 
+       ORDER BY i.fecha_intento DESC`,
+        [req.params.examenId],
+      );
+      res.json(rows);
+    } catch (error) {
+      console.error("Error al obtener resultados:", error);
+      res.status(500).send("Error al obtener los resultados");
+    }
+  },
+);
 
 // 6. DETALLE INTENTO (Docente revisa)
 app.get("/api/examenes/intento/:intentoId", verifyToken, async (req, res) => {
