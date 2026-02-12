@@ -7587,3 +7587,7 @@ adminRouter.get("/email/mensaje/:uid", async (req, res) => {
     res.status(500).send("Error al abrir el correo");
   }
 });
+
+app.listen(PORT, () => {
+  console.log(`Servidor corriendo en http://localhost:${PORT}`);
+});
