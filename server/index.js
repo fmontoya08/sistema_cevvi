@@ -7225,63 +7225,94 @@ apiRouter.get(
   },
 );
 
-// 5. ENTREGAR EXAMEN
+// 5. ENTREGAR EXAMEN (CORREGIDO PARA LEER ARRAY DEL FRONTEND)
 apiRouter.post(
   "/examenes/:examenId/entregar",
   verifyToken,
   async (req, res) => {
     const { examenId } = req.params;
-    const { respuestas } = req.body;
+    const { respuestas } = req.body; // El frontend manda un Array: [{ pregunta_id, respuesta_valor }, ...]
     const alumnoId = req.user.id;
 
+    const connection = await db.getConnection(); // Usamos transacción para mayor seguridad
     try {
-      const [result] = await db.query(
+      await connection.beginTransaction();
+
+      // 1. Crear el intento inicial (Calificación 0 temporalmente)
+      const [result] = await connection.query(
         "INSERT INTO intentos_examen (examen_id, alumno_id, calificacion) VALUES (?, ?, 0)",
         [examenId, alumnoId],
       );
       const intentoId = result.insertId;
 
-      for (const preguntaId in respuestas) {
-        const valor = respuestas[preguntaId];
+      // 2. Procesar cada respuesta del Array
+      for (const item of respuestas) {
+        const preguntaId = item.pregunta_id;
+        const valor = item.respuesta_valor;
+
         let puntos = 0;
         let opcionId = null;
         let respuestaTexto = null;
 
-        const [preg] = await db.query(
+        // Obtener tipo de pregunta
+        const [preg] = await connection.query(
           "SELECT tipo FROM preguntas WHERE id = ?",
           [preguntaId],
         );
 
+        // Validación de seguridad: Si la pregunta no existe, saltarla
+        if (preg.length === 0) continue;
+
         if (preg[0].tipo === "opcion_multiple") {
-          opcionId = valor;
-          const [correcta] = await db.query(
-            "SELECT es_correcta, puntos_pregunta FROM opciones JOIN preguntas ON opciones.pregunta_id = preguntas.id WHERE opciones.id = ?",
+          opcionId = valor; // En opción múltiple, el valor es el ID de la opción
+
+          // Verificar si es correcta
+          const [correcta] = await connection.query(
+            `SELECT o.es_correcta, p.puntos 
+           FROM opciones o 
+           JOIN preguntas p ON o.pregunta_id = p.id 
+           WHERE o.id = ?`,
             [opcionId],
           );
-          if (correcta[0]?.es_correcta) puntos = correcta[0].puntos_pregunta;
+
+          // Si es correcta, sumamos los puntos definidos en la PREGUNTA (no en la opción)
+          // Nota: Ajusté la consulta para tomar los puntos de la tabla 'preguntas' que es lo estándar
+          if (correcta.length > 0 && correcta[0].es_correcta) {
+            puntos = correcta[0].puntos;
+          }
         } else {
+          // Pregunta Abierta
           respuestaTexto = valor;
+          // Puntos se quedan en 0 hasta que el docente califique
         }
 
-        await db.query(
+        // Guardar la respuesta individual
+        await connection.query(
           "INSERT INTO respuestas_alumno (intento_id, pregunta_id, opcion_id, respuesta_texto, puntos_obtenidos) VALUES (?, ?, ?, ?, ?)",
           [intentoId, preguntaId, opcionId, respuestaTexto, puntos],
         );
       }
 
-      const [total] = await db.query(
+      // 3. Calcular calificación total automática
+      const [total] = await connection.query(
         "SELECT SUM(puntos_obtenidos) as nota FROM respuestas_alumno WHERE intento_id = ?",
         [intentoId],
       );
-      await db.query(
+
+      // 4. Actualizar el intento con la calificación final
+      await connection.query(
         "UPDATE intentos_examen SET calificacion = ? WHERE id = ?",
         [total[0].nota || 0, intentoId],
       );
 
-      res.json({ message: "Examen entregado", intentoId });
+      await connection.commit();
+      res.json({ message: "Examen entregado correctamente", intentoId });
     } catch (error) {
-      console.error(error);
-      res.status(500).send("Error al entregar");
+      await connection.rollback();
+      console.error("Error al entregar examen:", error);
+      res.status(500).send("Error al procesar la entrega del examen.");
+    } finally {
+      connection.release();
     }
   },
 );
