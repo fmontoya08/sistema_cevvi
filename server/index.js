@@ -7595,7 +7595,7 @@ adminRouter.get("/email/inbox", async (req, res) => {
   }
 });
 
-// 2. RUTA PARA ENVIAR CORREO (POST /api/admin/email/enviar)
+// 2. RUTA PARA ENVIAR CORREO (POST /api/admin/email/enviar)adasd
 adminRouter.post("/email/enviar", async (req, res) => {
   const { destinatario, asunto, mensaje } = req.body;
 
