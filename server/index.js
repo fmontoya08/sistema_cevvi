@@ -7130,40 +7130,30 @@ app.delete("/api/muro/:id", verifyToken, async (req, res) => {
 });
 
 // ==========================================
-// MÓDULO DE EXÁMENES (CREACIÓN HÍBRIDA)
+// MÓDULO DE EXÁMENES (VERSIÓN FINAL COMPLETA)
 // ==========================================
 
-// 1. CREAR EXAMEN (Guarda título, preguntas mixtas y opciones)
+// 1. CREAR EXAMEN
 app.post("/api/examenes/crear", verifyToken, async (req, res) => {
   const { grupo_id, asignatura_id, titulo, descripcion, preguntas } = req.body;
   const docente_id = req.user.id;
-
   const connection = await db.getConnection();
   try {
     await connection.beginTransaction();
-
-    // A. Guardar el Examen
     const [examResult] = await connection.query(
       "INSERT INTO examenes (grupo_id, asignatura_id, docente_id, titulo, descripcion) VALUES (?, ?, ?, ?, ?)",
       [grupo_id, asignatura_id, docente_id, titulo, descripcion],
     );
     const examenId = examResult.insertId;
 
-    // B. Recorrer y guardar cada pregunta
     for (const preg of preguntas) {
-      // Guardamos el tipo ('opcion_multiple' o 'abierta')
       const [pregResult] = await connection.query(
         "INSERT INTO preguntas (examen_id, texto_pregunta, puntos, tipo) VALUES (?, ?, ?, ?)",
         [examenId, preg.texto, preg.puntos, preg.tipo],
       );
       const preguntaId = pregResult.insertId;
 
-      // C. Si es opción múltiple, guardar sus opciones
-      if (
-        preg.tipo === "opcion_multiple" &&
-        preg.opciones &&
-        preg.opciones.length > 0
-      ) {
+      if (preg.tipo === "opcion_multiple" && preg.opciones?.length > 0) {
         const opcionesValues = preg.opciones.map((op) => [
           preguntaId,
           op.texto,
@@ -7175,150 +7165,217 @@ app.post("/api/examenes/crear", verifyToken, async (req, res) => {
         );
       }
     }
-
     await connection.commit();
-    res.status(201).json({ message: "Examen creado exitosamente", examenId });
+    res.status(201).json({ message: "Examen creado", examenId });
   } catch (error) {
     await connection.rollback();
-    console.error("Error creando examen:", error);
-    res.status(500).send("Error al guardar el examen");
+    res.status(500).send("Error al crear examen");
   } finally {
     connection.release();
   }
 });
 
-// --- EXÁMENES: LADO ALUMNO ---
-
-// 2. OBTENER EXAMEN PARA RESOLVER (Sin mostrar cuál es la correcta)
-app.get("/api/examenes/:examenId/resolver", verifyToken, async (req, res) => {
-  const { examenId } = req.params;
-  try {
-    // A. Datos del examen
-    const [examen] = await db.query("SELECT * FROM examenes WHERE id = ?", [
-      examenId,
-    ]);
-    if (examen.length === 0)
-      return res.status(404).send("Examen no encontrado");
-
-    // B. Preguntas
-    const [preguntas] = await db.query(
-      "SELECT id, texto_pregunta, puntos, tipo FROM preguntas WHERE examen_id = ?",
-      [examenId],
-    );
-
-    // C. Opciones (¡OJO! No enviamos 'es_correcta' para que no hagan trampa)
-    for (const preg of preguntas) {
-      if (preg.tipo === "opcion_multiple") {
-        const [opciones] = await db.query(
-          "SELECT id, texto_opcion FROM opciones WHERE pregunta_id = ?",
-          [preg.id],
-        );
-        preg.opciones = opciones;
-      }
-    }
-
-    res.json({ examen: examen[0], preguntas });
-  } catch (error) {
-    res.status(500).send("Error al cargar examen");
-  }
-});
-
-// 3. CALIFICAR EXAMEN (Automático para múltiple, manual para abiertas)
-app.post("/api/examenes/:examenId/entregar", verifyToken, async (req, res) => {
-  const { examenId } = req.params;
-  const { respuestas } = req.body; // { pregunta_id: opcion_id OR "texto respuesta" }
-  const alumnoId = req.user.id;
-
-  try {
-    let calificacionTotal = 0;
-
-    // Recorremos las respuestas del alumno
-    for (const resp of respuestas) {
-      // Obtenemos la pregunta original para saber puntos y tipo
-      const [pregRows] = await db.query(
-        "SELECT * FROM preguntas WHERE id = ?",
-        [resp.pregunta_id],
-      );
-      const pregunta = pregRows[0];
-
-      if (pregunta.tipo === "opcion_multiple") {
-        // Verificamos si la opción elegida es la correcta
-        const [opcion] = await db.query(
-          "SELECT es_correcta FROM opciones WHERE id = ?",
-          [resp.respuesta_valor],
-        );
-        if (opcion.length > 0 && opcion[0].es_correcta) {
-          calificacionTotal += pregunta.puntos;
-        }
-      } else {
-        // Si es abierta, NO sumamos puntos todavía (el profe debe calificar después)
-        // Aquí deberías guardar la respuesta de texto en otra tabla 'respuestas_alumno'
-      }
-    }
-
-    // Guardamos el intento (Por ahora solo calificación automática)
-    await db.query(
-      "INSERT INTO intentos_examen (examen_id, alumno_id, calificacion) VALUES (?, ?, ?)",
-      [examenId, alumnoId, calificacionTotal],
-    );
-
-    res.json({ message: "Examen entregado", calificacion: calificacionTotal });
-  } catch (error) {
-    console.error(error);
-    res.status(500).send("Error al calificar");
-  }
-});
-
-// 4. LISTAR EXÁMENES (Inteligente: Detecta si el alumno ya lo hizo)
+// 2. LISTAR EXÁMENES (Docente y Alumno)
 app.get(
   "/api/examenes/:grupoId/:asignaturaId",
   verifyToken,
   async (req, res) => {
     const { grupoId, asignaturaId } = req.params;
     const userId = req.user.id;
-    const userRole = req.user.rol; // 'docente', 'admin' o 'alumno'
-
+    const userRole = req.user.rol;
     try {
-      // 1. Obtener todos los exámenes de esta materia
       const [examenes] = await db.query(
         "SELECT * FROM examenes WHERE grupo_id = ? AND asignatura_id = ? ORDER BY fecha_creacion DESC",
         [grupoId, asignaturaId],
       );
 
-      // 2. Si es ALUMNO, verificar cuáles ya contestó
       if (userRole === "alumno") {
-        const examenesConEstado = [];
-
-        for (const examen of examenes) {
-          // Buscamos si hay un intento de este alumno
+        const examenesEstado = [];
+        for (const ex of examenes) {
           const [intento] = await db.query(
             "SELECT calificacion FROM intentos_examen WHERE examen_id = ? AND alumno_id = ?",
-            [examen.id, userId],
+            [ex.id, userId],
           );
-
           if (intento.length > 0) {
-            // Ya lo hizo: Le mandamos su calificación
-            examenesConEstado.push({
-              ...examen,
+            examenesEstado.push({
+              ...ex,
               contestado: true,
               calificacion: intento[0].calificacion,
             });
           } else {
-            // No lo ha hecho
-            examenesConEstado.push({ ...examen, contestado: false });
+            examenesEstado.push({ ...ex, contestado: false });
           }
         }
-        return res.json(examenesConEstado);
+        return res.json(examenesEstado);
       }
-
-      // Si es DOCENTE, mandamos la lista normal
       res.json(examenes);
     } catch (error) {
-      console.error(error);
-      res.status(500).send("Error al listar exámenes");
+      res.status(500).send("Error al listar");
     }
   },
 );
+
+// 3. OBTENER EXAMEN PARA RESOLVER (Alumno)
+app.get("/api/examenes/:examenId/resolver", verifyToken, async (req, res) => {
+  const { examenId } = req.params;
+  try {
+    const [examen] = await db.query("SELECT * FROM examenes WHERE id = ?", [
+      examenId,
+    ]);
+    if (examen.length === 0) return res.status(404).send("No encontrado");
+
+    const [preguntas] = await db.query(
+      "SELECT id, texto_pregunta, puntos, tipo FROM preguntas WHERE examen_id = ?",
+      [examenId],
+    );
+
+    for (const p of preguntas) {
+      if (p.tipo === "opcion_multiple") {
+        const [ops] = await db.query(
+          "SELECT id, texto_opcion FROM opciones WHERE pregunta_id = ?",
+          [p.id],
+        );
+        p.opciones = ops;
+      }
+    }
+    res.json({ examen: examen[0], preguntas });
+  } catch (error) {
+    res.status(500).send("Error al cargar");
+  }
+});
+
+// 4. ENTREGAR EXAMEN (¡ESTE ES EL IMPORTANTE!)
+app.post("/api/examenes/:examenId/entregar", verifyToken, async (req, res) => {
+  const { examenId } = req.params;
+  const { respuestas } = req.body;
+  const alumnoId = req.user.id;
+
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // Crear intento
+    const [intento] = await connection.query(
+      "INSERT INTO intentos_examen (examen_id, alumno_id, calificacion) VALUES (?, ?, 0)",
+      [examenId, alumnoId],
+    );
+    const intentoId = intento.insertId;
+    let totalPuntos = 0;
+
+    // Guardar respuestas
+    for (const r of respuestas) {
+      const [preg] = await connection.query(
+        "SELECT * FROM preguntas WHERE id = ?",
+        [r.pregunta_id],
+      );
+      const pregunta = preg[0];
+      let puntos = 0;
+
+      if (pregunta.tipo === "opcion_multiple") {
+        const [op] = await connection.query(
+          "SELECT es_correcta FROM opciones WHERE id = ?",
+          [r.respuesta_valor],
+        );
+        if (op.length > 0 && op[0].es_correcta) puntos = pregunta.puntos;
+
+        await connection.query(
+          "INSERT INTO respuestas_alumno (intento_id, pregunta_id, opcion_id, puntos_obtenidos) VALUES (?, ?, ?, ?)",
+          [intentoId, pregunta.id, r.respuesta_valor, puntos],
+        );
+      } else {
+        // ABIERTA: Guardamos texto y puntos 0 (hasta revisión)
+        await connection.query(
+          "INSERT INTO respuestas_alumno (intento_id, pregunta_id, respuesta_texto, puntos_obtenidos) VALUES (?, ?, ?, 0)",
+          [intentoId, pregunta.id, r.respuesta_valor],
+        );
+      }
+      totalPuntos += puntos;
+    }
+
+    // Actualizar calificación preliminar
+    await connection.query(
+      "UPDATE intentos_examen SET calificacion = ? WHERE id = ?",
+      [totalPuntos, intentoId],
+    );
+    await connection.commit();
+    res.json({ message: "Entregado", calificacion: totalPuntos });
+  } catch (error) {
+    await connection.rollback();
+    console.error(error);
+    res.status(500).send("Error al entregar");
+  } finally {
+    connection.release();
+  }
+});
+
+// 5. OBTENER RESULTADOS (Lista de alumnos para el Docente)
+app.get("/api/examenes/:examenId/resultados", verifyToken, async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      `
+      SELECT i.*, u.nombre, u.apellido_paterno 
+      FROM intentos_examen i
+      JOIN usuarios u ON i.alumno_id = u.id
+      WHERE i.examen_id = ? ORDER BY i.fecha_intento DESC
+    `,
+      [req.params.examenId],
+    );
+    res.json(rows);
+  } catch (error) {
+    res.status(500).send("Error");
+  }
+});
+
+// 6. DETALLE DE UN INTENTO (Para calificar manual)
+app.get("/api/examenes/intento/:intentoId", verifyToken, async (req, res) => {
+  try {
+    const [info] = await db.query(
+      `
+      SELECT i.*, u.nombre, u.apellido_paterno, e.titulo 
+      FROM intentos_examen i
+      JOIN usuarios u ON i.alumno_id = u.id
+      JOIN examenes e ON i.examen_id = e.id
+      WHERE i.id = ?`,
+      [req.params.intentoId],
+    );
+
+    const [respuestas] = await db.query(
+      `
+      SELECT r.*, p.texto_pregunta, p.tipo, p.puntos as puntos_maximos, op.texto_opcion
+      FROM respuestas_alumno r
+      JOIN preguntas p ON r.pregunta_id = p.id
+      LEFT JOIN opciones op ON r.opcion_id = op.id
+      WHERE r.intento_id = ?`,
+      [req.params.intentoId],
+    );
+
+    res.json({ info: info[0], respuestas });
+  } catch (error) {
+    res.status(500).send("Error");
+  }
+});
+
+// 7. CALIFICAR PREGUNTA MANUALMENTE
+app.put("/api/examenes/calificar-pregunta", verifyToken, async (req, res) => {
+  const { respuestaId, puntosNuevos, intentoId } = req.body;
+  try {
+    await db.query(
+      "UPDATE respuestas_alumno SET puntos_obtenidos = ? WHERE id = ?",
+      [puntosNuevos, respuestaId],
+    );
+    const [total] = await db.query(
+      "SELECT SUM(puntos_obtenidos) as cal FROM respuestas_alumno WHERE intento_id = ?",
+      [intentoId],
+    );
+    await db.query("UPDATE intentos_examen SET calificacion = ? WHERE id = ?", [
+      total[0].cal,
+      intentoId,
+    ]);
+    res.json({ message: "Actualizado" });
+  } catch (error) {
+    res.status(500).send("Error");
+  }
+});
 
 // --- INICIO DEL SERVIDOR ---
 const PORT = 3001;

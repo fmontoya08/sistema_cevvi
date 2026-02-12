@@ -10,6 +10,8 @@ import EditarExamenPage from "./pages/EditarExamenPage";
 import AnaliticasGrupoPage from "./pages/AnaliticasGrupoPage";
 import TomarExamenPage from "./pages/TomarExamenPage";
 import ExamenesPage from "./pages/ExamenesPage"; // <--- IMPORTANTE
+import ResultadosExamenPage from "./pages/ResultadosExamenPage";
+import RevisarExamenPage from "./pages/RevisarExamenPage";
 
 import React, {
   useState,
@@ -13639,6 +13641,16 @@ function App() {
                 path="/docente/grupo/:grupoId/asignatura/:asignaturaId/foro/hilo/:hiloId"
                 element={<HiloPage />}
               />
+              <Route
+                path="/docente/grupo/:grupoId/asignatura/:asignaturaId/examen/:examenId/resultados"
+                element={<ResultadosExamenPage />}
+              />
+
+              {/* RUTA 2: Pantalla para calificar un examen específico */}
+              <Route
+                path="/docente/examen/revisar/:intentoId"
+                element={<RevisarExamenPage />}
+              />
               {/* --- RUTAS AGREGADAS PARA CLASSROOM 2.0 (DOCENTE) --- */}
 
               {/* 1. Muro de Novedades (Stream) */}
@@ -13655,6 +13667,14 @@ function App() {
               <Route
                 path="/docente/grupo/:grupoId/asignatura/:asignaturaId/examen/editar/:examenId"
                 element={<EditarExamenPage />}
+              />
+              <Route
+                path="/docente/grupo/:grupoId/asignatura/:asignaturaId/examen/:examenId/resultados"
+                element={<ResultadosExamenPage />}
+              />
+              <Route
+                path="/docente/examen/revisar/:intentoId"
+                element={<RevisarExamenPage />}
               />
 
               {/* 3. Analíticas de la Clase */}
