@@ -7038,7 +7038,7 @@ app.post("/api/muro/publicar", verifyToken, async (req, res) => {
       // Recortamos el mensaje si es muy largo para que quepa en la notificación
       const resumen =
         mensaje.length > 40 ? mensaje.substring(0, 40) + "..." : mensaje;
-      const textoNotificacion = `Muro ${nombreMateria}: ${nombrePublica} escribió "${resumen}"`;
+      const textoNotificacion = `Aviso de la materia ${nombreMateria}: ${nombrePublica} escribió "${resumen}"`;
 
       // 3. URL de destino (Universal para alumno y docente)
       // Ajusta esto si tus rutas de alumno y docente son muy diferentes
@@ -7126,6 +7126,146 @@ app.delete("/api/muro/:id", verifyToken, async (req, res) => {
   } catch (err) {
     console.error("Error al eliminar del muro:", err);
     res.status(500).send({ message: "Error al eliminar." });
+  }
+});
+
+// ==========================================
+// MÓDULO DE EXÁMENES (CREACIÓN HÍBRIDA)
+// ==========================================
+
+// 1. CREAR EXAMEN (Guarda título, preguntas mixtas y opciones)
+app.post("/api/examenes/crear", verifyToken, async (req, res) => {
+  const { grupo_id, asignatura_id, titulo, descripcion, preguntas } = req.body;
+  const docente_id = req.user.id;
+
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // A. Guardar el Examen
+    const [examResult] = await connection.query(
+      "INSERT INTO examenes (grupo_id, asignatura_id, docente_id, titulo, descripcion) VALUES (?, ?, ?, ?, ?)",
+      [grupo_id, asignatura_id, docente_id, titulo, descripcion],
+    );
+    const examenId = examResult.insertId;
+
+    // B. Recorrer y guardar cada pregunta
+    for (const preg of preguntas) {
+      // Guardamos el tipo ('opcion_multiple' o 'abierta')
+      const [pregResult] = await connection.query(
+        "INSERT INTO preguntas (examen_id, texto_pregunta, puntos, tipo) VALUES (?, ?, ?, ?)",
+        [examenId, preg.texto, preg.puntos, preg.tipo],
+      );
+      const preguntaId = pregResult.insertId;
+
+      // C. Si es opción múltiple, guardar sus opciones
+      if (
+        preg.tipo === "opcion_multiple" &&
+        preg.opciones &&
+        preg.opciones.length > 0
+      ) {
+        const opcionesValues = preg.opciones.map((op) => [
+          preguntaId,
+          op.texto,
+          op.esCorrecta ? 1 : 0,
+        ]);
+        await connection.query(
+          "INSERT INTO opciones (pregunta_id, texto_opcion, es_correcta) VALUES ?",
+          [opcionesValues],
+        );
+      }
+    }
+
+    await connection.commit();
+    res.status(201).json({ message: "Examen creado exitosamente", examenId });
+  } catch (error) {
+    await connection.rollback();
+    console.error("Error creando examen:", error);
+    res.status(500).send("Error al guardar el examen");
+  } finally {
+    connection.release();
+  }
+});
+
+// --- EXÁMENES: LADO ALUMNO ---
+
+// 2. OBTENER EXAMEN PARA RESOLVER (Sin mostrar cuál es la correcta)
+app.get("/api/examenes/:examenId/resolver", verifyToken, async (req, res) => {
+  const { examenId } = req.params;
+  try {
+    // A. Datos del examen
+    const [examen] = await db.query("SELECT * FROM examenes WHERE id = ?", [
+      examenId,
+    ]);
+    if (examen.length === 0)
+      return res.status(404).send("Examen no encontrado");
+
+    // B. Preguntas
+    const [preguntas] = await db.query(
+      "SELECT id, texto_pregunta, puntos, tipo FROM preguntas WHERE examen_id = ?",
+      [examenId],
+    );
+
+    // C. Opciones (¡OJO! No enviamos 'es_correcta' para que no hagan trampa)
+    for (const preg of preguntas) {
+      if (preg.tipo === "opcion_multiple") {
+        const [opciones] = await db.query(
+          "SELECT id, texto_opcion FROM opciones WHERE pregunta_id = ?",
+          [preg.id],
+        );
+        preg.opciones = opciones;
+      }
+    }
+
+    res.json({ examen: examen[0], preguntas });
+  } catch (error) {
+    res.status(500).send("Error al cargar examen");
+  }
+});
+
+// 3. CALIFICAR EXAMEN (Automático para múltiple, manual para abiertas)
+app.post("/api/examenes/:examenId/entregar", verifyToken, async (req, res) => {
+  const { examenId } = req.params;
+  const { respuestas } = req.body; // { pregunta_id: opcion_id OR "texto respuesta" }
+  const alumnoId = req.user.id;
+
+  try {
+    let calificacionTotal = 0;
+
+    // Recorremos las respuestas del alumno
+    for (const resp of respuestas) {
+      // Obtenemos la pregunta original para saber puntos y tipo
+      const [pregRows] = await db.query(
+        "SELECT * FROM preguntas WHERE id = ?",
+        [resp.pregunta_id],
+      );
+      const pregunta = pregRows[0];
+
+      if (pregunta.tipo === "opcion_multiple") {
+        // Verificamos si la opción elegida es la correcta
+        const [opcion] = await db.query(
+          "SELECT es_correcta FROM opciones WHERE id = ?",
+          [resp.respuesta_valor],
+        );
+        if (opcion.length > 0 && opcion[0].es_correcta) {
+          calificacionTotal += pregunta.puntos;
+        }
+      } else {
+        // Si es abierta, NO sumamos puntos todavía (el profe debe calificar después)
+        // Aquí deberías guardar la respuesta de texto en otra tabla 'respuestas_alumno'
+      }
+    }
+
+    // Guardamos el intento (Por ahora solo calificación automática)
+    await db.query(
+      "INSERT INTO intentos_examen (examen_id, alumno_id, calificacion) VALUES (?, ?, ?)",
+      [examenId, alumnoId, calificacionTotal],
+    );
+
+    res.json({ message: "Examen entregado", calificacion: calificacionTotal });
+  } catch (error) {
+    console.error(error);
+    res.status(500).send("Error al calificar");
   }
 });
 

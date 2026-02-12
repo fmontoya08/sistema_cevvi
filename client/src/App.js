@@ -13688,6 +13688,10 @@ function App() {
                 path="/alumno/mis-solicitudes"
                 element={<MisSolicitudesPage />}
               />
+              <Route
+                path="/alumno/examen/:examenId/resolver"
+                element={<TomarExamenPage />}
+              />
               {/* --- FIN NUEVA RUTA SOLICITUDES (ALUMNO) --- */}
               <Route path="/alumno/mi-perfil" element={<MiPerfilPage />} />
               <Route path="/alumno/correo" element={<CorreoPage />} />
