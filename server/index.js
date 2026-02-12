@@ -7040,64 +7040,62 @@ app.get("/api/muro/:grupoId/:asignaturaId", verifyToken, async (req, res) => {
   }
 });
 
-// 2. Publicar en el Muro Y NOTIFICAR
+// Endpoint para PUBLICAR EN EL MURO y NOTIFICAR (Ajustado a tu estructura)
 app.post("/api/muro/publicar", verifyToken, async (req, res) => {
   const { grupo_id, asignatura_id, mensaje, tipo } = req.body;
-  const usuario_id = req.user.id; // El profesor que publica
+  const usuario_id = req.user.id; // El ID del docente que publica
 
-  const connection = await db.getConnection(); // Usamos transacción para seguridad
+  const connection = await db.getConnection();
   try {
     await connection.beginTransaction();
 
-    // 1. Guardar la publicación en el Muro
+    // 1. Guardar la publicación en el Muro (Tabla muro_publicaciones)
     await connection.query(
       "INSERT INTO muro_publicaciones (grupo_id, asignatura_id, usuario_id, mensaje, tipo) VALUES (?, ?, ?, ?, ?)",
       [grupo_id, asignatura_id, usuario_id, mensaje, tipo || "anuncio"],
     );
 
-    // 2. CORRECCIÓN: Usamos SELECT * para evitar errores si la columna no se llama 'nombre'
-    const [asignaturaRows] = await connection.query(
+    // 2. Obtener el nombre de la materia (Para el mensaje de aviso)
+    // Usamos SELECT * para evitar errores si la columna tiene otro nombre
+    const [materiaRows] = await connection.query(
       "SELECT * FROM asignaturas WHERE id = ?",
       [asignatura_id],
     );
+    const nombreMateria = materiaRows[0]
+      ? materiaRows[0].nombre || materiaRows[0].asignatura || "la materia"
+      : "la clase";
 
-    // Intentamos adivinar el nombre del campo (ajusta si tu columna se llama diferente)
-    const materiaObj = asignaturaRows[0];
-    const nombreMateria = materiaObj
-      ? materiaObj.nombre ||
-        materiaObj.nombre_asignatura ||
-        materiaObj.materia ||
-        materiaObj.asignatura ||
-        "la materia"
-      : "la materia";
-
-    // 3. Buscar a todos los ALUMNOS de ese grupo (para avisarles)
+    // 3. Buscar a los ALUMNOS del grupo para avisarles
     const [alumnos] = await connection.query(
       "SELECT id FROM usuarios WHERE grupo_id = ? AND rol = 'alumno'",
       [grupo_id],
     );
 
-    // 4. Crear la notificación para cada alumno
+    // 4. Insertar las notificaciones USANDO TUS COLUMNAS EXACTAS
     if (alumnos.length > 0) {
-      const notificacionesValues = alumnos.map((alumno) => [
-        alumno.id, // Para quién es
-        `Nueva publicación en ${nombreMateria}: "${mensaje.substring(0, 30)}..."`, // Mensaje corto
-        "muro", // Tipo
-        `/alumno/grupo/${grupo_id}/asignatura/${asignatura_id}/muro`, // Link al dar clic
+      // Preparamos los datos masivos
+      const notificacionesData = alumnos.map((alumno) => [
+        alumno.id, // user_id (TU COLUMNA)
+        `Nuevo aviso en ${nombreMateria}: ${mensaje.substring(0, 30)}...`, // mensaje (TU COLUMNA)
+        0, // leida (TU COLUMNA: 0 es falso)
+        `/alumno/grupo/${grupo_id}/asignatura/${asignatura_id}/muro`, // url_destino (TU COLUMNA)
       ]);
 
+      // Insertamos todo de una sola vez
       await connection.query(
-        "INSERT INTO notificaciones (usuario_id, mensaje, tipo, link) VALUES ?",
-        [notificacionesValues],
+        "INSERT INTO notificaciones (user_id, mensaje, leida, url_destino) VALUES ?",
+        [notificacionesData],
       );
     }
 
-    await connection.commit(); // Confirmar cambios
-    res.status(201).send({ message: "Publicado y notificaciones enviadas" });
-  } catch (err) {
-    await connection.rollback(); // Si falla algo, deshacer todo
-    console.error("Error al publicar y notificar:", err);
-    res.status(500).send("Error al procesar la publicación");
+    await connection.commit();
+    res
+      .status(201)
+      .send({ message: "Publicación exitosa y notificaciones enviadas" });
+  } catch (error) {
+    await connection.rollback();
+    console.error("Error en muro:", error);
+    res.status(500).send("Error al publicar");
   } finally {
     connection.release();
   }
