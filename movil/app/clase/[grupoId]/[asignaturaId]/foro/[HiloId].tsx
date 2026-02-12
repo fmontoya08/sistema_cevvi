@@ -31,9 +31,25 @@ export default function DetalleHiloScreen() {
 
   const cargarRespuestas = async () => {
     try {
-      // Ajusta la ruta GET según tu backend
-      const res = await api.get(`/alumno/aula-virtual/foro/hilo/${hiloId}`);
-      setMensajes(res.data);
+      // CORREGIDO: Ruta directa a /foro/hilo/...
+      const res = await api.get(`/foro/hilo/${hiloId}`);
+
+      // TU BACKEND DEVUELVE UN OBJETO { hilo: {...}, respuestas: [...] }
+      // Así que asignamos res.data.respuestas
+      if (res.data && res.data.respuestas) {
+        // Unimos el mensaje original del hilo al principio para que se vea como el primero
+        const hiloOriginal = {
+          id: "original",
+          mensaje: res.data.hilo.mensaje_original,
+          creador_nombre: res.data.hilo.creador_nombre,
+          creador_apellido: res.data.hilo.creador_apellido,
+          fecha_creacion: res.data.hilo.fecha_creacion,
+          creado_por_usuario_id: res.data.hilo.creado_por_usuario_id,
+        };
+        setMensajes([hiloOriginal, ...res.data.respuestas]);
+      } else {
+        setMensajes([]);
+      }
     } catch (error) {
       console.error(error);
     } finally {
@@ -45,13 +61,13 @@ export default function DetalleHiloScreen() {
     if (!nuevoMensaje.trim()) return;
     setEnviando(true);
     try {
-      // Ajusta la ruta POST según tu backend
-      await api.post(`/alumno/aula-virtual/foro/hilo/${hiloId}/respuesta`, {
-        contenido: nuevoMensaje,
+      // CORREGIDO: Ruta correcta /foro/hilo/.../respuestas
+      // CORRECCIÓN 2: Tu backend espera "mensaje" en el body
+      await api.post(`/foro/hilo/${hiloId}/respuestas`, {
+        mensaje: nuevoMensaje,
       });
       setNuevoMensaje("");
-      await cargarRespuestas(); // Recargar para ver el nuevo mensaje
-      // Hacer scroll al final
+      await cargarRespuestas();
       setTimeout(
         () => flatListRef.current?.scrollToEnd({ animated: true }),
         200,
@@ -64,14 +80,18 @@ export default function DetalleHiloScreen() {
   };
 
   const renderItem = ({ item }) => {
-    const soyYo = item.autor_id === user?.id; // Ajusta lógica si tu ID es numérico o string
+    const soyYo = item.creado_por_usuario_id === user?.id;
     return (
       <View
         style={[styles.msgContainer, soyYo ? styles.msgYo : styles.msgOtro]}
       >
-        {!soyYo && <Text style={styles.autorName}>{item.autor_nombre}</Text>}
+        {!soyYo && (
+          <Text style={styles.autorName}>
+            {item.creador_nombre} {item.creador_apellido}
+          </Text>
+        )}
         <Text style={[styles.msgText, soyYo ? styles.textYo : styles.textOtro]}>
-          {item.contenido}
+          {item.mensaje}
         </Text>
         <Text style={[styles.msgDate, soyYo ? styles.dateYo : styles.dateOtro]}>
           {item.fecha_creacion ? item.fecha_creacion.split("T")[0] : ""}
@@ -114,7 +134,6 @@ export default function DetalleHiloScreen() {
         />
       )}
 
-      {/* Input de respuesta */}
       <View style={styles.inputArea}>
         <TextInput
           style={styles.input}

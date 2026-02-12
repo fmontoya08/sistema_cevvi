@@ -22,7 +22,7 @@ export default function TabsLayout() {
       screenOptions={{
         tabBarActiveTintColor: "#a72a34", // Color vino activo
         tabBarInactiveTintColor: "gray",
-        headerShown: true,
+        headerShown: false,
         headerStyle: { backgroundColor: "#fff" },
         headerTintColor: "#a72a34",
       }}

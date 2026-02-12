@@ -2,6 +2,13 @@ import CorreoPage from "./pages/CorreoAdminPage";
 import RegistroPage from "./pages/RegistroPage";
 import ExploradorArchivos from "./pages/ExploradorArchivos";
 import MiDrivePage from "./pages/MiDrivePage";
+// --- IMPORTACIONES NUEVAS PARA EL AULA VIRTUAL ---
+import MuroDocentePage from "./pages/MuroDocentePage";
+import MuroAlumnoPage from "./pages/MuroAlumnoPage";
+import CrearExamenPage from "./pages/CrearExamenPage";
+import EditarExamenPage from "./pages/EditarExamenPage";
+import AnaliticasGrupoPage from "./pages/AnaliticasGrupoPage";
+
 import React, {
   useState,
   useEffect,
@@ -179,7 +186,7 @@ api.interceptors.response.use(
 // --- FIN DEL NUEVO BLOQUE ---
 
 // --- CONTEXTO DE AUTENTICACIÓN ---
-const AuthContext = createContext(null);
+export const AuthContext = createContext(null);
 
 // --- COMPONENTE CALENDARIO ADMIN ---
 const CalendarioAdmin = () => {
@@ -11532,6 +11539,41 @@ const AulaVirtualPage = () => {
           >
             <MessageSquare size={18} /> Foro
           </button>
+          {/* --- BOTÓN MURO (Nuevo) --- */}
+          <button
+            onClick={() => setActiveTab("muro")}
+            className={`pb-4 px-2 text-sm font-bold flex items-center gap-2 border-b-2 transition-all ${
+              activeTab === "muro"
+                ? "border-[#a72a34] text-[#a72a34]"
+                : "border-transparent text-gray-400 hover:text-gray-600 hover:border-gray-300"
+            }`}
+          >
+            <Bell size={18} /> Novedades
+          </button>
+
+          {/* --- BOTÓN EXÁMENES (Nuevo) --- */}
+          <button
+            onClick={() => setActiveTab("examenes")}
+            className={`pb-4 px-2 text-sm font-bold flex items-center gap-2 border-b-2 transition-all ${
+              activeTab === "examenes"
+                ? "border-[#a72a34] text-[#a72a34]"
+                : "border-transparent text-gray-400 hover:text-gray-600 hover:border-gray-300"
+            }`}
+          >
+            <CheckCircle size={18} /> Exámenes
+          </button>
+
+          {/* --- BOTÓN ANALÍTICAS (Nuevo) --- */}
+          <button
+            onClick={() => setActiveTab("analiticas")}
+            className={`pb-4 px-2 text-sm font-bold flex items-center gap-2 border-b-2 transition-all ${
+              activeTab === "analiticas"
+                ? "border-[#a72a34] text-[#a72a34]"
+                : "border-transparent text-gray-400 hover:text-gray-600 hover:border-gray-300"
+            }`}
+          >
+            <TrendingUp size={18} /> Analíticas
+          </button>
         </nav>
       </div>
 
@@ -11680,6 +11722,25 @@ const AulaVirtualPage = () => {
               )}
             </div>
             {renderTareasList()}
+          </div>
+        )}
+        {/* CONTENIDO DE LAS PESTAÑAS NUEVAS */}
+
+        {activeTab === "muro" && (
+          <div className="mt-6">
+            <MuroDocentePage />
+          </div>
+        )}
+
+        {activeTab === "examenes" && (
+          <div className="mt-6">
+            <CrearExamenPage />
+          </div>
+        )}
+
+        {activeTab === "analiticas" && (
+          <div className="mt-6">
+            <AnaliticasGrupoPage />
           </div>
         )}
 
@@ -13575,6 +13636,29 @@ function App() {
                 path="/docente/grupo/:grupoId/asignatura/:asignaturaId/foro/hilo/:hiloId"
                 element={<HiloPage />}
               />
+              {/* --- RUTAS AGREGADAS PARA CLASSROOM 2.0 (DOCENTE) --- */}
+
+              {/* 1. Muro de Novedades (Stream) */}
+              <Route
+                path="/docente/grupo/:grupoId/asignatura/:asignaturaId/muro"
+                element={<MuroDocentePage />}
+              />
+
+              {/* 2. Creación de Exámenes */}
+              <Route
+                path="/docente/grupo/:grupoId/asignatura/:asignaturaId/examen/crear"
+                element={<CrearExamenPage />}
+              />
+              <Route
+                path="/docente/grupo/:grupoId/asignatura/:asignaturaId/examen/editar/:examenId"
+                element={<EditarExamenPage />}
+              />
+
+              {/* 3. Analíticas de la Clase */}
+              <Route
+                path="/docente/grupo/:grupoId/asignatura/:asignaturaId/analiticas"
+                element={<AnaliticasGrupoPage />}
+              />
             </Route>
             <Route path="/docente/mi-nube" element={<MiDrivePage />} />
           </Route>
@@ -13612,6 +13696,29 @@ function App() {
                 element={<HiloPage />}
               />
               <Route path="/alumno/calendario" element={<CalendarioAlumno />} />
+              {/* --- RUTAS AGREGADAS PARA CLASSROOM 2.0 (DOCENTE) --- */}
+
+              {/* 1. Muro de Novedades (Stream) */}
+              <Route
+                path="/docente/grupo/:grupoId/asignatura/:asignaturaId/muro"
+                element={<MuroDocentePage />}
+              />
+
+              {/* 2. Creación de Exámenes */}
+              <Route
+                path="/docente/grupo/:grupoId/asignatura/:asignaturaId/examen/crear"
+                element={<CrearExamenPage />}
+              />
+              <Route
+                path="/docente/grupo/:grupoId/asignatura/:asignaturaId/examen/editar/:examenId"
+                element={<EditarExamenPage />}
+              />
+
+              {/* 3. Analíticas de la Clase */}
+              <Route
+                path="/docente/grupo/:grupoId/asignatura/:asignaturaId/analiticas"
+                element={<AnaliticasGrupoPage />}
+              />
             </Route>
           </Route>
           {/* --- FIN DEL BLOQUE AÑADIDO --- */}

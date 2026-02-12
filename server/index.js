@@ -6981,6 +6981,103 @@ aspiranteRouter.delete("/expedientes/:id", async (req, res) => {
 
 apiRouter.use("/aspirante", aspiranteRouter); // Registra el router de aspirante
 
+// --- ENDPOINTS PARA EL MURO (STREAM) ---
+
+// 1. OBTENER PUBLICACIONES DEL MURO
+app.get("/muro/:grupoId/:asignaturaId", async (req, res) => {
+  const { grupoId, asignaturaId } = req.params;
+  try {
+    const [rows] = await db.query(
+      `SELECT m.*, u.nombre, u.apellido_paterno, u.foto_perfil, u.rol 
+       FROM muro_publicaciones m
+       JOIN usuarios u ON m.usuario_id = u.id
+       WHERE m.grupo_id = ? AND m.asignatura_id = ?
+       ORDER BY m.fecha DESC`,
+      [grupoId, asignaturaId],
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error("Error al obtener muro:", err);
+    res.status(500).send("Error al obtener publicaciones");
+  }
+});
+
+// 2. CREAR UNA PUBLICACIÓN EN EL MURO
+app.post("/muro/publicar", async (req, res) => {
+  const { grupo_id, asignatura_id, usuario_id, mensaje, tipo } = req.body;
+  try {
+    await db.query(
+      "INSERT INTO muro_publicaciones (grupo_id, asignatura_id, usuario_id, mensaje, tipo) VALUES (?, ?, ?, ?, ?)",
+      [grupo_id, asignatura_id, usuario_id, mensaje, tipo || "anuncio"],
+    );
+    res.status(201).send("Publicación creada");
+  } catch (err) {
+    console.error("Error al publicar en muro:", err);
+    res.status(500).send("Error al publicar");
+  }
+});
+
+// ==========================================
+// MÓDULO AULA VIRTUAL: MURO Y EXÁMENES
+// ==========================================
+
+// 1. Obtener publicaciones del Muro
+app.get("/api/muro/:grupoId/:asignaturaId", verifyToken, async (req, res) => {
+  const { grupoId, asignaturaId } = req.params;
+  try {
+    const [rows] = await db.query(
+      `SELECT m.*, u.nombre, u.apellido_paterno, u.foto_perfil, u.rol 
+       FROM muro_publicaciones m
+       JOIN usuarios u ON m.usuario_id = u.id
+       WHERE m.grupo_id = ? AND m.asignatura_id = ?
+       ORDER BY m.fecha DESC`,
+      [grupoId, asignaturaId],
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error("Error al obtener muro:", err);
+    res.status(500).send("Error al obtener publicaciones");
+  }
+});
+
+// 2. Publicar en el Muro
+app.post("/api/muro/publicar", verifyToken, async (req, res) => {
+  const { grupo_id, asignatura_id, mensaje, tipo } = req.body;
+  const usuario_id = req.user.id; // Obtenemos ID del token
+  try {
+    await db.query(
+      "INSERT INTO muro_publicaciones (grupo_id, asignatura_id, usuario_id, mensaje, tipo) VALUES (?, ?, ?, ?, ?)",
+      [grupo_id, asignatura_id, usuario_id, mensaje, tipo || "anuncio"],
+    );
+    res.status(201).send({ message: "Publicado correctamente" });
+  } catch (err) {
+    console.error("Error al publicar en muro:", err);
+    res.status(500).send("Error al publicar");
+  }
+});
+
+// 3. Eliminar publicación (Solo Admin o el autor)
+app.delete("/api/muro/:id", verifyToken, async (req, res) => {
+  const { id } = req.params;
+  const usuario_id = req.user.id;
+  const rol = req.user.rol;
+
+  try {
+    // Si es admin o docente puede borrar todo, si no, solo lo suyo
+    if (rol === "admin" || rol === "docente") {
+      await db.query("DELETE FROM muro_publicaciones WHERE id = ?", [id]);
+    } else {
+      await db.query(
+        "DELETE FROM muro_publicaciones WHERE id = ? AND usuario_id = ?",
+        [id, usuario_id],
+      );
+    }
+    res.send({ message: "Eliminado" });
+  } catch (err) {
+    res.status(500).send("Error al eliminar");
+  }
+});
+
 // --- INICIO DEL SERVIDOR ---
 const PORT = 3001;
 // ==========================================

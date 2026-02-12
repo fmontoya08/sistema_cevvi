@@ -29,9 +29,16 @@ export default function HomeScreen() {
             <Text style={styles.greeting}>¡Hola, {nombreUsuario}!</Text>
             <Text style={styles.subGreeting}>Bienvenido a tu portal móvil</Text>
           </View>
+          <TouchableOpacity
+            onPress={() => router.push("/notificaciones")}
+            style={styles.bellButton}
+          >
+            <Ionicons name="notifications-outline" size={24} color="#a72a34" />
+            {/* Opcional: Un puntito rojo si hay notificaciones sin leer (requeriría consultar API) */}
+          </TouchableOpacity>
           {/* Puedes cambiar esta imagen por tu logo real */}
           <Image
-            source={require("../../assets/images/logo.png")}
+            source={require("../../assets/images/logo_sigloxxi.jpg")}
             style={styles.logo}
           />
         </View>
@@ -189,4 +196,15 @@ const styles = StyleSheet.create({
   },
   noticeTitle: { fontWeight: "bold", color: "#333", marginBottom: 2 },
   noticeBody: { fontSize: 13, color: "#666" },
+
+  bellButton: {
+    backgroundColor: "#fff",
+    padding: 10,
+    borderRadius: 25,
+    elevation: 3,
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    marginLeft: 10,
+  },
 });

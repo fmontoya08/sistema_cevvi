@@ -16,14 +16,13 @@ import { Ionicons } from "@expo/vector-icons";
 
 export default function ForoIndexScreen() {
   const { grupoId, asignaturaId } = useLocalSearchParams();
-  const { api, user } = useAuth();
+  const { api } = useAuth();
   const router = useRouter();
 
   const [hilos, setHilos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
 
-  // Estado para nuevo tema
   const [titulo, setTitulo] = useState("");
   const [contenido, setContenido] = useState("");
   const [creando, setCreando] = useState(false);
@@ -34,10 +33,8 @@ export default function ForoIndexScreen() {
 
   const cargarForo = async () => {
     try {
-      // Ajusta la ruta a tu endpoint real de "listar hilos"
-      const res = await api.get(
-        `/alumno/aula-virtual/${grupoId}/${asignaturaId}/foro`,
-      );
+      // CORREGIDO: Ruta correcta según tu index.js
+      const res = await api.get(`/foro/${grupoId}/${asignaturaId}/hilos`);
       setHilos(res.data);
     } catch (error) {
       console.error(error);
@@ -53,16 +50,17 @@ export default function ForoIndexScreen() {
     }
     setCreando(true);
     try {
-      await api.post(`/alumno/aula-virtual/${grupoId}/${asignaturaId}/foro`, {
+      // CORREGIDO: Ruta correcta y campos correctos (mensaje_original)
+      await api.post(`/foro/${grupoId}/${asignaturaId}/hilos`, {
         titulo,
-        contenido,
-        // El backend ya debería saber quién es el usuario por el token
+        mensaje_original: contenido,
       });
       setModalVisible(false);
       setTitulo("");
       setContenido("");
-      cargarForo(); // Recargar la lista
+      cargarForo();
     } catch (error) {
+      console.error(error);
       Alert.alert("Error", "No se pudo crear el tema.");
     } finally {
       setCreando(false);
@@ -70,7 +68,6 @@ export default function ForoIndexScreen() {
   };
 
   const irAHilo = (hiloId, tituloHilo) => {
-    // Navegamos al detalle del hilo pasando el ID
     router.push({
       pathname: `/clase/${grupoId}/${asignaturaId}/foro/${hiloId}`,
       params: { tituloHilo },
@@ -85,13 +82,13 @@ export default function ForoIndexScreen() {
       <View style={styles.row}>
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>
-            {item.autor_nombre ? item.autor_nombre.charAt(0) : "?"}
+            {item.creador_nombre ? item.creador_nombre.charAt(0) : "?"}
           </Text>
         </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.cardTitle}>{item.titulo}</Text>
           <Text style={styles.cardSubtitle}>
-            Por: {item.autor_nombre} •{" "}
+            Por: {item.creador_nombre} {item.creador_apellido} •{" "}
             {item.fecha_creacion ? item.fecha_creacion.split("T")[0] : ""}
           </Text>
         </View>
@@ -143,7 +140,6 @@ export default function ForoIndexScreen() {
         }
       />
 
-      {/* MODAL NUEVO TEMA */}
       <Modal visible={modalVisible} animationType="slide" transparent={true}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -200,6 +196,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     elevation: 2,
   },
+  backButton: { marginRight: 10 },
   title: { fontSize: 20, fontWeight: "bold", color: "#a72a34" },
   addButton: { backgroundColor: "#a72a34", padding: 8, borderRadius: 20 },
   card: {
@@ -231,8 +228,6 @@ const styles = StyleSheet.create({
   },
   statsText: { fontSize: 12, color: "#666", marginLeft: 5 },
   empty: { textAlign: "center", marginTop: 50, color: "#999" },
-
-  // Modal
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",

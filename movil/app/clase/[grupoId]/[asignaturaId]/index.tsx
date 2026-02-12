@@ -67,6 +67,15 @@ export default function DetalleMateriaScreen() {
           <Text style={styles.cardTitle}>Material</Text>
           <Text style={styles.cardDesc}>PDFs y archivos</Text>
         </TouchableOpacity>
+
+        {/* --- BOTÓN DE ASISTENCIA --- */}
+        <TouchableOpacity style={styles.card} onPress={() => irA("asistencia")}>
+          <View style={[styles.iconCircle, { backgroundColor: "#ffe4e6" }]}>
+            <Ionicons name="calendar-number" size={32} color="#be123c" />
+          </View>
+          <Text style={styles.cardTitle}>Asistencia</Text>
+          <Text style={styles.cardDesc}>Historial de faltas</Text>
+        </TouchableOpacity>
       </View>
     </ScrollView>
   );
