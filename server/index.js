@@ -7132,6 +7132,19 @@ app.delete("/api/muro/:id", verifyToken, async (req, res) => {
 // ==========================================
 // CONFIGURACIÓN CONSOLIDADA DE EXÁMENES
 // ==========================================
+// OBTENER TODOS LOS EXÁMENES (Para que el docente los vea en su lista)
+apiRouter.get("/examenes", verifyToken, async (req, res) => {
+  try {
+    // Esta consulta trae los exámenes creados
+    const [rows] = await db.query(
+      "SELECT * FROM examenes ORDER BY fecha_creacion DESC",
+    );
+    res.json(rows);
+  } catch (error) {
+    console.error("Error al listar exámenes:", error);
+    res.status(500).send("Error al obtener la lista de exámenes");
+  }
+});
 
 // 1. OBTENER EXAMEN PARA RESOLVER (ALUMNO)
 apiRouter.get("/examenes/:examenId/resolver", verifyToken, async (req, res) => {
