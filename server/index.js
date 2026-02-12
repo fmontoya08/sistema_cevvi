@@ -6981,47 +6981,11 @@ aspiranteRouter.delete("/expedientes/:id", async (req, res) => {
 
 apiRouter.use("/aspirante", aspiranteRouter); // Registra el router de aspirante
 
-// --- ENDPOINTS PARA EL MURO (STREAM) ---
+// ==========================================
+// MÓDULO AULA VIRTUAL: MURO (STREAM)
+// ==========================================
 
 // 1. OBTENER PUBLICACIONES DEL MURO
-app.get("/muro/:grupoId/:asignaturaId", async (req, res) => {
-  const { grupoId, asignaturaId } = req.params;
-  try {
-    const [rows] = await db.query(
-      `SELECT m.*, u.nombre, u.apellido_paterno, u.foto_perfil, u.rol 
-       FROM muro_publicaciones m
-       JOIN usuarios u ON m.usuario_id = u.id
-       WHERE m.grupo_id = ? AND m.asignatura_id = ?
-       ORDER BY m.fecha DESC`,
-      [grupoId, asignaturaId],
-    );
-    res.json(rows);
-  } catch (err) {
-    console.error("Error al obtener muro:", err);
-    res.status(500).send("Error al obtener publicaciones");
-  }
-});
-
-// 2. CREAR UNA PUBLICACIÓN EN EL MURO
-app.post("/muro/publicar", async (req, res) => {
-  const { grupo_id, asignatura_id, usuario_id, mensaje, tipo } = req.body;
-  try {
-    await db.query(
-      "INSERT INTO muro_publicaciones (grupo_id, asignatura_id, usuario_id, mensaje, tipo) VALUES (?, ?, ?, ?, ?)",
-      [grupo_id, asignatura_id, usuario_id, mensaje, tipo || "anuncio"],
-    );
-    res.status(201).send("Publicación creada");
-  } catch (err) {
-    console.error("Error al publicar en muro:", err);
-    res.status(500).send("Error al publicar");
-  }
-});
-
-// ==========================================
-// MÓDULO AULA VIRTUAL: MURO Y EXÁMENES
-// ==========================================
-
-// 1. Obtener publicaciones del Muro
 app.get("/api/muro/:grupoId/:asignaturaId", verifyToken, async (req, res) => {
   const { grupoId, asignaturaId } = req.params;
   try {
@@ -7036,90 +7000,132 @@ app.get("/api/muro/:grupoId/:asignaturaId", verifyToken, async (req, res) => {
     res.json(rows);
   } catch (err) {
     console.error("Error al obtener muro:", err);
-    res.status(500).send("Error al obtener publicaciones");
+    res.status(500).send({ message: "Error al obtener publicaciones" });
   }
 });
 
-// Endpoint para PUBLICAR EN EL MURO y NOTIFICAR (Ajustado a tu estructura)
+// 2. PUBLICAR EN EL MURO + NOTIFICACIONES (Campanita y Push)
 app.post("/api/muro/publicar", verifyToken, async (req, res) => {
-  const { grupo_id, asignatura_id, mensaje, tipo } = req.body;
-  const usuario_id = req.user.id; // El ID del docente que publica
-
-  const connection = await db.getConnection();
   try {
-    await connection.beginTransaction();
+    // Nota: Tu frontend envía estos datos en el body
+    const { grupo_id, asignatura_id, mensaje } = req.body;
+    const usuario_id = req.user.id; // Quien publica (Docente o Alumno)
 
-    // 1. Guardar la publicación en el Muro (Tabla muro_publicaciones)
-    await connection.query(
-      "INSERT INTO muro_publicaciones (grupo_id, asignatura_id, usuario_id, mensaje, tipo) VALUES (?, ?, ?, ?, ?)",
-      [grupo_id, asignatura_id, usuario_id, mensaje, tipo || "anuncio"],
-    );
-
-    // 2. Obtener el nombre de la materia (Para el mensaje de aviso)
-    // Usamos SELECT * para evitar errores si la columna tiene otro nombre
-    const [materiaRows] = await connection.query(
-      "SELECT * FROM asignaturas WHERE id = ?",
-      [asignatura_id],
-    );
-    const nombreMateria = materiaRows[0]
-      ? materiaRows[0].nombre || materiaRows[0].asignatura || "la materia"
-      : "la clase";
-
-    // 3. Buscar a los ALUMNOS del grupo para avisarles
-    const [alumnos] = await connection.query(
-      "SELECT id FROM usuarios WHERE grupo_id = ? AND rol = 'alumno'",
-      [grupo_id],
-    );
-
-    // 4. Insertar las notificaciones USANDO TUS COLUMNAS EXACTAS
-    if (alumnos.length > 0) {
-      // Preparamos los datos masivos
-      const notificacionesData = alumnos.map((alumno) => [
-        alumno.id, // user_id (TU COLUMNA)
-        `Nuevo aviso en ${nombreMateria}: ${mensaje.substring(0, 30)}...`, // mensaje (TU COLUMNA)
-        0, // leida (TU COLUMNA: 0 es falso)
-        `/alumno/grupo/${grupo_id}/asignatura/${asignatura_id}/muro`, // url_destino (TU COLUMNA)
-      ]);
-
-      // Insertamos todo de una sola vez
-      await connection.query(
-        "INSERT INTO notificaciones (user_id, mensaje, leida, url_destino) VALUES ?",
-        [notificacionesData],
-      );
+    if (!mensaje) {
+      return res.status(400).send({ message: "El mensaje es requerido." });
     }
 
-    await connection.commit();
-    res
-      .status(201)
-      .send({ message: "Publicación exitosa y notificaciones enviadas" });
-  } catch (error) {
-    await connection.rollback();
-    console.error("Error en muro:", error);
-    res.status(500).send("Error al publicar");
-  } finally {
-    connection.release();
+    // A) Guardar en Base de Datos
+    // Aseguramos que 'tipo' tenga un valor por defecto 'anuncio'
+    const sqlInsert = `
+      INSERT INTO muro_publicaciones (grupo_id, asignatura_id, usuario_id, mensaje, fecha, tipo) 
+      VALUES (?, ?, ?, ?, NOW(), 'anuncio')
+    `;
+    await db.query(sqlInsert, [grupo_id, asignatura_id, usuario_id, mensaje]);
+
+    // --- B) NOTIFICACIONES MASIVAS ---
+    try {
+      const nombrePublica = `${req.user.nombre} ${req.user.apellido_paterno}`;
+
+      // 1. Obtener nombre de la materia
+      const [[materia]] = await db.query(
+        "SELECT nombre_asignatura FROM asignaturas WHERE id = ?",
+        [asignatura_id],
+      );
+      const nombreMateria = materia ? materia.nombre_asignatura : "la clase";
+
+      // 2. Preparar el mensaje de alerta
+      // Recortamos el mensaje si es muy largo para que quepa en la notificación
+      const resumen =
+        mensaje.length > 40 ? mensaje.substring(0, 40) + "..." : mensaje;
+      const textoNotificacion = `Muro ${nombreMateria}: ${nombrePublica} escribió "${resumen}"`;
+
+      // 3. URL de destino (Universal para alumno y docente)
+      // Ajusta esto si tus rutas de alumno y docente son muy diferentes
+      // Por ahora apuntamos al portal de alumno que es el destinatario principal
+      const urlDestino = `/alumno/grupo/${grupo_id}/asignatura/${asignatura_id}/muro`;
+
+      // 4. Obtener destinatarios (Alumnos del grupo)
+      // Usamos la tabla 'grupo_alumnos' que es la correcta según tus otros endpoints
+      const [alumnos] = await db.query(
+        "SELECT alumno_id FROM grupo_alumnos WHERE grupo_id = ?",
+        [grupo_id],
+      );
+
+      // 5. Enviar a cada alumno (menos al que publicó si fuera un alumno)
+      for (const alumno of alumnos) {
+        const idDestino = alumno.alumno_id;
+
+        // No notificarse a sí mismo
+        if (idDestino === usuario_id) continue;
+
+        // I. Insertar en Tabla Notificaciones (Campanita)
+        // OJO: Usamos las columnas CORRECTAS: usuario_id, leido, fecha, tipo
+        await db.query(
+          "INSERT INTO notificaciones (usuario_id, mensaje, url_destino, leido, fecha, tipo) VALUES (?, ?, ?, 0, NOW(), 'aviso')",
+          [idDestino, textoNotificacion, urlDestino],
+        );
+
+        // II. Enviar Push Notification (Android)
+        const [tokens] = await db.query(
+          "SELECT token FROM push_tokens WHERE user_id = ?",
+          [idDestino],
+        );
+
+        if (tokens.length > 0) {
+          const expoMessages = tokens.map((t) => ({
+            to: t.token,
+            sound: "default",
+            title: "Nuevo Aviso en el Muro 📢",
+            body: textoNotificacion,
+            data: { url: urlDestino },
+          }));
+
+          fetch("https://exp.host/--/api/v2/push/send", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(expoMessages),
+          }).catch((e) => console.error("Error envío Push Muro:", e));
+        }
+      }
+    } catch (notifError) {
+      console.error("Error en sistema de notificaciones (Muro):", notifError);
+      // No detenemos el flujo, el mensaje ya se guardó
+    }
+
+    res.status(201).send({ message: "Publicado correctamente." });
+  } catch (err) {
+    console.error("Error al publicar en muro:", err);
+    res.status(500).send({ message: "Error interno al publicar." });
   }
 });
 
-// 3. Eliminar publicación (Solo Admin o el autor)
+// 3. ELIMINAR PUBLICACIÓN
 app.delete("/api/muro/:id", verifyToken, async (req, res) => {
   const { id } = req.params;
   const usuario_id = req.user.id;
   const rol = req.user.rol;
 
   try {
-    // Si es admin o docente puede borrar todo, si no, solo lo suyo
+    // Si es admin o docente puede borrar cualquier mensaje
     if (rol === "admin" || rol === "docente") {
       await db.query("DELETE FROM muro_publicaciones WHERE id = ?", [id]);
     } else {
-      await db.query(
+      // Si es alumno, solo puede borrar SU propio mensaje
+      const [result] = await db.query(
         "DELETE FROM muro_publicaciones WHERE id = ? AND usuario_id = ?",
         [id, usuario_id],
       );
+      if (result.affectedRows === 0) {
+        return res
+          .status(403)
+          .send({ message: "No puedes eliminar este mensaje." });
+      }
     }
-    res.send({ message: "Eliminado" });
+    res.send({ message: "Mensaje eliminado." });
   } catch (err) {
-    res.status(500).send("Error al eliminar");
+    console.error("Error al eliminar del muro:", err);
+    res.status(500).send({ message: "Error al eliminar." });
   }
 });
 
