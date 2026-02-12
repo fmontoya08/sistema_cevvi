@@ -7055,12 +7055,21 @@ app.post("/api/muro/publicar", verifyToken, async (req, res) => {
       [grupo_id, asignatura_id, usuario_id, mensaje, tipo || "anuncio"],
     );
 
-    // 2. Obtener el nombre de la Asignatura (para que el mensaje sea claro)
+    // 2. CORRECCIÓN: Usamos SELECT * para evitar errores si la columna no se llama 'nombre'
     const [asignaturaRows] = await connection.query(
-      "SELECT nombre FROM asignaturas WHERE id = ?",
+      "SELECT * FROM asignaturas WHERE id = ?",
       [asignatura_id],
     );
-    const nombreMateria = asignaturaRows[0]?.nombre || "una materia";
+
+    // Intentamos adivinar el nombre del campo (ajusta si tu columna se llama diferente)
+    const materiaObj = asignaturaRows[0];
+    const nombreMateria = materiaObj
+      ? materiaObj.nombre ||
+        materiaObj.nombre_asignatura ||
+        materiaObj.materia ||
+        materiaObj.asignatura ||
+        "la materia"
+      : "la materia";
 
     // 3. Buscar a todos los ALUMNOS de ese grupo (para avisarles)
     const [alumnos] = await connection.query(

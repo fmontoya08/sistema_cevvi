@@ -11,9 +11,9 @@ const MuroDocentePage = () => {
   const [nuevoMensaje, setNuevoMensaje] = useState("");
   const [loading, setLoading] = useState(true);
 
-  // Configuración de API local (o usa tu instancia 'api' si la exportas)
+  // Configuración de API local
   const api = axios.create({
-    baseURL: "https://api-universidad-c5o8.onrender.com/api", // Ajusta a tu URL real
+    baseURL: "https://api-universidad-c5o8.onrender.com/api",
     headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
   });
 
@@ -59,33 +59,41 @@ const MuroDocentePage = () => {
     }
   };
 
+  // Normalizamos el rol para evitar problemas de mayúsculas/minúsculas
+  const userRole = user?.rol ? user.rol.toLowerCase() : "";
+
   return (
     <div className="max-w-4xl mx-auto p-6">
-      {/* Caja de Publicación */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-8">
-        <h2 className="text-lg font-bold text-gray-700 mb-2 flex items-center gap-2">
-          <MessageSquare size={20} className="text-blue-600" />
-          Anunciar algo a la clase
-        </h2>
-        <form onSubmit={handlePublicar}>
-          <textarea
-            className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none resize-none bg-gray-50 focus:bg-white transition-colors"
-            placeholder="Escribe un comunicado, bienvenida o aviso..."
-            rows="3"
-            value={nuevoMensaje}
-            onChange={(e) => setNuevoMensaje(e.target.value)}
-          />
-          <div className="flex justify-end mt-2">
-            <button
-              type="submit"
-              disabled={!nuevoMensaje.trim()}
-              className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Send size={16} /> Publicar
-            </button>
-          </div>
-        </form>
-      </div>
+      {/* --- CORRECCIÓN: Solo Admin y Docentes pueden ver el formulario --- */}
+      {(userRole === "admin" ||
+        userRole === "docente" ||
+        userRole === "maestro") && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-8">
+          <h2 className="text-lg font-bold text-gray-700 mb-2 flex items-center gap-2">
+            <MessageSquare size={20} className="text-blue-600" />
+            Anunciar algo a la clase
+          </h2>
+          <form onSubmit={handlePublicar}>
+            <textarea
+              className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none resize-none bg-gray-50 focus:bg-white transition-colors"
+              placeholder="Escribe un comunicado, bienvenida o aviso..."
+              rows="3"
+              value={nuevoMensaje}
+              onChange={(e) => setNuevoMensaje(e.target.value)}
+            />
+            <div className="flex justify-end mt-2">
+              <button
+                type="submit"
+                disabled={!nuevoMensaje.trim()}
+                className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Send size={16} /> Publicar
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+      {/* ------------------------------------------------------------------ */}
 
       {/* Lista de Publicaciones */}
       <div className="space-y-4">
@@ -128,7 +136,8 @@ const MuroDocentePage = () => {
                       })}
                     </span>
                   </div>
-                  {(user.rol === "admin" || user.id === post.usuario_id) && (
+                  {/* Botón de eliminar: Solo para Admin o el dueño del post */}
+                  {(userRole === "admin" || user.id === post.usuario_id) && (
                     <button
                       onClick={() => handleEliminar(post.id)}
                       className="text-gray-400 hover:text-red-500 p-1"
