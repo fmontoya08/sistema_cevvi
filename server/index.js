@@ -7326,54 +7326,65 @@ app.get("/api/examenes/:examenId/resultados", verifyToken, async (req, res) => {
   }
 });
 
-// 6. DETALLE DE UN INTENTO (Para calificar manual)
-app.get("/api/examenes/intento/:intentoId", verifyToken, async (req, res) => {
+// 6. VER DETALLE DE UN INTENTO (Para que el docente revise)
+apiRouter.get("/intentos/:intentoId", verifyToken, async (req, res) => {
   try {
     const [info] = await db.query(
-      `
-      SELECT i.*, u.nombre, u.apellido_paterno, e.titulo 
-      FROM intentos_examen i
-      JOIN usuarios u ON i.alumno_id = u.id
-      JOIN examenes e ON i.examen_id = e.id
-      WHERE i.id = ?`,
+      `SELECT i.*, u.nombre, u.apellido_paterno, e.titulo
+       FROM intentos_examen i
+       JOIN usuarios u ON i.alumno_id = u.id
+       JOIN examenes e ON i.examen_id = e.id
+       WHERE i.id = ?`,
       [req.params.intentoId],
     );
 
+    if (info.length === 0) return res.status(404).send("Intento no encontrado");
+
     const [respuestas] = await db.query(
-      `
-      SELECT r.*, p.texto_pregunta, p.tipo, p.puntos as puntos_maximos, op.texto_opcion
-      FROM respuestas_alumno r
-      JOIN preguntas p ON r.pregunta_id = p.id
-      LEFT JOIN opciones op ON r.opcion_id = op.id
-      WHERE r.intento_id = ?`,
+      `SELECT r.*, p.texto_pregunta, p.tipo, op.texto_opcion 
+       FROM respuestas_alumno r
+       JOIN preguntas p ON r.pregunta_id = p.id
+       LEFT JOIN opciones op ON r.opcion_id = op.id
+       WHERE r.intento_id = ?`,
       [req.params.intentoId],
     );
 
     res.json({ info: info[0], respuestas });
   } catch (error) {
-    res.status(500).send("Error");
+    console.error("Error al obtener detalle:", error);
+    res.status(500).send("Error en el servidor");
   }
 });
 
-// 7. CALIFICAR PREGUNTA MANUALMENTE
-app.put("/api/examenes/calificar-pregunta", verifyToken, async (req, res) => {
+// 7. CALIFICAR MANUALMENTE
+apiRouter.put("/examenes/calificar-pregunta", verifyToken, async (req, res) => {
   const { respuestaId, puntosNuevos, intentoId } = req.body;
   try {
+    // Actualizar puntos de la respuesta específica
     await db.query(
       "UPDATE respuestas_alumno SET puntos_obtenidos = ? WHERE id = ?",
       [puntosNuevos, respuestaId],
     );
+
+    // Recalcular el total del examen
     const [total] = await db.query(
       "SELECT SUM(puntos_obtenidos) as cal FROM respuestas_alumno WHERE intento_id = ?",
       [intentoId],
     );
+
+    // Actualizar la calificación final en el intento
     await db.query("UPDATE intentos_examen SET calificacion = ? WHERE id = ?", [
-      total[0].cal,
+      total[0].cal || 0,
       intentoId,
     ]);
-    res.json({ message: "Actualizado" });
+
+    res.json({
+      message: "Calificación actualizada con éxito",
+      nuevaCalificacion: total[0].cal,
+    });
   } catch (error) {
-    res.status(500).send("Error");
+    console.error("Error al calificar:", error);
+    res.status(500).send("Error al actualizar la calificación");
   }
 });
 
