@@ -7146,6 +7146,57 @@ apiRouter.get("/examenes", verifyToken, async (req, res) => {
   }
 });
 
+// POST: CREAR EXAMEN (Asegurando que guarde grupo y materia)
+apiRouter.post("/examenes", verifyToken, async (req, res) => {
+  const { titulo, descripcion, grupo_id, asignatura_id, preguntas } = req.body; // Asegúrate de recibir grupo_id y asignatura_id
+  const docente_id = req.user.id;
+
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // 1. Insertar el examen con sus vínculos al grupo
+    const [result] = await connection.query(
+      "INSERT INTO examenes (titulo, descripcion, docente_id, grupo_id, asignatura_id, fecha_creacion) VALUES (?, ?, ?, ?, ?, NOW())",
+      [titulo, descripcion, docente_id, grupo_id, asignatura_id],
+    );
+    const examenId = result.insertId;
+
+    // 2. Insertar las preguntas (tu lógica actual de preguntas va aquí)
+    // ... (Tu código de insertar preguntas y opciones) ...
+    // Si necesitas el código completo de insertar preguntas, avísame.
+
+    await connection.commit();
+    res.status(201).json({ message: "Examen creado", examenId });
+  } catch (error) {
+    await connection.rollback();
+    console.error(error);
+    res.status(500).send("Error al crear examen");
+  } finally {
+    connection.release();
+  }
+});
+
+// --- NUEVA RUTA: OBTENER EXÁMENES POR GRUPO Y MATERIA ---
+// Esta es la ruta que tu frontend está buscando y le daba 404
+apiRouter.get(
+  "/examenes/:grupoId/:asignaturaId",
+  verifyToken,
+  async (req, res) => {
+    const { grupoId, asignaturaId } = req.params;
+    try {
+      const [examenes] = await db.query(
+        "SELECT * FROM examenes WHERE grupo_id = ? AND asignatura_id = ? ORDER BY fecha_creacion DESC",
+        [grupoId, asignaturaId],
+      );
+      res.json(examenes);
+    } catch (error) {
+      console.error("Error al obtener exámenes del curso:", error);
+      res.status(500).send("Error al obtener exámenes");
+    }
+  },
+);
+
 // 1. OBTENER EXAMEN PARA RESOLVER (ALUMNO)
 apiRouter.get("/examenes/:examenId/resolver", verifyToken, async (req, res) => {
   const { examenId } = req.params;
