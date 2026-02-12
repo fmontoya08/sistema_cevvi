@@ -7749,13 +7749,15 @@ app.post("/api/examenes/crear", verifyToken, async (req, res) => {
   }
 });
 
-// 3. OBTENER EXAMEN PARA RESOLVER (Alumno)
-app.get("/api/examenes/:examenId/resolver", verifyToken, async (req, res) => {
+// Busca esta línea (aprox 1585) y asegúrate de que use 'apiRouter' o añade '/api'
+apiRouter.get("/examenes/:examenId/resolver", verifyToken, async (req, res) => {
   const { examenId } = req.params;
   try {
     const [examen] = await db.query("SELECT * FROM examenes WHERE id = ?", [
       examenId,
     ]);
+
+    // Si el ID no llega bien o no existe, aquí es donde devuelve 404
     if (examen.length === 0) return res.status(404).send("No encontrado");
 
     const [preguntas] = await db.query(
@@ -7774,6 +7776,7 @@ app.get("/api/examenes/:examenId/resolver", verifyToken, async (req, res) => {
     }
     res.json({ examen: examen[0], preguntas });
   } catch (error) {
+    console.error("Error al cargar examen:", error);
     res.status(500).send("Error al cargar");
   }
 });
@@ -7908,6 +7911,22 @@ app.put("/api/examenes/calificar-pregunta", verifyToken, async (req, res) => {
     res.json({ message: "Actualizado" });
   } catch (error) {
     res.status(500).send("Error");
+  }
+});
+
+// --- HERRAMIENTA DE DIAGNÓSTICO (BORRAR DESPUÉS DE SOLUCIONAR) ---
+app.get("/api/debug/ver-examenes", async (req, res) => {
+  try {
+    const [examenes] = await db.query(
+      "SELECT id, titulo, grupo_id FROM examenes",
+    );
+    res.json({
+      mensaje: "Conexión a BD exitosa",
+      total_examenes: examenes.length,
+      lista: examenes,
+    });
+  } catch (error) {
+    res.status(500).json({ error: "Error de BD", detalle: error.message });
   }
 });
 
