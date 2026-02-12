@@ -7269,6 +7269,57 @@ app.post("/api/examenes/:examenId/entregar", verifyToken, async (req, res) => {
   }
 });
 
+// 4. LISTAR EXÁMENES (Inteligente: Detecta si el alumno ya lo hizo)
+app.get(
+  "/api/examenes/:grupoId/:asignaturaId",
+  verifyToken,
+  async (req, res) => {
+    const { grupoId, asignaturaId } = req.params;
+    const userId = req.user.id;
+    const userRole = req.user.rol; // 'docente', 'admin' o 'alumno'
+
+    try {
+      // 1. Obtener todos los exámenes de esta materia
+      const [examenes] = await db.query(
+        "SELECT * FROM examenes WHERE grupo_id = ? AND asignatura_id = ? ORDER BY fecha_creacion DESC",
+        [grupoId, asignaturaId],
+      );
+
+      // 2. Si es ALUMNO, verificar cuáles ya contestó
+      if (userRole === "alumno") {
+        const examenesConEstado = [];
+
+        for (const examen of examenes) {
+          // Buscamos si hay un intento de este alumno
+          const [intento] = await db.query(
+            "SELECT calificacion FROM intentos_examen WHERE examen_id = ? AND alumno_id = ?",
+            [examen.id, userId],
+          );
+
+          if (intento.length > 0) {
+            // Ya lo hizo: Le mandamos su calificación
+            examenesConEstado.push({
+              ...examen,
+              contestado: true,
+              calificacion: intento[0].calificacion,
+            });
+          } else {
+            // No lo ha hecho
+            examenesConEstado.push({ ...examen, contestado: false });
+          }
+        }
+        return res.json(examenesConEstado);
+      }
+
+      // Si es DOCENTE, mandamos la lista normal
+      res.json(examenes);
+    } catch (error) {
+      console.error(error);
+      res.status(500).send("Error al listar exámenes");
+    }
+  },
+);
+
 // --- INICIO DEL SERVIDOR ---
 const PORT = 3001;
 // ==========================================

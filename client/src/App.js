@@ -8,6 +8,8 @@ import MuroAlumnoPage from "./pages/MuroAlumnoPage";
 import CrearExamenPage from "./pages/CrearExamenPage";
 import EditarExamenPage from "./pages/EditarExamenPage";
 import AnaliticasGrupoPage from "./pages/AnaliticasGrupoPage";
+import TomarExamenPage from "./pages/TomarExamenPage";
+import ExamenesPage from "./pages/ExamenesPage"; // <--- IMPORTANTE
 
 import React, {
   useState,
@@ -11734,7 +11736,8 @@ const AulaVirtualPage = () => {
 
         {activeTab === "examenes" && (
           <div className="mt-6">
-            <CrearExamenPage />
+            {/* Cargamos la LISTA, no el creador directo */}
+            <ExamenesPage />
           </div>
         )}
 
