@@ -7040,19 +7040,57 @@ app.get("/api/muro/:grupoId/:asignaturaId", verifyToken, async (req, res) => {
   }
 });
 
-// 2. Publicar en el Muro
+// 2. Publicar en el Muro Y NOTIFICAR
 app.post("/api/muro/publicar", verifyToken, async (req, res) => {
   const { grupo_id, asignatura_id, mensaje, tipo } = req.body;
-  const usuario_id = req.user.id; // Obtenemos ID del token
+  const usuario_id = req.user.id; // El profesor que publica
+
+  const connection = await db.getConnection(); // Usamos transacción para seguridad
   try {
-    await db.query(
+    await connection.beginTransaction();
+
+    // 1. Guardar la publicación en el Muro
+    await connection.query(
       "INSERT INTO muro_publicaciones (grupo_id, asignatura_id, usuario_id, mensaje, tipo) VALUES (?, ?, ?, ?, ?)",
       [grupo_id, asignatura_id, usuario_id, mensaje, tipo || "anuncio"],
     );
-    res.status(201).send({ message: "Publicado correctamente" });
+
+    // 2. Obtener el nombre de la Asignatura (para que el mensaje sea claro)
+    const [asignaturaRows] = await connection.query(
+      "SELECT nombre FROM asignaturas WHERE id = ?",
+      [asignatura_id],
+    );
+    const nombreMateria = asignaturaRows[0]?.nombre || "una materia";
+
+    // 3. Buscar a todos los ALUMNOS de ese grupo (para avisarles)
+    const [alumnos] = await connection.query(
+      "SELECT id FROM usuarios WHERE grupo_id = ? AND rol = 'alumno'",
+      [grupo_id],
+    );
+
+    // 4. Crear la notificación para cada alumno
+    if (alumnos.length > 0) {
+      const notificacionesValues = alumnos.map((alumno) => [
+        alumno.id, // Para quién es
+        `Nueva publicación en ${nombreMateria}: "${mensaje.substring(0, 30)}..."`, // Mensaje corto
+        "muro", // Tipo
+        `/alumno/grupo/${grupo_id}/asignatura/${asignatura_id}/muro`, // Link al dar clic
+      ]);
+
+      await connection.query(
+        "INSERT INTO notificaciones (usuario_id, mensaje, tipo, link) VALUES ?",
+        [notificacionesValues],
+      );
+    }
+
+    await connection.commit(); // Confirmar cambios
+    res.status(201).send({ message: "Publicado y notificaciones enviadas" });
   } catch (err) {
-    console.error("Error al publicar en muro:", err);
-    res.status(500).send("Error al publicar");
+    await connection.rollback(); // Si falla algo, deshacer todo
+    console.error("Error al publicar y notificar:", err);
+    res.status(500).send("Error al procesar la publicación");
+  } finally {
+    connection.release();
   }
 });
 
