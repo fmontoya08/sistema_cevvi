@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useContext } from "react";
-import { useParams, Link, Eye } from "react-router-dom";
+import { useParams, Link } from "react-router-dom"; // Solo herramientas de navegación
 import axios from "axios";
 import { AuthContext } from "../App";
+// CORRECCIÓN: 'Eye' debe estar aquí junto con los otros iconos
 import {
   PlusCircle,
   FileText,
   PlayCircle,
   CheckCircle,
   Clock,
+  Eye,
 } from "lucide-react";
 
 const ExamenesPage = () => {
@@ -98,6 +100,8 @@ const ExamenesPage = () => {
                     <button className="text-gray-500 border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 text-sm font-medium">
                       Editar
                     </button>
+
+                    {/* BOTÓN VER RESULTADOS CORREGIDO */}
                     <Link
                       to={`/docente/grupo/${grupoId}/asignatura/${asignaturaId}/examen/${examen.id}/resultados`}
                       className="bg-blue-50 text-blue-600 border border-blue-100 px-4 py-2 rounded-lg hover:bg-blue-100 text-sm font-bold flex items-center gap-2"
