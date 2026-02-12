@@ -7146,28 +7146,55 @@ apiRouter.get("/examenes", verifyToken, async (req, res) => {
   }
 });
 
-// 2. CREAR EXAMEN
+// 2. CREAR EXAMEN (VERSIÓN COMPLETA: GUARDA PREGUNTAS Y OPCIONES)
 apiRouter.post("/examenes", verifyToken, async (req, res) => {
+  // Recibimos los datos del frontend
   const { titulo, descripcion, grupo_id, asignatura_id, preguntas } = req.body;
   const docente_id = req.user.id;
-  const connection = await db.getConnection();
+
+  const connection = await db.getConnection(); // Usamos transacción para que se guarde TODO o NADA
   try {
     await connection.beginTransaction();
+
+    // PASO A: Insertar la cabecera del Examen
     const [result] = await connection.query(
       "INSERT INTO examenes (titulo, descripcion, docente_id, grupo_id, asignatura_id, fecha_creacion) VALUES (?, ?, ?, ?, ?, NOW())",
       [titulo, descripcion, docente_id, grupo_id, asignatura_id],
     );
     const examenId = result.insertId;
 
-    // Aquí iría tu lógica de guardar preguntas...
-    // (Asumiendo que ya la tienes implementada en tu backend o la agregarás)
+    // PASO B: Recorrer y guardar las Preguntas
+    if (preguntas && preguntas.length > 0) {
+      for (const p of preguntas) {
+        // Insertamos la pregunta individual
+        const [resPreg] = await connection.query(
+          "INSERT INTO preguntas (examen_id, texto_pregunta, puntos, tipo) VALUES (?, ?, ?, ?)",
+          [examenId, p.texto, p.puntos, p.tipo], // 'p.texto' viene del frontend
+        );
+        const preguntaId = resPreg.insertId;
 
-    await connection.commit();
-    res.status(201).json({ message: "Examen creado", examenId });
+        // PASO C: Si es opción múltiple, guardar sus Opciones
+        if (
+          p.tipo === "opcion_multiple" &&
+          p.opciones &&
+          p.opciones.length > 0
+        ) {
+          for (const op of p.opciones) {
+            await connection.query(
+              "INSERT INTO opciones (pregunta_id, texto_opcion, es_correcta) VALUES (?, ?, ?)",
+              [preguntaId, op.texto, op.esCorrecta], // 'op.texto' y 'op.esCorrecta' vienen del frontend
+            );
+          }
+        }
+      }
+    }
+
+    await connection.commit(); // Confirmar cambios en la BD
+    res.status(201).json({ message: "Examen creado exitosamente", examenId });
   } catch (error) {
-    await connection.rollback();
-    console.error(error);
-    res.status(500).send("Error al crear examen");
+    await connection.rollback(); // Si falla algo, deshacer todo
+    console.error("Error al crear examen:", error);
+    res.status(500).send("Error al guardar el examen");
   } finally {
     connection.release();
   }
