@@ -7437,6 +7437,135 @@ apiRouter.get(
   },
 );
 
+// --- NUEVO ENDPOINT: ANALÍTICAS GLOBALES (SÁBANA DE CALIFICACIONES) ---
+apiRouter.get(
+  "/analiticas/:grupoId/:asignaturaId",
+  verifyToken,
+  async (req, res) => {
+    const { grupoId, asignaturaId } = req.params;
+
+    try {
+      // 1. Obtener LISTA DE ALUMNOS del grupo
+      const [alumnos] = await db.query(
+        `SELECT u.id, u.nombre, u.apellido_paterno, u.matricula 
+       FROM usuarios u
+       JOIN grupos_alumnos ga ON u.id = ga.alumno_id
+       WHERE ga.grupo_id = ? AND u.rol = 'alumno'
+       ORDER BY u.apellido_paterno ASC`,
+        [grupoId],
+      );
+
+      // 2. Obtener TODAS LAS COLUMNAS (Tareas y Exámenes creados)
+      const [colsTareas] = await db.query(
+        "SELECT id, titulo, fecha_entrega FROM tareas WHERE grupo_id = ? AND asignatura_id = ? ORDER BY fecha_creacion ASC",
+        [grupoId, asignaturaId],
+      );
+      const [colsExamenes] = await db.query(
+        "SELECT id, titulo FROM examenes WHERE grupo_id = ? AND asignatura_id = ?",
+        [grupoId, asignaturaId],
+      );
+
+      // 3. Obtener CALIFICACIONES (Tareas y Exámenes)
+      const [notasTareas] = await db.query(
+        `SELECT et.alumno_id, et.tarea_id, et.calificacion 
+       FROM entregas_tareas et 
+       JOIN tareas t ON et.tarea_id = t.id 
+       WHERE t.grupo_id = ? AND t.asignatura_id = ?`,
+        [grupoId, asignaturaId],
+      );
+
+      const [notasExamenes] = await db.query(
+        `SELECT ie.alumno_id, ie.examen_id, ie.calificacion 
+       FROM intentos_examen ie 
+       JOIN examenes e ON ie.examen_id = e.id 
+       WHERE e.grupo_id = ? AND e.asignatura_id = ?`,
+        [grupoId, asignaturaId],
+      );
+
+      // 4. Calcular ASISTENCIA (% de asistencia)
+      // Contamos total de sesiones de la materia
+      const [totalSesiones] = await db.query(
+        "SELECT COUNT(*) as total FROM sesiones_clase WHERE grupo_id = ? AND asignatura_id = ?",
+        [grupoId, asignaturaId],
+      );
+      const numSesiones = totalSesiones[0].total || 1; // Evitar división entre 0
+
+      // Contamos asistencias por alumno
+      const [asistencias] = await db.query(
+        `SELECT a.alumno_id, COUNT(*) as presentes 
+       FROM asistencia a
+       JOIN sesiones_clase s ON a.sesion_id = s.id
+       WHERE s.grupo_id = ? AND s.asignatura_id = ? AND a.estado = 'presente'
+       GROUP BY a.alumno_id`,
+        [grupoId, asignaturaId],
+      );
+
+      // --- PROCESAMIENTO DE DATOS EN JAVASCRIPT ---
+      // Armamos el objeto final alumno por alumno
+      const reporte = alumnos.map((alumno) => {
+        let sumaCalificaciones = 0;
+        let cantidadItems = 0;
+
+        // a) Procesar Tareas
+        const misTareas = colsTareas.map((col) => {
+          const entrega = notasTareas.find(
+            (n) => n.alumno_id === alumno.id && n.tarea_id === col.id,
+          );
+          const nota = entrega ? entrega.calificacion : 0; // 0 si no entregó
+          sumaCalificaciones += parseFloat(nota);
+          cantidadItems++;
+          return { id: col.id, nota };
+        });
+
+        // b) Procesar Exámenes
+        const misExamenes = colsExamenes.map((col) => {
+          const intento = notasExamenes.find(
+            (n) => n.alumno_id === alumno.id && n.examen_id === col.id,
+          );
+          const nota = intento ? intento.calificacion : 0;
+          sumaCalificaciones += parseFloat(nota);
+          cantidadItems++;
+          return { id: col.id, nota };
+        });
+
+        // c) Procesar Asistencia
+        const dataAsistencia = asistencias.find(
+          (a) => a.alumno_id === alumno.id,
+        );
+        const presentes = dataAsistencia ? dataAsistencia.presentes : 0;
+        const porcentajeAsistencia = Math.round(
+          (presentes / numSesiones) * 100,
+        );
+
+        // d) Promedio General (Simple)
+        const promedio =
+          cantidadItems > 0
+            ? (sumaCalificaciones / cantidadItems).toFixed(1)
+            : 0;
+
+        return {
+          id: alumno.id,
+          nombre: `${alumno.nombre} ${alumno.apellido_paterno}`,
+          matricula: alumno.matricula,
+          tareas: misTareas,
+          examenes: misExamenes,
+          asistencia: porcentajeAsistencia,
+          promedio,
+        };
+      });
+
+      res.json({
+        columnasTareas: colsTareas,
+        columnasExamenes: colsExamenes,
+        filas: reporte,
+      });
+    } catch (error) {
+      console.error(error);
+      res.status(500).send("Error al generar analíticas");
+    }
+  },
+);
+
 // --- INICIO DEL SERVIDOR ---
 const PORT = 3001;
 // ==========================================
