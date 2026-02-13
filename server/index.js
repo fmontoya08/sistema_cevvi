@@ -7237,16 +7237,19 @@ apiRouter.get(
   verifyToken,
   async (req, res) => {
     try {
+      // CORRECCIÓN: Usamos "AS id_intento" para que el frontend lo reconozca
       const [rows] = await db.query(
-        `SELECT i.*, u.nombre, u.apellido_paterno 
-       FROM intentos_examen i
-       JOIN usuarios u ON i.alumno_id = u.id
-       WHERE i.examen_id = ? 
-       ORDER BY i.fecha_intento DESC`,
+        `SELECT i.id AS id_intento, i.calificacion, i.fecha_intento, 
+               u.nombre, u.apellido_paterno 
+         FROM intentos_examen i
+         JOIN usuarios u ON i.alumno_id = u.id
+         WHERE i.examen_id = ? 
+         ORDER BY i.fecha_intento DESC`,
         [req.params.examenId],
       );
       res.json(rows);
     } catch (error) {
+      console.error(error);
       res.status(500).send("Error al obtener resultados");
     }
   },
