@@ -10079,7 +10079,7 @@ const DetalleCursoDocentePage = () => {
 
       // 1. Cargar Alumnos
       const { data: dataAlumnos } = await axios.get(
-        `https://api-universidad-c5o8.onrender.com/api/docente/grupo/${grupoId}/asignatura/${asignaturaId}/alumnos`,
+        `https://api-universidad-c5o8.onrender.com/api/docente/v2/grupo/${grupoId}/asignatura/${asignaturaId}/alumnos`,
         { headers: { Authorization: `Bearer ${token}` } },
       );
 
