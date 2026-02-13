@@ -7457,7 +7457,8 @@ apiRouter.get(
 
       // 2. Obtener TODAS LAS COLUMNAS (Tareas y Exámenes creados)
       const [colsTareas] = await db.query(
-        "SELECT id, titulo, fecha_entrega FROM tareas WHERE grupo_id = ? AND asignatura_id = ? ORDER BY fecha_creacion ASC",
+        // CORRECCIÓN: Usamos "fecha_limite" que es el nombre real en tu BD
+        "SELECT id, titulo, fecha_limite FROM tareas WHERE grupo_id = ? AND asignatura_id = ? ORDER BY fecha_creacion ASC",
         [grupoId, asignaturaId],
       );
       const [colsExamenes] = await db.query(
