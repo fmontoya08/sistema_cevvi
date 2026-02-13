@@ -53,7 +53,7 @@ const ResultadosExamenPage = () => {
                   {new Date(res.fecha_intento).toLocaleString()}
                 </td>
                 <td className="p-4 font-bold text-gray-800">
-                  {res.calificacion} pts
+                  {res.calificacion} / {res.puntos_maximos}
                 </td>
                 <td className="p-4 text-right">
                   {/* CORRECCIÓN: Usamos res.id_intento en el link */}

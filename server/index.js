@@ -7231,21 +7231,21 @@ apiRouter.get("/examenes/:examenId/resolver", verifyToken, async (req, res) => {
   }
 });
 
-// 4. VER RESULTADOS (Ruta Específica - DEBE IR ANTES DE LA GENÉRICA)
+// 3. VER RESULTADOS DE UN EXAMEN (DOCENTE) - Con Total de Puntos
 apiRouter.get(
   "/examenes/:examenId/resultados",
   verifyToken,
   async (req, res) => {
     try {
-      // CORRECCIÓN: Usamos "AS id_intento" para que el frontend lo reconozca
       const [rows] = await db.query(
         `SELECT i.id AS id_intento, i.calificacion, i.fecha_intento, 
-               u.nombre, u.apellido_paterno 
-         FROM intentos_examen i
-         JOIN usuarios u ON i.alumno_id = u.id
-         WHERE i.examen_id = ? 
-         ORDER BY i.fecha_intento DESC`,
-        [req.params.examenId],
+              u.nombre, u.apellido_paterno,
+              (SELECT IFNULL(SUM(puntos), 0) FROM preguntas WHERE examen_id = ?) AS puntos_maximos
+       FROM intentos_examen i
+       JOIN usuarios u ON i.alumno_id = u.id
+       WHERE i.examen_id = ? 
+       ORDER BY i.fecha_intento DESC`,
+        [req.params.examenId, req.params.examenId], // <--- OJO: Se pasa el ID dos veces
       );
       res.json(rows);
     } catch (error) {
@@ -7400,7 +7400,7 @@ apiRouter.get("/intentos/:intentoId", verifyToken, async (req, res) => {
   }
 });
 
-// 8. OBTENER EXÁMENES POR GRUPO (Ahora trae el estado de calificación)
+// 8. OBTENER EXÁMENES POR GRUPO (Con Total de Puntos)
 apiRouter.get(
   "/examenes/:grupoId/:asignaturaId",
   verifyToken,
@@ -7413,7 +7413,8 @@ apiRouter.get(
         `SELECT e.*, 
        (SELECT COUNT(*) FROM intentos_examen i WHERE i.examen_id = e.id AND i.alumno_id = ?) as ya_contestado,
        (SELECT calificacion FROM intentos_examen i WHERE i.examen_id = e.id AND i.alumno_id = ? LIMIT 1) as mi_calificacion,
-       (SELECT estado FROM intentos_examen i WHERE i.examen_id = e.id AND i.alumno_id = ? LIMIT 1) as estado_revision
+       (SELECT estado FROM intentos_examen i WHERE i.examen_id = e.id AND i.alumno_id = ? LIMIT 1) as estado_revision,
+       (SELECT IFNULL(SUM(puntos), 0) FROM preguntas WHERE examen_id = e.id) as puntos_maximos
        FROM examenes e 
        WHERE e.grupo_id = ? AND e.asignatura_id = ? 
        ORDER BY e.fecha_creacion DESC`,
@@ -7423,8 +7424,9 @@ apiRouter.get(
       const examenesProcesados = examenes.map((ex) => ({
         ...ex,
         contestado: ex.ya_contestado > 0,
-        calificacion: Math.round(ex.mi_calificacion), // Aseguramos entero al enviar
-        estado: ex.estado_revision, // 'pendiente' o 'calificado'
+        calificacion: Math.round(ex.mi_calificacion),
+        estado: ex.estado_revision,
+        puntos_maximos: ex.puntos_maximos, // <--- Enviamos el total al frontend
       }));
 
       res.json(examenesProcesados);

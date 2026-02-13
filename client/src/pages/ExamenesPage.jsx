@@ -102,8 +102,10 @@ const ExamenesPage = () => {
                         // CASO A: Ya revisado por el docente -> Muestra NOTA ENTERA
                         <>
                           <span className="text-green-600 font-bold flex items-center gap-2 bg-green-50 px-4 py-2 rounded-lg border border-green-100">
-                            <CheckCircle size={20} /> Calificación:{" "}
-                            {Math.round(examen.calificacion)}
+                            <CheckCircle size={20} />
+                            Calificación: {Math.round(
+                              examen.calificacion,
+                            )} / {examen.puntos_maximos}
                           </span>
                           <span className="text-xs text-green-600 mt-1">
                             Examen Calificado
