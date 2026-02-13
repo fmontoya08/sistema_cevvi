@@ -7371,11 +7371,11 @@ apiRouter.put("/examenes/calificar-pregunta", verifyToken, async (req, res) => {
   }
 });
 
-// 7. VER DETALLE INTENTO
+// 7. VER DETALLE INTENTO (CORREGIDA PARA VER PUNTOS MÁXIMOS)
 apiRouter.get("/intentos/:intentoId", verifyToken, async (req, res) => {
   try {
     const [info] = await db.query(
-      `SELECT i.*, u.nombre, u.apellido_paterno, e.titulo
+      `SELECT i.id, i.calificacion, u.nombre, u.apellido_paterno, e.titulo
        FROM intentos_examen i
        JOIN usuarios u ON i.alumno_id = u.id
        JOIN examenes e ON i.examen_id = e.id
@@ -7385,8 +7385,9 @@ apiRouter.get("/intentos/:intentoId", verifyToken, async (req, res) => {
 
     if (info.length === 0) return res.status(404).send("No encontrado");
 
+    // CORRECCIÓN: Agregamos "p.puntos" al SELECT para saber cuánto vale la pregunta
     const [respuestas] = await db.query(
-      `SELECT r.*, p.texto_pregunta, p.tipo, op.texto_opcion 
+      `SELECT r.*, p.texto_pregunta, p.tipo, p.puntos as puntos_maximos, op.texto_opcion 
        FROM respuestas_alumno r
        JOIN preguntas p ON r.pregunta_id = p.id
        LEFT JOIN opciones op ON r.opcion_id = op.id
@@ -7404,17 +7405,34 @@ apiRouter.get("/intentos/:intentoId", verifyToken, async (req, res) => {
 // 8. OBTENER EXÁMENES POR GRUPO Y MATERIA (Ruta Genérica)
 // --- ¡IMPORTANTE! ESTA RUTA DEBE IR AL FINAL DE TODAS LAS RUTAS DE EXÁMENES ---
 // Si la pones antes, se "comerá" las peticiones a /resolver o /resultados
+// 8. OBTENER EXÁMENES POR GRUPO Y MATERIA (CON ESTADO DE CONTESTADO)
 apiRouter.get(
   "/examenes/:grupoId/:asignaturaId",
   verifyToken,
   async (req, res) => {
     const { grupoId, asignaturaId } = req.params;
+    const alumnoId = req.user.id; // Obtenemos el ID de quien pregunta
+
     try {
+      // CORRECCIÓN: Hacemos una subconsulta para ver si ESTE alumno ya tiene un intento
       const [examenes] = await db.query(
-        "SELECT * FROM examenes WHERE grupo_id = ? AND asignatura_id = ? ORDER BY fecha_creacion DESC",
-        [grupoId, asignaturaId],
+        `SELECT e.*, 
+       (SELECT COUNT(*) FROM intentos_examen i WHERE i.examen_id = e.id AND i.alumno_id = ?) as ya_contestado,
+       (SELECT calificacion FROM intentos_examen i WHERE i.examen_id = e.id AND i.alumno_id = ? LIMIT 1) as mi_calificacion
+       FROM examenes e 
+       WHERE e.grupo_id = ? AND e.asignatura_id = ? 
+       ORDER BY e.fecha_creacion DESC`,
+        [alumnoId, alumnoId, grupoId, asignaturaId],
       );
-      res.json(examenes);
+
+      // Convertimos el 1/0 de SQL a true/false para React
+      const examenesProcesados = examenes.map((ex) => ({
+        ...ex,
+        contestado: ex.ya_contestado > 0, // Si es mayor a 0, es true
+        calificacion: ex.mi_calificacion, // Mandamos la nota para que la vea
+      }));
+
+      res.json(examenesProcesados);
     } catch (error) {
       console.error("Error al obtener exámenes del curso:", error);
       res.status(500).send("Error al obtener exámenes");
