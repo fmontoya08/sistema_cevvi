@@ -7368,10 +7368,9 @@ apiRouter.put("/examenes/calificar-pregunta", verifyToken, async (req, res) => {
   }
 });
 
-// 7. VER DETALLE INTENTO (CORREGIDO: Incluye puntos máximos de cada pregunta)
+// 7. VER DETALLE INTENTO (Corregido)
 apiRouter.get("/intentos/:intentoId", verifyToken, async (req, res) => {
   try {
-    // 1. Datos generales del intento
     const [info] = await db.query(
       `SELECT i.id, i.calificacion, i.estado, u.nombre, u.apellido_paterno, e.titulo
        FROM intentos_examen i
@@ -7383,13 +7382,10 @@ apiRouter.get("/intentos/:intentoId", verifyToken, async (req, res) => {
 
     if (info.length === 0) return res.status(404).send("No encontrado");
 
-    // 2. Respuestas con el VALOR MÁXIMO de la pregunta
+    // --- AQUÍ ESTABA EL ERROR ---
+    // Faltaba agregar "p.puntos" en la lista de cosas que pedimos a la base de datos
     const [respuestas] = await db.query(
-      `SELECT r.*, 
-              p.texto_pregunta, 
-              p.tipo, 
-              p.puntos AS puntos_maximos,  /* <--- ESTA ES LA CLAVE */
-              op.texto_opcion 
+      `SELECT r.*, p.texto_pregunta, p.tipo, p.puntos, op.texto_opcion 
        FROM respuestas_alumno r
        JOIN preguntas p ON r.pregunta_id = p.id
        LEFT JOIN opciones op ON r.opcion_id = op.id
