@@ -7437,7 +7437,7 @@ apiRouter.get(
   },
 );
 
-// --- NUEVO ENDPOINT: ANALÍTICAS GLOBALES (SÁBANA DE CALIFICACIONES) ---
+// --- NUEVO ENDPOINT: ANALÍTICAS GLOBALES (ADAPTADO A TU BASE DE DATOS) ---
 apiRouter.get(
   "/analiticas/:grupoId/:asignaturaId",
   verifyToken,
@@ -7446,6 +7446,7 @@ apiRouter.get(
 
     try {
       // 1. Obtener LISTA DE ALUMNOS del grupo
+      // CORRECCIÓN: Tabla "grupo_alumnos" en lugar de "grupos_alumnos"
       const [alumnos] = await db.query(
         `SELECT u.id, u.nombre, u.apellido_paterno, u.matricula 
        FROM usuarios u
@@ -7456,8 +7457,8 @@ apiRouter.get(
       );
 
       // 2. Obtener TODAS LAS COLUMNAS (Tareas y Exámenes creados)
+      // CORRECCIÓN: "fecha_limite" en lugar de "fecha_entrega"
       const [colsTareas] = await db.query(
-        // CORRECCIÓN: Usamos "fecha_limite" que es el nombre real en tu BD
         "SELECT id, titulo, fecha_limite FROM tareas WHERE grupo_id = ? AND asignatura_id = ? ORDER BY fecha_creacion ASC",
         [grupoId, asignaturaId],
       );
@@ -7467,10 +7468,11 @@ apiRouter.get(
       );
 
       // 3. Obtener CALIFICACIONES (Tareas y Exámenes)
+      // CORRECCIÓN: Tabla "tareas_entregas" en lugar de "entregas_tareas"
       const [notasTareas] = await db.query(
-        `SELECT et.alumno_id, et.tarea_id, et.calificacion 
-       FROM entregas_tareas et 
-       JOIN tareas t ON et.tarea_id = t.id 
+        `SELECT te.alumno_id, te.tarea_id, te.calificacion 
+       FROM tareas_entregas te 
+       JOIN tareas t ON te.tarea_id = t.id 
        WHERE t.grupo_id = ? AND t.asignatura_id = ?`,
         [grupoId, asignaturaId],
       );
@@ -7484,25 +7486,24 @@ apiRouter.get(
       );
 
       // 4. Calcular ASISTENCIA (% de asistencia)
-      // Contamos total de sesiones de la materia
+      // CORRECCIÓN: Tabla "clases_sesiones" en lugar de "sesiones_clase"
       const [totalSesiones] = await db.query(
-        "SELECT COUNT(*) as total FROM sesiones_clase WHERE grupo_id = ? AND asignatura_id = ?",
+        "SELECT COUNT(*) as total FROM clases_sesiones WHERE grupo_id = ? AND asignatura_id = ?",
         [grupoId, asignaturaId],
       );
       const numSesiones = totalSesiones[0].total || 1; // Evitar división entre 0
 
-      // Contamos asistencias por alumno
+      // CORRECCIÓN: Tabla "clases_sesiones" y campo "estatus" (no "estado")
       const [asistencias] = await db.query(
         `SELECT a.alumno_id, COUNT(*) as presentes 
        FROM asistencia a
-       JOIN sesiones_clase s ON a.sesion_id = s.id
-       WHERE s.grupo_id = ? AND s.asignatura_id = ? AND a.estado = 'presente'
+       JOIN clases_sesiones s ON a.sesion_id = s.id
+       WHERE s.grupo_id = ? AND s.asignatura_id = ? AND a.estatus = 'presente'
        GROUP BY a.alumno_id`,
         [grupoId, asignaturaId],
       );
 
-      // --- PROCESAMIENTO DE DATOS EN JAVASCRIPT ---
-      // Armamos el objeto final alumno por alumno
+      // --- PROCESAMIENTO DE DATOS ---
       const reporte = alumnos.map((alumno) => {
         let sumaCalificaciones = 0;
         let cantidadItems = 0;
@@ -7512,8 +7513,8 @@ apiRouter.get(
           const entrega = notasTareas.find(
             (n) => n.alumno_id === alumno.id && n.tarea_id === col.id,
           );
-          const nota = entrega ? entrega.calificacion : 0; // 0 si no entregó
-          sumaCalificaciones += parseFloat(nota);
+          const nota = entrega ? entrega.calificacion : 0;
+          sumaCalificaciones += parseFloat(nota || 0);
           cantidadItems++;
           return { id: col.id, nota };
         });
@@ -7524,7 +7525,7 @@ apiRouter.get(
             (n) => n.alumno_id === alumno.id && n.examen_id === col.id,
           );
           const nota = intento ? intento.calificacion : 0;
-          sumaCalificaciones += parseFloat(nota);
+          sumaCalificaciones += parseFloat(nota || 0);
           cantidadItems++;
           return { id: col.id, nota };
         });
@@ -7538,7 +7539,7 @@ apiRouter.get(
           (presentes / numSesiones) * 100,
         );
 
-        // d) Promedio General (Simple)
+        // d) Promedio General
         const promedio =
           cantidadItems > 0
             ? (sumaCalificaciones / cantidadItems).toFixed(1)
