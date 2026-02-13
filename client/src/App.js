@@ -97,6 +97,7 @@ import {
   AlertCircle,
   Loader,
   Folder,
+  PlusCircle,
 } from "lucide-react";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
@@ -10058,167 +10059,249 @@ const DocenteDashboardPage = () => {
   );
 };
 
-// --- ESTE ES EL COMPONENTE REFACTORIZADO ---
+// --- COMPONENTE DETALLE CURSO (CORREGIDO: ESTILO USUARIOS Y RUTA ALUMNOS) ---
 const DetalleCursoDocentePage = () => {
   const { grupoId, asignaturaId } = useParams();
+  const navigate = useNavigate();
   const [alumnos, setAlumnos] = useState([]);
   const [cursoInfo, setCursoInfo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
-  // El estado ahora es un objeto para manejar todas las calificaciones a la vez
+  // Estados para calificación
   const [calificaciones, setCalificaciones] = useState({});
-  const [originalCalificaciones, setOriginalCalificaciones] = useState({});
+  const [promediosSistema, setPromediosSistema] = useState({});
 
-  const fetchAlumnos = useCallback(async () => {
+  const fetchDatos = useCallback(async () => {
     try {
       setLoading(true);
-      // Esta ruta es la del DOCENTE
-      const { data } = await api.get(
-        `/docente/grupo/${grupoId}/asignatura/${asignaturaId}/alumnos`,
-      );
-      setAlumnos(data.alumnos);
-      setCursoInfo(data.cursoInfo);
+      const token = localStorage.getItem("token");
 
-      // Inicializa el estado 'calificaciones' con los datos de la API
-      const initialCalificaciones = data.alumnos.reduce((acc, alumno) => {
-        acc[alumno.id] =
-          alumno.calificacion !== null ? String(alumno.calificacion) : "";
-        return acc;
-      }, {});
+      // 1. Cargar Alumnos (Asegúrate de que la ruta en index.js exista)
+      const { data: dataAlumnos } = await axios.get(
+        `https://api-universidad-c5o8.onrender.com/api/docente/grupo/${grupoId}/asignatura/${asignaturaId}/alumnos`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+
+      // 2. Cargar Analíticas
+      const { data: dataAnaliticas } = await axios.get(
+        `https://api-universidad-c5o8.onrender.com/api/analiticas/${grupoId}/${asignaturaId}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+
+      setAlumnos(dataAlumnos.alumnos);
+      setCursoInfo(dataAlumnos.cursoInfo);
+
+      // Mapear promedios
+      const mapaPromedios = {};
+      dataAnaliticas.filas.forEach((fila) => {
+        mapaPromedios[fila.id] = fila.promedio;
+      });
+      setPromediosSistema(mapaPromedios);
+
+      // Inicializar inputs (prioridad: calificación guardada > promedio sistema)
+      const initialCalificaciones = {};
+      dataAlumnos.alumnos.forEach((alumno) => {
+        if (alumno.calificacion !== null && alumno.calificacion !== "") {
+          initialCalificaciones[alumno.id] = String(alumno.calificacion);
+        } else {
+          initialCalificaciones[alumno.id] = String(
+            mapaPromedios[alumno.id] || "",
+          );
+        }
+      });
       setCalificaciones(initialCalificaciones);
-      // "Congelamos" el estado original para poder comparar después
-      setOriginalCalificaciones(initialCalificaciones);
     } catch (error) {
-      console.error("Error al cargar alumnos", error);
+      console.error("Error al cargar datos", error);
     } finally {
       setLoading(false);
     }
   }, [grupoId, asignaturaId]);
 
   useEffect(() => {
-    fetchAlumnos();
-  }, [fetchAlumnos]);
+    fetchDatos();
+  }, [fetchDatos]);
 
-  // Maneja el cambio de un solo input
   const handleCalificacionChange = (alumnoId, valor) => {
     setCalificaciones((prev) => ({ ...prev, [alumnoId]: valor }));
   };
 
-  // --- **** AQUÍ ESTÁ LA CORRECCIÓN **** ---
-  // --- ESTA ES LA FUNCIÓN QUE CORREGÍ ---
   const handleGuardarTodo = async () => {
     setIsSaving(true);
-
-    // 1. Compara el estado 'calificaciones' con 'originalCalificaciones'
-    const calificacionesArray = Object.keys(calificaciones)
-      .filter((alumnoId) => {
-        const valorActual = calificaciones[alumnoId];
-        const valorOriginal = originalCalificaciones[alumnoId];
-
-        // Solo incluiremos la calificación si:
-        // 1. No está vacía (es nueva o modificada)
-        // 2. Y es DIFERENTE del valor original que cargó la página
-        return valorActual !== "" && valorActual !== valorOriginal;
-      })
-      .map((alumnoId) => ({
-        alumno_id: parseInt(alumnoId),
-        calificacion: calificaciones[alumnoId],
-      }));
-
-    // Si no hay calificaciones nuevas o modificadas, no hacemos nada
-    if (calificacionesArray.length === 0) {
-      alert("No hay calificaciones nuevas o modificadas para guardar.");
-      setIsSaving(false);
-      return;
-    }
+    const calificacionesArray = Object.keys(calificaciones).map((alumnoId) => ({
+      alumno_id: parseInt(alumnoId),
+      calificacion: calificaciones[alumnoId],
+    }));
 
     try {
-      // 2. Usar el NUEVO endpoint de "Guardar Todo"
-      await api.post("/calificar-grupo-completo", {
-        asignatura_id: asignaturaId,
-        grupo_id: grupoId, // <-- AÑADE ESTA LÍNEA (grupoId viene de useParams)
-        calificaciones: calificacionesArray,
-      });
-      alert("Calificaciones guardadas con éxito.");
-
-      // --- ¡IMPORTANTE! ---
-      // Sincronizamos el estado 'original' con el 'actual'
-      // para evitar re-envíos si el usuario vuelve a dar clic.
-      setOriginalCalificaciones(calificaciones);
-
-      fetchAlumnos(); // Recargar los datos
+      const token = localStorage.getItem("token");
+      await axios.post(
+        "https://api-universidad-c5o8.onrender.com/api/calificaciones/guardar-acta",
+        { grupoId, asignaturaId, calificaciones: calificacionesArray },
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      alert("Acta guardada correctamente.");
+      fetchDatos();
     } catch (error) {
-      console.error("Error al guardar calificaciones", error);
-      alert("Error al guardar: " + (error.response?.data?.message || "Error"));
+      alert("Error al guardar.");
     } finally {
       setIsSaving(false);
     }
   };
 
-  if (loading) return <p>Cargando...</p>;
+  if (loading) return <div className="p-10 text-center">Cargando...</div>;
 
   return (
-    <div>
-      <Link
-        to="/docente/dashboard"
-        className="flex items-center text-principal mb-6 hover:underline"
-      >
-        <ArrowLeft size={18} className="mr-2" />
-        Volver a Mis Cursos
-      </Link>
-      <h2 className="text-3xl font-bold text-gray-800 mb-2">
-        {cursoInfo.nombre_asignatura}
-      </h2>
-      <p className="text-lg text-secundario mb-6">
-        Grupo: {cursoInfo.nombre_grupo}
-      </p>
+    <div className="p-6 bg-gray-50 min-h-screen">
+      <div className="flex items-center gap-4 mb-6">
+        <button
+          onClick={() => navigate("/docente/dashboard")}
+          className="flex items-center text-gray-500 hover:text-blue-600"
+        >
+          <ArrowLeft size={20} className="mr-1" /> Volver
+        </button>
+        <div>
+          <h2 className="text-2xl font-bold text-gray-800">
+            {cursoInfo?.nombre_asignatura}
+          </h2>
+          <p className="text-gray-500">Grupo: {cursoInfo?.nombre_grupo}</p>
+        </div>
+      </div>
 
-      <div className="bg-white p-6 rounded-lg shadow">
-        <h3 className="text-xl font-bold mb-4">Lista de Alumnos</h3>
-        <table className="w-full table-auto">
-          <thead className="text-left bg-gray-50">
+      {/* --- BOTONES DE ACCIÓN RÁPIDA --- */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <Link
+          to={`/docente/grupo/${grupoId}/asignatura/${asignaturaId}/aula`}
+          className="bg-white p-4 rounded-xl shadow-sm hover:shadow-md border border-gray-200 flex flex-col items-center gap-2 group"
+        >
+          <div className="p-3 bg-blue-50 text-blue-600 rounded-full group-hover:bg-blue-100">
+            <Book size={24} />
+          </div>
+          <span className="font-bold text-gray-700">Aula Virtual</span>
+        </Link>
+        <Link
+          to={`/docente/grupo/${grupoId}/asignatura/${asignaturaId}/analiticas`}
+          className="bg-white p-4 rounded-xl shadow-sm hover:shadow-md border border-gray-200 flex flex-col items-center gap-2 group"
+        >
+          <div className="p-3 bg-purple-50 text-purple-600 rounded-full group-hover:bg-purple-100">
+            <Award size={24} />
+          </div>
+          <span className="font-bold text-gray-700">Analíticas</span>
+        </Link>
+        <Link
+          to={`/docente/grupo/${grupoId}/asignatura/${asignaturaId}/examen/crear`}
+          className="bg-white p-4 rounded-xl shadow-sm hover:shadow-md border border-gray-200 flex flex-col items-center gap-2 group"
+        >
+          <div className="p-3 bg-green-50 text-green-600 rounded-full group-hover:bg-green-100">
+            <PlusCircle size={24} />
+          </div>
+          <span className="font-bold text-gray-700">Crear Examen</span>
+        </Link>
+        <Link
+          to={`/docente/grupo/${grupoId}/asignatura/${asignaturaId}/muro`}
+          className="bg-white p-4 rounded-xl shadow-sm hover:shadow-md border border-gray-200 flex flex-col items-center gap-2 group"
+        >
+          <div className="p-3 bg-yellow-50 text-yellow-600 rounded-full group-hover:bg-yellow-100">
+            <Users size={24} />
+          </div>
+          <span className="font-bold text-gray-700">Muro</span>
+        </Link>
+      </div>
+
+      {/* --- ACTA DE CALIFICACIONES (ESTILO USUARIOS) --- */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="p-6 border-b border-gray-100">
+          <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+            <GraduationCap size={20} className="text-blue-600" /> Acta de
+            Calificaciones
+          </h3>
+        </div>
+
+        <table className="w-full">
+          <thead className="bg-gray-50 text-left">
             <tr>
-              <th className="px-4 py-2">Nombre del Alumno</th>
-              <th className="px-4 py-2 w-48">Calificación (0-100)</th>
+              <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">
+                Alumno
+              </th>
+              <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase text-center">
+                Promedio
+                <br />
+                Sugerido
+              </th>
+              <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase text-center w-40">
+                Calificación
+                <br />
+                Final
+              </th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="divide-y divide-gray-100">
             {alumnos.map((alumno) => (
-              <tr key={alumno.id} className="border-b">
-                <td className="px-4 py-2">{alumno.nombre_completo}</td>
-                <td>
+              <tr key={alumno.id} className="hover:bg-gray-50">
+                {/* COLUMNA ALUMNO: FOTO + DATOS (ESTILO USUARIOS) */}
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="flex items-center">
+                    <div className="flex-shrink-0 h-10 w-10">
+                      <img
+                        className="h-10 w-10 rounded-full object-cover border border-gray-200"
+                        src={
+                          alumno.foto_perfil
+                            ? `https://api-universidad-c5o8.onrender.com${alumno.foto_perfil}`
+                            : `https://ui-avatars.com/api/?name=${alumno.nombre}+${alumno.apellido_paterno}&background=random`
+                        }
+                        alt=""
+                      />
+                    </div>
+                    <div className="ml-4">
+                      <div className="text-sm font-bold text-gray-900">
+                        {alumno.nombre} {alumno.apellido_paterno}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {alumno.matricula}
+                      </div>
+                    </div>
+                  </div>
+                </td>
+
+                <td className="px-6 py-4 text-center">
+                  <span className="text-gray-400 font-medium text-sm">
+                    {promediosSistema[alumno.id] || "-"}
+                  </span>
+                </td>
+
+                <td className="px-6 py-4">
                   <input
                     type="number"
                     min="0"
                     max="100"
-                    step="0.1"
-                    value={calificaciones[alumno.id] || ""} // Usar el estado
+                    value={calificaciones[alumno.id] || ""}
                     onChange={(e) =>
                       handleCalificacionChange(alumno.id, e.target.value)
                     }
-                    className="w-full px-3 py-1 border rounded-md"
+                    className="w-full text-center font-bold border border-gray-300 rounded-lg py-2 px-3 focus:ring-2 focus:ring-blue-500 outline-none"
+                    placeholder="0"
                   />
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-        {/* --- NUEVO BOTÓN "GUARDAR TODO" --- */}
-        <div className="flex justify-end mt-6">
+
+        <div className="p-6 bg-gray-50 border-t border-gray-200 flex justify-end">
           <button
             onClick={handleGuardarTodo}
             disabled={isSaving}
-            className="flex items-center px-6 py-2 font-semibold text-white bg-principal rounded-md hover:opacity-90 disabled:bg-gray-400"
+            className="flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-blue-700 disabled:bg-gray-400 shadow-md transition-all active:scale-95"
           >
-            <Save size={18} className="mr-2" />
-            {isSaving ? "Guardando..." : "Guardar Todas las Calificaciones"}
+            <Save size={20} />
+            {isSaving ? "Guardando..." : "Guardar Acta Final"}
           </button>
         </div>
       </div>
     </div>
   );
 };
+
 const AdminCalificarPage = () => {
   const { grupoId, asignaturaId } = useParams();
   const [alumnos, setAlumnos] = useState([]);

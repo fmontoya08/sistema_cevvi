@@ -7872,6 +7872,45 @@ adminRouter.get("/email/mensaje/:uid", async (req, res) => {
   }
 });
 
+// ---------------------------------------------------------
+// RUTA FALTANTE: OBTENER ALUMNOS (CON FOTO Y MATRÍCULA)
+// ---------------------------------------------------------
+apiRouter.get(
+  "/docente/grupo/:grupoId/asignatura/:asignaturaId/alumnos",
+  verifyToken,
+  async (req, res) => {
+    const { grupoId, asignaturaId } = req.params;
+    try {
+      // 1. Obtener info del curso (para el título)
+      const [info] = await db.query(
+        `SELECT a.nombre as nombre_asignatura, g.nombre as nombre_grupo
+       FROM asignaturas a, grupos g
+       WHERE a.id = ? AND g.id = ?`,
+        [asignaturaId, grupoId],
+      );
+
+      // 2. Obtener lista de alumnos con FOTO, MATRÍCULA y CALIFICACIÓN
+      const [alumnos] = await db.query(
+        `SELECT u.id, u.nombre, u.apellido_paterno, u.matricula, u.foto_perfil, c.calificacion
+       FROM grupo_alumnos ga
+       JOIN usuarios u ON ga.alumno_id = u.id
+       LEFT JOIN calificaciones c ON c.alumno_id = u.id AND c.asignatura_id = ? AND c.grupo_id = ?
+       WHERE ga.grupo_id = ? AND u.rol = 'alumno'
+       ORDER BY u.apellido_paterno ASC`,
+        [asignaturaId, grupoId, grupoId],
+      );
+
+      res.json({
+        cursoInfo: info[0],
+        alumnos: alumnos,
+      });
+    } catch (error) {
+      console.error(error);
+      res.status(500).send("Error al obtener alumnos");
+    }
+  },
+);
+
 app.listen(PORT, () => {
   console.log(`Servidor corriendo en http://localhost:${PORT}`);
 });
