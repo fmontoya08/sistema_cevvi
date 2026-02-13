@@ -45,16 +45,17 @@ app.use("/uploads", express.static(uploadsDir));
 // ---------------------------------------------------------
 const webDir = path.join(__dirname, "publichtml/plataforma");
 
-// 1. Servir archivos estáticos (Aquí es donde busca el logo.png)
+// 1. Servir archivos estáticos
 app.use(express.static(webDir));
 
 // 2. Evitar errores al recargar la página (SPA)
-app.get("*", (req, res, next) => {
+// CORRECCIÓN: Usamos /.*/ en lugar de "*" para compatibilidad con Node 22
+app.get(/.*/, (req, res, next) => {
   // Si piden algo de la API o Uploads, dejamos que pase
   if (req.path.startsWith("/api") || req.path.startsWith("/uploads")) {
     return next();
   }
-  // Si no, enviamos la página web (tu React)
+  // Si no, enviamos la página web
   res.sendFile(path.join(webDir, "index.html"));
 });
 // ---------------------------------------------------------
