@@ -40,26 +40,6 @@ if (!fs.existsSync(uploadsDir)) {
 }
 app.use("/uploads", express.static(uploadsDir));
 
-// ---------------------------------------------------------
-// SOLUCIÓN PARA QUE SE VEA EL LOGO Y LA WEB
-// ---------------------------------------------------------
-const webDir = path.join(__dirname, "publichtml/plataforma");
-
-// 1. Servir archivos estáticos
-app.use(express.static(webDir));
-
-// 2. Evitar errores al recargar la página (SPA)
-// CORRECCIÓN: Usamos /.*/ en lugar de "*" para compatibilidad con Node 22
-app.get(/.*/, (req, res, next) => {
-  // Si piden algo de la API o Uploads, dejamos que pase
-  if (req.path.startsWith("/api") || req.path.startsWith("/uploads")) {
-    return next();
-  }
-  // Si no, enviamos la página web
-  res.sendFile(path.join(webDir, "index.html"));
-});
-// ---------------------------------------------------------
-
 // Directorio de TAREAS
 const tareasDir = path.join(__dirname, "uploads/tareas");
 if (!fs.existsSync(tareasDir)) {
