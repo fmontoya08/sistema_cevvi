@@ -10059,7 +10059,7 @@ const DocenteDashboardPage = () => {
   );
 };
 
-// --- COMPONENTE DETALLE CURSO (CORREGIDO: ESTILO USUARIOS Y RUTA ALUMNOS) ---
+// --- COMPONENTE CORREGIDO Y DEFINITIVO ---
 const DetalleCursoDocentePage = () => {
   const { grupoId, asignaturaId } = useParams();
   const navigate = useNavigate();
@@ -10077,7 +10077,7 @@ const DetalleCursoDocentePage = () => {
       setLoading(true);
       const token = localStorage.getItem("token");
 
-      // 1. Cargar Alumnos (Asegúrate de que la ruta en index.js exista)
+      // 1. Cargar Alumnos
       const { data: dataAlumnos } = await axios.get(
         `https://api-universidad-c5o8.onrender.com/api/docente/grupo/${grupoId}/asignatura/${asignaturaId}/alumnos`,
         { headers: { Authorization: `Bearer ${token}` } },
@@ -10094,12 +10094,14 @@ const DetalleCursoDocentePage = () => {
 
       // Mapear promedios
       const mapaPromedios = {};
-      dataAnaliticas.filas.forEach((fila) => {
-        mapaPromedios[fila.id] = fila.promedio;
-      });
+      if (dataAnaliticas && dataAnaliticas.filas) {
+        dataAnaliticas.filas.forEach((fila) => {
+          mapaPromedios[fila.id] = fila.promedio;
+        });
+      }
       setPromediosSistema(mapaPromedios);
 
-      // Inicializar inputs (prioridad: calificación guardada > promedio sistema)
+      // Inicializar inputs
       const initialCalificaciones = {};
       dataAlumnos.alumnos.forEach((alumno) => {
         if (alumno.calificacion !== null && alumno.calificacion !== "") {
@@ -10226,7 +10228,7 @@ const DetalleCursoDocentePage = () => {
               <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase text-center">
                 Promedio
                 <br />
-                Sugerido
+                Calculado
               </th>
               <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase text-center w-40">
                 Calificación
@@ -10238,10 +10240,11 @@ const DetalleCursoDocentePage = () => {
           <tbody className="divide-y divide-gray-100">
             {alumnos.map((alumno) => (
               <tr key={alumno.id} className="hover:bg-gray-50">
-                {/* COLUMNA ALUMNO: FOTO + DATOS (ESTILO USUARIOS) */}
+                {/* COLUMNA ALUMNO: FOTO + DATOS (CORREGIDO) */}
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center">
                     <div className="flex-shrink-0 h-10 w-10">
+                      {/* FOTO: Usamos la URL del servidor o un avatar por defecto */}
                       <img
                         className="h-10 w-10 rounded-full object-cover border border-gray-200"
                         src={
@@ -10253,6 +10256,7 @@ const DetalleCursoDocentePage = () => {
                       />
                     </div>
                     <div className="ml-4">
+                      {/* NOMBRE: Usamos 'nombre' y 'apellido_paterno' que SÍ vienen del backend */}
                       <div className="text-sm font-bold text-gray-900">
                         {alumno.nombre} {alumno.apellido_paterno}
                       </div>

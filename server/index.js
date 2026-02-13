@@ -7873,10 +7873,10 @@ adminRouter.get("/email/mensaje/:uid", async (req, res) => {
 });
 
 // ---------------------------------------------------------
-// RUTA CORREGIDA: NOMBRES EXACTOS DE TU BASE DE DATOS
+// RUTA CORREGIDA: NOMBRES EXACTOS DE TU BASE DE DATOSsa
 // ---------------------------------------------------------
 apiRouter.get(
-  "/docente/grupo/:grupoId/asignatura/:asignaturaId/alumnos",
+  "/docente/v2/grupo/:grupoId/asignatura/:asignaturaId/alumnos",
   verifyToken,
   async (req, res) => {
     const { grupoId, asignaturaId } = req.params;
