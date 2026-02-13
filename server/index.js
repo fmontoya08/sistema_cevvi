@@ -7437,7 +7437,7 @@ apiRouter.get(
   },
 );
 
-// --- NUEVO ENDPOINT: ANALÍTICAS GLOBALES (ADAPTADO A TU BASE DE DATOS) ---
+// --- NUEVO ENDPOINT: ANALÍTICAS GLOBALES (CON PROMEDIO CORREGIDO POR PORCENTAJES) ---
 apiRouter.get(
   "/analiticas/:grupoId/:asignaturaId",
   verifyToken,
@@ -7445,8 +7445,7 @@ apiRouter.get(
     const { grupoId, asignaturaId } = req.params;
 
     try {
-      // 1. Obtener LISTA DE ALUMNOS del grupo
-      // CORRECCIÓN: Tabla "grupo_alumnos" en lugar de "grupos_alumnos"
+      // 1. Obtener LISTA DE ALUMNOS
       const [alumnos] = await db.query(
         `SELECT u.id, u.nombre, u.apellido_paterno, u.matricula 
        FROM usuarios u
@@ -7456,19 +7455,23 @@ apiRouter.get(
         [grupoId],
       );
 
-      // 2. Obtener TODAS LAS COLUMNAS (Tareas y Exámenes creados)
-      // CORRECCIÓN: "fecha_limite" en lugar de "fecha_entrega"
+      // 2. Obtener COLUMNAS (Tareas y Exámenes)
+      // Asumimos que las TAREAS valen 100 puntos por defecto
       const [colsTareas] = await db.query(
         "SELECT id, titulo, fecha_limite FROM tareas WHERE grupo_id = ? AND asignatura_id = ? ORDER BY fecha_creacion ASC",
         [grupoId, asignaturaId],
       );
+
+      // Para EXÁMENES, calculamos cuánto valen realmente sumando sus preguntas
       const [colsExamenes] = await db.query(
-        "SELECT id, titulo FROM examenes WHERE grupo_id = ? AND asignatura_id = ?",
+        `SELECT e.id, e.titulo, 
+       (SELECT IFNULL(SUM(puntos), 1) FROM preguntas WHERE examen_id = e.id) as puntos_maximos 
+       FROM examenes e 
+       WHERE e.grupo_id = ? AND e.asignatura_id = ?`,
         [grupoId, asignaturaId],
       );
 
-      // 3. Obtener CALIFICACIONES (Tareas y Exámenes)
-      // CORRECCIÓN: Tabla "tareas_entregas" en lugar de "entregas_tareas"
+      // 3. Obtener CALIFICACIONES
       const [notasTareas] = await db.query(
         `SELECT te.alumno_id, te.tarea_id, te.calificacion 
        FROM tareas_entregas te 
@@ -7485,15 +7488,13 @@ apiRouter.get(
         [grupoId, asignaturaId],
       );
 
-      // 4. Calcular ASISTENCIA (% de asistencia)
-      // CORRECCIÓN: Tabla "clases_sesiones" en lugar de "sesiones_clase"
+      // 4. Calcular ASISTENCIA
       const [totalSesiones] = await db.query(
         "SELECT COUNT(*) as total FROM clases_sesiones WHERE grupo_id = ? AND asignatura_id = ?",
         [grupoId, asignaturaId],
       );
-      const numSesiones = totalSesiones[0].total || 1; // Evitar división entre 0
+      const numSesiones = totalSesiones[0].total || 1;
 
-      // CORRECCIÓN: Tabla "clases_sesiones" y campo "estatus" (no "estado")
       const [asistencias] = await db.query(
         `SELECT a.alumno_id, COUNT(*) as presentes 
        FROM asistencia a
@@ -7503,34 +7504,46 @@ apiRouter.get(
         [grupoId, asignaturaId],
       );
 
-      // --- PROCESAMIENTO DE DATOS ---
+      // --- PROCESAMIENTO INTELIGENTE ---
       const reporte = alumnos.map((alumno) => {
-        let sumaCalificaciones = 0;
-        let cantidadItems = 0;
+        let sumaPorcentajes = 0;
+        let cantidadActividades = 0;
 
-        // a) Procesar Tareas
+        // a) Procesar Tareas (Base 100)
         const misTareas = colsTareas.map((col) => {
           const entrega = notasTareas.find(
             (n) => n.alumno_id === alumno.id && n.tarea_id === col.id,
           );
-          const nota = entrega ? entrega.calificacion : 0;
-          sumaCalificaciones += parseFloat(nota || 0);
-          cantidadItems++;
+          const nota = entrega ? parseFloat(entrega.calificacion) : 0;
+
+          // Cálculo de porcentaje: (Nota / 100) * 100
+          // Si quieres que las tareas valgan distinto, habría que agregar columna 'puntos' a tareas
+          const porcentaje = nota; // Como base es 100, el porcentaje es igual a la nota
+
+          sumaPorcentajes += porcentaje;
+          cantidadActividades++;
+
           return { id: col.id, nota };
         });
 
-        // b) Procesar Exámenes
+        // b) Procesar Exámenes (Base dinámica: 11, 5, etc.)
         const misExamenes = colsExamenes.map((col) => {
           const intento = notasExamenes.find(
             (n) => n.alumno_id === alumno.id && n.examen_id === col.id,
           );
-          const nota = intento ? intento.calificacion : 0;
-          sumaCalificaciones += parseFloat(nota || 0);
-          cantidadItems++;
-          return { id: col.id, nota };
+          const nota = intento ? parseFloat(intento.calificacion) : 0;
+          const max = parseFloat(col.puntos_maximos) || 1;
+
+          // Convertimos a escala 0-100
+          const porcentaje = (nota / max) * 100;
+
+          sumaPorcentajes += porcentaje;
+          cantidadActividades++;
+
+          return { id: col.id, nota }; // Regresamos la nota original para mostrar en la tabla
         });
 
-        // c) Procesar Asistencia
+        // c) Procesar Asistencia (Ya viene en escala 0-100)
         const dataAsistencia = asistencias.find(
           (a) => a.alumno_id === alumno.id,
         );
@@ -7539,10 +7552,14 @@ apiRouter.get(
           (presentes / numSesiones) * 100,
         );
 
-        // d) Promedio General
+        // OJO: Si quieres incluir la asistencia en el promedio final, descomenta esta línea:
+        // sumaPorcentajes += porcentajeAsistencia;
+        // cantidadActividades++;
+
+        // d) Promedio General (Basado en porcentajes)
         const promedio =
-          cantidadItems > 0
-            ? (sumaCalificaciones / cantidadItems).toFixed(1)
+          cantidadActividades > 0
+            ? Math.round(sumaPorcentajes / cantidadActividades)
             : 0;
 
         return {
