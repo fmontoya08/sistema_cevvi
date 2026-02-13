@@ -7255,117 +7255,114 @@ apiRouter.get(
   },
 );
 
-// 5. ENTREGAR EXAMEN (CORREGIDO PARA LEER ARRAY DEL FRONTEND)
+// 5. ENTREGAR EXAMEN (ALUMNO) - Ahora guarda enteros y estado 'pendiente'
 apiRouter.post(
   "/examenes/:examenId/entregar",
   verifyToken,
   async (req, res) => {
     const { examenId } = req.params;
-    const { respuestas } = req.body; // El frontend manda un Array: [{ pregunta_id, respuesta_valor }, ...]
+    const { respuestas } = req.body;
     const alumnoId = req.user.id;
 
-    const connection = await db.getConnection(); // Usamos transacción para mayor seguridad
+    const connection = await db.getConnection();
     try {
       await connection.beginTransaction();
 
-      // 1. Crear el intento inicial (Calificación 0 temporalmente)
+      // Insertar intento con estado 'pendiente'
       const [result] = await connection.query(
-        "INSERT INTO intentos_examen (examen_id, alumno_id, calificacion) VALUES (?, ?, 0)",
+        "INSERT INTO intentos_examen (examen_id, alumno_id, calificacion, estado) VALUES (?, ?, 0, 'pendiente')",
         [examenId, alumnoId],
       );
       const intentoId = result.insertId;
 
-      // 2. Procesar cada respuesta del Array
       for (const item of respuestas) {
         const preguntaId = item.pregunta_id;
         const valor = item.respuesta_valor;
-
         let puntos = 0;
         let opcionId = null;
         let respuestaTexto = null;
 
-        // Obtener tipo de pregunta
         const [preg] = await connection.query(
           "SELECT tipo FROM preguntas WHERE id = ?",
           [preguntaId],
         );
-
-        // Validación de seguridad: Si la pregunta no existe, saltarla
         if (preg.length === 0) continue;
 
         if (preg[0].tipo === "opcion_multiple") {
-          opcionId = valor; // En opción múltiple, el valor es el ID de la opción
-
-          // Verificar si es correcta
+          opcionId = valor;
           const [correcta] = await connection.query(
-            `SELECT o.es_correcta, p.puntos 
-           FROM opciones o 
-           JOIN preguntas p ON o.pregunta_id = p.id 
-           WHERE o.id = ?`,
+            "SELECT es_correcta, puntos_pregunta FROM opciones JOIN preguntas ON opciones.pregunta_id = preguntas.id WHERE opciones.id = ?",
             [opcionId],
           );
-
-          // Si es correcta, sumamos los puntos definidos en la PREGUNTA (no en la opción)
-          // Nota: Ajusté la consulta para tomar los puntos de la tabla 'preguntas' que es lo estándar
+          // Si es correcta, asignamos puntos
           if (correcta.length > 0 && correcta[0].es_correcta) {
-            puntos = correcta[0].puntos;
+            puntos = correcta[0].puntos_pregunta;
           }
         } else {
-          // Pregunta Abierta
           respuestaTexto = valor;
-          // Puntos se quedan en 0 hasta que el docente califique
         }
 
-        // Guardar la respuesta individual
+        // IMPORTANTE: Guardamos puntos redondeados (Math.round)
         await connection.query(
           "INSERT INTO respuestas_alumno (intento_id, pregunta_id, opcion_id, respuesta_texto, puntos_obtenidos) VALUES (?, ?, ?, ?, ?)",
-          [intentoId, preguntaId, opcionId, respuestaTexto, puntos],
+          [intentoId, preguntaId, opcionId, respuestaTexto, Math.round(puntos)],
         );
       }
 
-      // 3. Calcular calificación total automática
+      // Calcular total y REDONDEARLO
       const [total] = await connection.query(
         "SELECT SUM(puntos_obtenidos) as nota FROM respuestas_alumno WHERE intento_id = ?",
         [intentoId],
       );
 
-      // 4. Actualizar el intento con la calificación final
+      // Guardamos la calificación como entero
+      const notaFinal = Math.round(total[0].nota || 0);
+
       await connection.query(
         "UPDATE intentos_examen SET calificacion = ? WHERE id = ?",
-        [total[0].nota || 0, intentoId],
+        [notaFinal, intentoId],
       );
 
       await connection.commit();
       res.json({ message: "Examen entregado correctamente", intentoId });
     } catch (error) {
       await connection.rollback();
-      console.error("Error al entregar examen:", error);
-      res.status(500).send("Error al procesar la entrega del examen.");
+      console.error(error);
+      res.status(500).send("Error al entregar");
     } finally {
       connection.release();
     }
   },
 );
 
-// 6. CALIFICAR MANUALMENTE
+// 6. CALIFICAR MANUALMENTE (DOCENTE) - Marca como 'calificado' y usa enteros
 apiRouter.put("/examenes/calificar-pregunta", verifyToken, async (req, res) => {
   const { respuestaId, puntosNuevos, intentoId } = req.body;
   try {
+    // 1. Guardar los puntos nuevos redondeados
     await db.query(
       "UPDATE respuestas_alumno SET puntos_obtenidos = ? WHERE id = ?",
-      [puntosNuevos, respuestaId],
+      [Math.round(puntosNuevos), respuestaId],
     );
 
+    // 2. Recalcular total
     const [total] = await db.query(
       "SELECT SUM(puntos_obtenidos) as cal FROM respuestas_alumno WHERE intento_id = ?",
       [intentoId],
     );
 
-    await db.query("UPDATE intentos_examen SET calificacion = ? WHERE id = ?", [
-      total[0].cal,
-      intentoId,
-    ]);
-    res.json({ message: "Calificación actualizada correctamente" });
+    // 3. Actualizar calificación final (entero) y cambiar estado a 'calificado'
+    const calificacionFinal = Math.round(total[0].cal || 0);
+
+    await db.query(
+      "UPDATE intentos_examen SET calificacion = ?, estado = 'calificado' WHERE id = ?",
+      [calificacionFinal, intentoId],
+    );
+
+    res.json({
+      message: "Calificación actualizada",
+      nuevaCalificacion: calificacionFinal,
+    });
   } catch (error) {
     res.status(500).send("Error al calificar");
   }
@@ -7402,39 +7399,36 @@ apiRouter.get("/intentos/:intentoId", verifyToken, async (req, res) => {
   }
 });
 
-// 8. OBTENER EXÁMENES POR GRUPO Y MATERIA (Ruta Genérica)
-// --- ¡IMPORTANTE! ESTA RUTA DEBE IR AL FINAL DE TODAS LAS RUTAS DE EXÁMENES ---
-// Si la pones antes, se "comerá" las peticiones a /resolver o /resultados
-// 8. OBTENER EXÁMENES POR GRUPO Y MATERIA (CON ESTADO DE CONTESTADO)
+// 8. OBTENER EXÁMENES POR GRUPO (Ahora trae el estado de calificación)
 apiRouter.get(
   "/examenes/:grupoId/:asignaturaId",
   verifyToken,
   async (req, res) => {
     const { grupoId, asignaturaId } = req.params;
-    const alumnoId = req.user.id; // Obtenemos el ID de quien pregunta
+    const alumnoId = req.user.id;
 
     try {
-      // CORRECCIÓN: Hacemos una subconsulta para ver si ESTE alumno ya tiene un intento
       const [examenes] = await db.query(
         `SELECT e.*, 
        (SELECT COUNT(*) FROM intentos_examen i WHERE i.examen_id = e.id AND i.alumno_id = ?) as ya_contestado,
-       (SELECT calificacion FROM intentos_examen i WHERE i.examen_id = e.id AND i.alumno_id = ? LIMIT 1) as mi_calificacion
+       (SELECT calificacion FROM intentos_examen i WHERE i.examen_id = e.id AND i.alumno_id = ? LIMIT 1) as mi_calificacion,
+       (SELECT estado FROM intentos_examen i WHERE i.examen_id = e.id AND i.alumno_id = ? LIMIT 1) as estado_revision
        FROM examenes e 
        WHERE e.grupo_id = ? AND e.asignatura_id = ? 
        ORDER BY e.fecha_creacion DESC`,
-        [alumnoId, alumnoId, grupoId, asignaturaId],
+        [alumnoId, alumnoId, alumnoId, grupoId, asignaturaId],
       );
 
-      // Convertimos el 1/0 de SQL a true/false para React
       const examenesProcesados = examenes.map((ex) => ({
         ...ex,
-        contestado: ex.ya_contestado > 0, // Si es mayor a 0, es true
-        calificacion: ex.mi_calificacion, // Mandamos la nota para que la vea
+        contestado: ex.ya_contestado > 0,
+        calificacion: Math.round(ex.mi_calificacion), // Aseguramos entero al enviar
+        estado: ex.estado_revision, // 'pendiente' o 'calificado'
       }));
 
       res.json(examenesProcesados);
     } catch (error) {
-      console.error("Error al obtener exámenes del curso:", error);
+      console.error(error);
       res.status(500).send("Error al obtener exámenes");
     }
   },

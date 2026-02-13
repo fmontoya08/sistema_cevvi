@@ -83,6 +83,8 @@ const ExamenesPage = () => {
                 </div>
 
                 <div>
+                  {/* REEMPLAZA LA SECCIÓN DE "VISTA ALUMNO" CON ESTO: */}
+
                   {user.rol === "docente" ? (
                     <div className="flex gap-2">
                       <Link
@@ -92,16 +94,32 @@ const ExamenesPage = () => {
                         <Eye size={16} /> Ver Resultados
                       </Link>
                     </div>
-                  ) : // VISTA ALUMNO
+                  ) : // VISTA ALUMNO MEJORADA
                   examen.contestado ? (
                     <div className="flex flex-col items-end">
-                      <span className="text-green-600 font-bold flex items-center gap-2 bg-green-50 px-4 py-2 rounded-lg border border-green-100">
-                        <CheckCircle size={20} /> Calificación:{" "}
-                        {examen.calificacion}
-                      </span>
-                      <span className="text-xs text-gray-400 mt-1">
-                        Examen completado
-                      </span>
+                      {/* LÓGICA DE ESTADOS: */}
+                      {examen.estado === "calificado" ? (
+                        // CASO A: Ya revisado por el docente -> Muestra NOTA ENTERA
+                        <>
+                          <span className="text-green-600 font-bold flex items-center gap-2 bg-green-50 px-4 py-2 rounded-lg border border-green-100">
+                            <CheckCircle size={20} /> Calificación:{" "}
+                            {Math.round(examen.calificacion)}
+                          </span>
+                          <span className="text-xs text-green-600 mt-1">
+                            Examen Calificado
+                          </span>
+                        </>
+                      ) : (
+                        // CASO B: Aún no revisado -> Muestra TEXTO "ENVIADO"
+                        <>
+                          <span className="text-yellow-600 font-bold flex items-center gap-2 bg-yellow-50 px-4 py-2 rounded-lg border border-yellow-100">
+                            <Clock size={20} /> Enviado
+                          </span>
+                          <span className="text-xs text-gray-400 mt-1">
+                            Esperando revisión del docente
+                          </span>
+                        </>
+                      )}
                     </div>
                   ) : (
                     <Link
