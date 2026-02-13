@@ -7449,7 +7449,7 @@ apiRouter.get(
       const [alumnos] = await db.query(
         `SELECT u.id, u.nombre, u.apellido_paterno, u.matricula 
        FROM usuarios u
-       JOIN grupos_alumnos ga ON u.id = ga.alumno_id
+       JOIN grupo_alumnos ga ON u.id = ga.alumno_id
        WHERE ga.grupo_id = ? AND u.rol = 'alumno'
        ORDER BY u.apellido_paterno ASC`,
         [grupoId],
