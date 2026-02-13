@@ -7873,7 +7873,7 @@ adminRouter.get("/email/mensaje/:uid", async (req, res) => {
 });
 
 // ---------------------------------------------------------
-// RUTA FALTANTE: OBTENER ALUMNOS (CON FOTO Y MATRÍCULA)
+// RUTA CORREGIDA: NOMBRES EXACTOS DE TU BASE DE DATOS
 // ---------------------------------------------------------
 apiRouter.get(
   "/docente/grupo/:grupoId/asignatura/:asignaturaId/alumnos",
@@ -7881,15 +7881,15 @@ apiRouter.get(
   async (req, res) => {
     const { grupoId, asignaturaId } = req.params;
     try {
-      // 1. Obtener info del curso (para el título)
+      // 1. Obtener info del curso (CORREGIDO: nombre_asignatura y nombre_grupo)
       const [info] = await db.query(
-        `SELECT a.nombre as nombre_asignatura, g.nombre as nombre_grupo
+        `SELECT a.nombre_asignatura, g.nombre_grupo
        FROM asignaturas a, grupos g
        WHERE a.id = ? AND g.id = ?`,
         [asignaturaId, grupoId],
       );
 
-      // 2. Obtener lista de alumnos con FOTO, MATRÍCULA y CALIFICACIÓN
+      // 2. Lista de Alumnos
       const [alumnos] = await db.query(
         `SELECT u.id, u.nombre, u.apellido_paterno, u.matricula, u.foto_perfil, c.calificacion
        FROM grupo_alumnos ga
@@ -7905,12 +7905,11 @@ apiRouter.get(
         alumnos: alumnos,
       });
     } catch (error) {
-      console.error(error);
+      console.error("Error al obtener alumnos:", error);
       res.status(500).send("Error al obtener alumnos");
     }
   },
 );
-
 app.listen(PORT, () => {
   console.log(`Servidor corriendo en http://localhost:${PORT}`);
 });
