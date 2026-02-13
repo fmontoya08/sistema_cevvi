@@ -7368,11 +7368,12 @@ apiRouter.put("/examenes/calificar-pregunta", verifyToken, async (req, res) => {
   }
 });
 
-// 7. VER DETALLE INTENTO (CORREGIDA PARA VER PUNTOS MÁXIMOS)
+// 7. VER DETALLE INTENTO (CORREGIDO: Incluye puntos máximos de cada pregunta)
 apiRouter.get("/intentos/:intentoId", verifyToken, async (req, res) => {
   try {
+    // 1. Datos generales del intento
     const [info] = await db.query(
-      `SELECT i.id, i.calificacion, u.nombre, u.apellido_paterno, e.titulo
+      `SELECT i.id, i.calificacion, i.estado, u.nombre, u.apellido_paterno, e.titulo
        FROM intentos_examen i
        JOIN usuarios u ON i.alumno_id = u.id
        JOIN examenes e ON i.examen_id = e.id
@@ -7382,9 +7383,13 @@ apiRouter.get("/intentos/:intentoId", verifyToken, async (req, res) => {
 
     if (info.length === 0) return res.status(404).send("No encontrado");
 
-    // CORRECCIÓN: Agregamos "p.puntos" al SELECT para saber cuánto vale la pregunta
+    // 2. Respuestas con el VALOR MÁXIMO de la pregunta
     const [respuestas] = await db.query(
-      `SELECT r.*, p.texto_pregunta, p.tipo, p.puntos as puntos_maximos, op.texto_opcion 
+      `SELECT r.*, 
+              p.texto_pregunta, 
+              p.tipo, 
+              p.puntos AS puntos_maximos,  /* <--- ESTA ES LA CLAVE */
+              op.texto_opcion 
        FROM respuestas_alumno r
        JOIN preguntas p ON r.pregunta_id = p.id
        LEFT JOIN opciones op ON r.opcion_id = op.id
