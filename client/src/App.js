@@ -193,7 +193,7 @@ api.interceptors.response.use(
 // --- CONTEXTO DE AUTENTICACIÓN ---
 export const AuthContext = createContext(null);
 
-// --- COMPONENTE CALENDARIO ADMIN ---
+// --- COMPONENTE CALENDARIO ADMIN (Gestión de Semáforo y Avisos) ---
 const CalendarioAdmin = () => {
   const [eventos, setEventos] = useState([]);
 
@@ -204,16 +204,22 @@ const CalendarioAdmin = () => {
   const cargarEventos = async () => {
     try {
       const res = await api.get("/eventos-admin");
-      // Asignar colores
-      const eventosConColor = res.data.map((e) => ({
-        ...e,
-        color:
-          e.modalidad === "virtual"
-            ? "#3b82f6"
-            : e.modalidad === "presencial"
-              ? "#10b981"
-              : "#a72a34",
-      }));
+      // Mapeamos los tipos de base de datos a los colores visuales
+      const eventosConColor = res.data.map((e) => {
+        let color = "#3788d8"; // Azul default (Aviso General)
+
+        // Asignamos colores según el tipo guardado
+        if (e.modalidad === "si_clases") color = "#86efac"; // Verde Claro
+        if (e.modalidad === "no_clases") color = "#ef4444"; // Rojo
+        if (e.modalidad === "asincrona") color = "#3b82f6"; // Azul Fuerte
+        if (e.modalidad === "vacaciones") color = "#facc15"; // Amarillo
+
+        return {
+          ...e,
+          color,
+          textColor: e.modalidad === "vacaciones" ? "black" : "white",
+        };
+      });
       setEventos(eventosConColor);
     } catch (error) {
       console.error("Error cargando calendario");
@@ -221,25 +227,61 @@ const CalendarioAdmin = () => {
   };
 
   const handleDateClick = async (arg) => {
-    const titulo = prompt("📅 Nuevo Evento:\nIngresa el título:");
-    if (!titulo) return;
+    // 1. Preguntar Título (Opcional si es solo marcar el día)
+    let titulo = prompt(
+      "📅 Título del evento o aviso (Dejar vacío para solo colorear el día):",
+    );
 
+    // 2. Preguntar Tipo de Día (Semáforo)
     const tipo = prompt(
-      "Tipo de evento (Escribe el número):\n1. General (Rojo)\n2. Virtual (Azul)\n3. Presencial (Verde)",
+      "Selecciona el tipo de día (Escribe el número):\n" +
+        "1. ✅ SI hay clases (Verde)\n" +
+        "2. ⛔ NO hay clases (Rojo)\n" +
+        "3. 🔵 Clase Asíncrona (Azul)\n" +
+        "4. 🏖️ Semana Santa/Pascua (Amarillo)\n" +
+        "5. 📢 Aviso General (Texto)",
       "1",
     );
-    let mod = "general";
-    if (tipo === "2") mod = "virtual";
-    if (tipo === "3") mod = "presencial";
+
+    if (!tipo) return;
+
+    // Mapeamos la selección del admin a códigos para la BD
+    let modalidadBD = "general";
+    let tituloFinal = titulo;
+
+    switch (tipo) {
+      case "1":
+        modalidadBD = "si_clases";
+        if (!titulo) tituloFinal = "SI HAY CLASES";
+        break;
+      case "2":
+        modalidadBD = "no_clases";
+        if (!titulo) tituloFinal = "NO HAY CLASES";
+        break;
+      case "3":
+        modalidadBD = "asincrona";
+        if (!titulo) tituloFinal = "CLASE ASÍNCRONA";
+        break;
+      case "4":
+        modalidadBD = "vacaciones";
+        if (!titulo) tituloFinal = "VACACIONES";
+        break;
+      case "5":
+        modalidadBD = "general"; // Aviso normal
+        if (!titulo)
+          return alert("Para un aviso general debes poner un título.");
+        break;
+      default:
+        return;
+    }
 
     try {
-      await api.post("/eventos-admin", {
-        title: titulo,
+      await api.post("/api/eventos-admin", {
+        title: tituloFinal,
         start: arg.dateStr,
-        modalidad: mod,
+        modalidad: modalidadBD,
       });
       cargarEventos();
-      alert("Evento guardado ✅");
     } catch (error) {
       alert("Error al guardar ❌");
     }
@@ -249,7 +291,7 @@ const CalendarioAdmin = () => {
     if (window.confirm(`¿Eliminar "${info.event.title}"?`)) {
       try {
         await api.delete(
-          `/eventos-admin/${info.event.extendedProps.id || info.event.id}`,
+          `/api/eventos-admin/${info.event.extendedProps.id || info.event.id}`,
         );
         info.event.remove();
       } catch (error) {
@@ -261,8 +303,33 @@ const CalendarioAdmin = () => {
   return (
     <div className="p-6 bg-white rounded-xl shadow-lg m-4">
       <h2 className="text-2xl font-bold mb-4 flex items-center gap-2 text-gray-800">
-        <Calendar className="text-[#a72a34]" /> Gestión de Calendario (Admin)
+        <Calendar className="text-[#a72a34]" /> Gestión de Calendario Escolar
       </h2>
+
+      {/* LEYENDA VISUAL PARA EL ADMIN */}
+      <div className="flex flex-wrap gap-4 mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 bg-[#86efac] rounded border border-gray-300"></div>
+          <span className="text-xs font-bold text-gray-600">Si Hay Clases</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 bg-[#ef4444] rounded border border-gray-300"></div>
+          <span className="text-xs font-bold text-gray-600">No Hay Clases</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 bg-[#3b82f6] rounded border border-gray-300"></div>
+          <span className="text-xs font-bold text-gray-600">
+            Clase Asíncrona
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 bg-[#facc15] rounded border border-gray-300"></div>
+          <span className="text-xs font-bold text-gray-600">
+            Semana Santa/Pascua
+          </span>
+        </div>
+      </div>
+
       <FullCalendar
         plugins={[dayGridPlugin, interactionPlugin]}
         initialView="dayGridMonth"
@@ -271,12 +338,17 @@ const CalendarioAdmin = () => {
         dateClick={handleDateClick}
         eventClick={handleEventClick}
         height="auto"
+        headerToolbar={{
+          left: "prev,next today",
+          center: "title",
+          right: "dayGridMonth,dayGridWeek",
+        }}
       />
     </div>
   );
 };
 
-// --- COMPONENTE CALENDARIO ALUMNO (SOLO LECTURA) ---
+// --- COMPONENTE CALENDARIO ALUMNO/DOCENTE (Lectura + Leyenda) ---
 const CalendarioAlumno = () => {
   const [eventos, setEventos] = useState([]);
 
@@ -286,59 +358,88 @@ const CalendarioAlumno = () => {
 
   const cargarEventos = async () => {
     try {
-      // Usamos la ruta nueva de alumno
       const res = await api.get("/eventos-alumno");
 
-      const eventosConColor = res.data.map((e) => ({
-        ...e,
-        color:
-          e.modalidad === "virtual"
-            ? "#3b82f6"
-            : e.modalidad === "presencial"
-              ? "#10b981"
-              : "#a72a34",
-      }));
+      const eventosConColor = res.data.map((e) => {
+        let color = "#3788d8"; // Default
+        let textColor = "white";
+
+        if (e.modalidad === "si_clases") color = "#86efac"; // Verde
+        if (e.modalidad === "no_clases") color = "#ef4444"; // Rojo
+        if (e.modalidad === "asincrona") color = "#3b82f6"; // Azul
+        if (e.modalidad === "vacaciones") {
+          color = "#facc15"; // Amarillo
+          textColor = "black"; // Texto negro para contraste
+        }
+
+        return { ...e, color, textColor };
+      });
       setEventos(eventosConColor);
     } catch (error) {
-      console.error("Error cargando mi calendario");
+      console.error("Error cargando calendario");
     }
   };
 
   const handleEventClick = (info) => {
-    // Solo mostramos información, no dejamos borrar
-    alert(
-      `📅 Clase/Evento: ${info.event.title}\nModalidad: ${info.event.extendedProps.modalidad}`,
-    );
+    alert(`📅 ${info.event.title}`);
   };
 
   return (
     <div className="p-6 bg-white rounded-xl shadow-lg m-4">
-      <h2 className="text-2xl font-bold mb-4 flex items-center gap-2 text-gray-800">
-        <Calendar className="text-blue-600" /> Mi Calendario Escolar
+      <h2 className="text-2xl font-bold mb-6 flex items-center gap-2 text-gray-800">
+        <Calendar className="text-blue-600" /> Calendario Escolar
       </h2>
-      <div className="mb-4 flex gap-3 text-xs">
-        <span className="px-2 py-1 bg-[#a72a34] text-white rounded">
-          General
-        </span>
-        <span className="px-2 py-1 bg-blue-500 text-white rounded">
-          Virtual
-        </span>
-        <span className="px-2 py-1 bg-green-500 text-white rounded">
-          Presencial
-        </span>
-      </div>
+
       <FullCalendar
         plugins={[dayGridPlugin, interactionPlugin]}
         initialView="dayGridMonth"
         locale={esLocale}
         events={eventos}
-        eventClick={handleEventClick} // Solo ver info
+        eventClick={handleEventClick}
         height="auto"
+        headerToolbar={{
+          left: "prev,next today",
+          center: "title",
+          right: "",
+        }}
       />
+
+      {/* --- LEYENDA (TIPO IMAGEN) --- */}
+      <div className="mt-8 flex justify-center">
+        <div className="border border-gray-300 rounded-lg overflow-hidden text-sm font-bold shadow-sm max-w-md w-full">
+          {/* Fila Verde */}
+          <div className="flex border-b border-gray-200">
+            <div className="w-16 h-10 bg-[#86efac] border-r border-gray-200"></div>
+            <div className="flex-1 flex items-center justify-center p-2 bg-white text-gray-700">
+              SI HAY CLASES
+            </div>
+          </div>
+          {/* Fila Roja */}
+          <div className="flex border-b border-gray-200">
+            <div className="w-16 h-10 bg-[#ef4444] border-r border-gray-200"></div>
+            <div className="flex-1 flex items-center justify-center p-2 bg-white text-gray-700">
+              NO HAY CLASE
+            </div>
+          </div>
+          {/* Fila Azul */}
+          <div className="flex border-b border-gray-200">
+            <div className="w-16 h-10 bg-[#3b82f6] border-r border-gray-200"></div>
+            <div className="flex-1 flex items-center justify-center p-2 bg-white text-gray-700">
+              CLASE ASÍNCRONA
+            </div>
+          </div>
+          {/* Fila Amarilla */}
+          <div className="flex">
+            <div className="w-16 h-10 bg-[#facc15] border-r border-gray-200"></div>
+            <div className="flex-1 flex items-center justify-center p-2 bg-white text-gray-700">
+              SEMANA SANTA Y PASCUA
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };
-
 const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);

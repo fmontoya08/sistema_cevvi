@@ -7668,39 +7668,13 @@ const verificarLecturaCalendario = (req, res, next) => {
   });
 };
 
-// 2. Ruta Inteligente: Obtener eventos (AHORA PARA AMBOS)
+// 2. Ruta Inteligente: Obtener eventos (AHORA GENERAL PARA TODOS)
 app.get("/api/eventos-alumno", verificarLecturaCalendario, async (req, res) => {
   try {
-    const { id } = req.user;
-
-    // A) Intentamos averiguar la modalidad del usuario
-    // Si es alumno, tendrá grupo. Si es docente, usualmente no, por lo que no traerá nada.
-    const [info] = await db.query(
-      `
-        SELECT g.modalidad 
-        FROM usuarios u
-        JOIN grupos g ON u.grupo_id = g.id
-        WHERE u.id = ? 
-        LIMIT 1
-    `,
-      [id],
-    );
-
-    // Si encontramos modalidad (es alumno), la usamos.
-    // Si NO encontramos (es docente o alumno sin grupo), asumimos 'presencial' por defecto
-    // para que vea los eventos generales y presenciales.
-    const modalidadUsuario =
-      info.length > 0 && info[0].modalidad ? info[0].modalidad : "presencial";
-
-    // B) Buscamos los eventos (Generales + Modalidad Detectada)
-    const [eventos] = await db.query(
-      `
-        SELECT * FROM eventos 
-        WHERE modalidad = 'general' OR modalidad = ?
-    `,
-      [modalidadUsuario],
-    );
-
+    // Ya no filtramos por modalidad 'virtual' o 'presencial' porque el requerimiento
+    // cambió a "forma general sin excluir a nadie".
+    // Traemos TODOS los eventos.
+    const [eventos] = await db.query("SELECT * FROM eventos");
     res.json(eventos);
   } catch (error) {
     console.error("Error calendario lectura:", error);
