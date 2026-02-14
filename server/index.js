@@ -5038,9 +5038,6 @@ docenteRouter.get(
     res.json({ cursoInfo, alumnos });
   },
 );
-// --- RUTA BORRADA --- Ya no es necesaria, la movimos a /admin
-// docenteRouter.post("/calificar", ... );
-// --- INICIA NUEVO CÓDIGO (AGREGAR) ---
 
 // Función helper para asegurar que existe una config (se usará en GET)
 async function getOrCreateAulaConfig(grupoId, asignaturaId) {
@@ -5049,11 +5046,19 @@ async function getOrCreateAulaConfig(grupoId, asignaturaId) {
     "INSERT IGNORE INTO aula_virtual_config (grupo_id, asignatura_id) VALUES (?, ?)",
     [grupoId, asignaturaId],
   );
-  // Luego, selecciónalo. Ahora estamos seguros de que existe.
+
+  // LUEGO SELECCIONAMOS CON LOS NOMBRES
   const [[config]] = await db.query(
-    `SELECT avc.*, g.modalidad, g.estatus, g.nombre_grupo, a.nombre_asignatura, a.clave_asignatura 
+    `SELECT 
+        avc.*, 
+        g.modalidad, 
+        g.estatus, 
+        g.nombre_grupo,
+        a.nombre_asignatura,     
+        a.clave_asignatura       
      FROM aula_virtual_config avc
      JOIN grupos g ON avc.grupo_id = g.id 
+     JOIN asignaturas a ON avc.asignatura_id = a.id  -- <--- ESTA ES LA LÍNEA QUE TE FALTABA
      WHERE avc.grupo_id = ? AND avc.asignatura_id = ?`,
     [grupoId, asignaturaId],
   );
