@@ -7709,6 +7709,26 @@ app.get("/api/eventos-alumno", verificarLecturaCalendario, async (req, res) => {
 });
 
 // ==========================================
+// MIDDLEWARE ESPECÍFICO PARA ALUMNOS (Restaurado para Finanzas)
+// ==========================================
+const verificarAlumno = (req, res, next) => {
+  const authHeader = req.headers["authorization"];
+  if (!authHeader) return res.sendStatus(401);
+
+  const token = authHeader.split(" ")[1];
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) return res.sendStatus(403);
+
+    // Solo permitimos pasar si el rol es estrictamente 'alumno'
+    if (user.rol.toLowerCase() !== "alumno") {
+      return res.status(403).send("Acceso denegado: Solo alumnos.");
+    }
+    req.user = user;
+    next();
+  });
+};
+
+// ==========================================
 // MÓDULO FINANZAS (ALUMNO)
 // ==========================================
 
