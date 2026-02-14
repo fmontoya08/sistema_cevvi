@@ -11150,10 +11150,10 @@ const AulaVirtualPage = () => {
       className="bg-gray-50 p-6 rounded-lg shadow-inner space-y-6"
     >
       {/* Bloque Enlace Videoconferencia */}
-      <div>
+      <div className="bg-white p-4 rounded-xl border border-blue-100 shadow-sm">
         <label
           htmlFor="enlace_videollamada"
-          className="block text-sm font-medium text-gray-700"
+          className="block text-sm font-bold text-gray-700 mb-2"
         >
           Enlace de la Videollamada (Zoom, Meet, etc.)
         </label>
@@ -11163,22 +11163,48 @@ const AulaVirtualPage = () => {
           id="enlace_videollamada"
           value={formData.enlace_videollamada}
           onChange={handleChange}
-          placeholder="https://zoom.us/j/..."
-          className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-principal focus:border-principal"
+          placeholder="https://meet.jit.si/..."
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#a72a34] outline-none"
         />
-        <button
-          type="button"
-          onClick={() =>
-            setFormData((prev) => ({
-              ...prev,
-              enlace_videollamada: `https://meet.jit.si/CEVVI-G${grupoId}-A${asignaturaId}`,
-            }))
-          }
-          className="flex items-center mt-2 px-3 py-1 text-sm text-white bg-secundario rounded-md hover:opacity-90"
-        >
-          <Sparkles size={16} className="mr-2" />
-          Generar enlace de Jitsi Meet
-        </button>
+
+        <div className="flex flex-col sm:flex-row gap-4 mt-3">
+          {/* Botón generar Jitsi */}
+          <button
+            type="button"
+            onClick={() =>
+              setFormData((prev) => ({
+                ...prev,
+                enlace_videollamada: `https://meet.jit.si/CEVVI-G${grupoId}-A${asignaturaId}`,
+              }))
+            }
+            className="flex items-center px-3 py-2 text-sm text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100"
+          >
+            <Sparkles size={16} className="mr-2" />
+            Generar enlace automático
+          </button>
+
+          {/* --- CHECKBOX NUEVO: NOTIFICAR AHORA --- */}
+          <label className="flex items-center gap-2 cursor-pointer bg-red-50 px-3 py-2 rounded-lg border border-red-100 hover:bg-red-100 transition-colors">
+            <input
+              type="checkbox"
+              checked={formData.notificar_inicio || false}
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  notificar_inicio: e.target.checked,
+                }))
+              }
+              className="w-4 h-4 text-[#a72a34] rounded focus:ring-[#a72a34]"
+            />
+            <span className="text-sm font-bold text-[#a72a34]">
+              🔔 ¡Avisar a alumnos que la clase inicia YA!
+            </span>
+          </label>
+        </div>
+        <p className="text-xs text-gray-400 mt-2">
+          Nota: Marca la casilla de la campana si quieres enviar una
+          notificación push aunque el enlace sea el mismo de ayer.
+        </p>
       </div>
       {/* Nuevos Campos Estructurados */}
       <div>

@@ -5103,10 +5103,11 @@ docenteRouter.put(
         evaluacion,
         horario,
         contacto_docente,
+        notificar_inicio, // <--- 1. RECIBIMOS ESTA NUEVA VARIABLE
       } = req.body;
       const docente_id = req.user.id;
 
-      // 1. Validar Permiso
+      // Validar Permiso
       const [[curso]] = await db.query(
         "SELECT * FROM grupo_asignaturas_docentes WHERE grupo_id = ? AND asignatura_id = ? AND docente_id = ?",
         [grupoId, asignaturaId, docente_id],
@@ -5115,7 +5116,7 @@ docenteRouter.put(
         return res.status(403).send({ message: "No tienes permiso." });
       }
 
-      // 2. OBTENER CONFIG ACTUAL (Para comparar si cambió el link)
+      // OBTENER CONFIG ACTUAL
       const [[configPrevia]] = await db.query(
         "SELECT enlace_videollamada FROM aula_virtual_config WHERE grupo_id = ? AND asignatura_id = ?",
         [grupoId, asignaturaId],
@@ -5124,11 +5125,13 @@ docenteRouter.put(
       const linkAnterior = configPrevia ? configPrevia.enlace_videollamada : "";
       const linkNuevo = enlace_videollamada || "";
 
-      // Detectamos si HUBO UN CAMBIO en el link (y no está vacío)
-      // Esto significa que el profe "Habilitó" o "Actualizó" el botón de la clase
-      const seHabilitoClase = linkNuevo !== "" && linkNuevo !== linkAnterior;
+      // --- CAMBIO EN LA LÓGICA DE NOTIFICACIÓN ---
+      // Notificamos si el link cambió O SI EL DOCENTE MARCÓ EL CHECKBOX 'notificar_inicio'
+      const seHabilitoClase =
+        (linkNuevo !== "" && linkNuevo !== linkAnterior) ||
+        (linkNuevo !== "" && notificar_inicio === true);
 
-      // 3. ACTUALIZAR EN BD
+      // ACTUALIZAR EN BD
       const sql = `
         INSERT INTO aula_virtual_config (
           grupo_id, asignatura_id, enlace_videollamada, descripcion_curso, 
@@ -5155,92 +5158,82 @@ docenteRouter.put(
         contacto_docente || null,
       ]);
 
-      // --- 4. NOTIFICACIONES INTELIGENTES ---
-      try {
-        const docenteNombre = `${req.user.nombre} ${req.user.apellido_paterno}`;
+      // --- NOTIFICACIONES ---
+      if (seHabilitoClase) {
+        // Solo entramos aquí si hay link nuevo O se forzó
+        try {
+          const docenteNombre = `${req.user.nombre} ${req.user.apellido_paterno}`;
+          const [[materia]] = await db.query(
+            "SELECT nombre_asignatura FROM asignaturas WHERE id = ?",
+            [asignaturaId],
+          );
+          const nombreMateria = materia ? materia.nombre_asignatura : "Clase";
+          const urlDestino = `/alumno/grupo/${grupoId}/asignatura/${asignaturaId}/aula`;
 
-        // Obtenemos nombre de la materia
-        const [[materia]] = await db.query(
-          "SELECT nombre_asignatura FROM asignaturas WHERE id = ?",
-          [asignaturaId],
-        );
-        const nombreMateria = materia ? materia.nombre_asignatura : "Clase";
-        const urlDestino = `/alumno/grupo/${grupoId}/asignatura/${asignaturaId}/aula`;
+          // Mensaje de clase en vivo
+          const mensaje = `🔴 ¡Clase en línea iniciada! El docente te espera en ${nombreMateria}.`;
+          const tituloPush = "¡Clase en Vivo Ahora! 📹";
 
-        // Definimos el mensaje según qué pasó
-        let mensaje = "";
-        let tituloPush = "";
-        let tipoNotif = "info"; // Por defecto
-
-        if (seHabilitoClase) {
-          // CASO 1: Se habilitó la clase online
-          mensaje = `🔴 ¡Clase en línea habilitada! El docente inició la sesión en ${nombreMateria}.`;
-          tituloPush = "¡Clase en Vivo Iniciada! 📹";
-          tipoNotif = "videollamada"; // Para poner un icono de camarita si quieres
-        } else {
-          // CASO 2: Solo actualizó información general
-          mensaje = `${docenteNombre} actualizó la información general de ${nombreMateria}.`;
-          tituloPush = "Información Actualizada ℹ️";
-        }
-
-        // Obtener alumnos
-        const [alumnos] = await db.query(
-          "SELECT alumno_id FROM grupo_alumnos WHERE grupo_id = ?",
-          [grupoId],
-        );
-
-        if (alumnos.length > 0) {
-          // A) Campanita (Masivo)
-          const datosCampanita = alumnos.map((a) => [
-            a.alumno_id,
-            mensaje,
-            urlDestino,
-            0,
-            new Date(),
-            tipoNotif,
-          ]);
-
-          await db.query(
-            "INSERT INTO notificaciones (usuario_id, mensaje, url_destino, leido, fecha, tipo) VALUES ?",
-            [datosCampanita],
+          // Obtener alumnos
+          const [alumnos] = await db.query(
+            "SELECT alumno_id FROM grupo_alumnos WHERE grupo_id = ?",
+            [grupoId],
           );
 
-          // B) Push Android (Masivo)
-          // Si se habilitó la clase, esto es CRÍTICO, así que mandamos el push sí o sí
-          const alumnoIds = alumnos.map((a) => a.alumno_id);
-          const [tokens] = await db.query(
-            "SELECT token FROM push_tokens WHERE user_id IN (?)",
-            [alumnoIds],
-          );
+          if (alumnos.length > 0) {
+            // A) Campanita
+            const datosCampanita = alumnos.map((a) => [
+              a.alumno_id,
+              mensaje,
+              urlDestino,
+              0,
+              new Date(),
+              "videollamada",
+            ]);
 
-          if (tokens.length > 0) {
-            const messages = tokens.map((t) => ({
-              to: t.token,
-              sound: "default",
-              title: tituloPush,
-              body: mensaje,
-              data: { url: urlDestino },
-            }));
+            await db.query(
+              "INSERT INTO notificaciones (usuario_id, mensaje, url_destino, leido, fecha, tipo) VALUES ?",
+              [datosCampanita],
+            );
 
-            fetch("https://exp.host/--/api/v2/push/send", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(messages),
-            }).catch((e) => console.error("Error push config:", e));
+            // B) Push Android
+            const alumnoIds = alumnos.map((a) => a.alumno_id);
+            const [tokens] = await db.query(
+              "SELECT token FROM push_tokens WHERE user_id IN (?)",
+              [alumnoIds],
+            );
+
+            if (tokens.length > 0) {
+              const messages = tokens.map((t) => ({
+                to: t.token,
+                sound: "default",
+                title: tituloPush,
+                body: mensaje,
+                data: { url: urlDestino },
+              }));
+
+              fetch("https://exp.host/--/api/v2/push/send", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(messages),
+              }).catch((e) => console.error("Error push config:", e));
+            }
           }
+        } catch (notifError) {
+          console.error("Error notificaciones config:", notifError);
         }
-      } catch (notifError) {
-        console.error("Error notificaciones config:", notifError);
       }
 
-      res.send({ message: "Configuración guardada y alumnos notificados." });
+      res.send({
+        message:
+          "Configuración guardada y notificaciones enviadas (si aplica).",
+      });
     } catch (error) {
       console.error("Error al actualizar config:", error);
       res.status(500).send({ message: "Error en el servidor." });
     }
   },
 );
-// --- INICIA NUEVO CÓDIGO (AGREGAR) ---
 
 // GET (Docente): Obtener listado de tareas
 docenteRouter.get(
