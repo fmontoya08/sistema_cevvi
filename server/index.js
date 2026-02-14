@@ -4861,38 +4861,75 @@ const driveRouter = express.Router();
 const getUserRoot = (userId) =>
   path.join(uploadsDir, "drive", `usuario_${userId}`);
 
-// 1. LISTAR ARCHIVOS
+// 1. LISTAR ARCHIVOS (PROPIOS + COMPARTIDOS)
 driveRouter.get("/list", async (req, res) => {
   try {
     const userId = req.user.id;
     const rutaRelativa = req.query.ruta || "";
+
+    // Seguridad básica de rutas
     if (rutaRelativa.includes(".."))
       return res.status(400).send({ message: "Ruta inválida" });
 
     const userRoot = getUserRoot(userId);
     const targetPath = path.join(userRoot, rutaRelativa);
+    let respuesta = [];
 
-    if (!fs.existsSync(userRoot)) fs.mkdirSync(userRoot, { recursive: true });
-    if (!fs.existsSync(targetPath)) return res.json([]);
+    // A) LEER ARCHIVOS FÍSICOS (Lo que ya tenías)
+    if (fs.existsSync(targetPath)) {
+      const elementos = fs.readdirSync(targetPath, { withFileTypes: true });
+      respuesta = elementos.map((dirent) => {
+        const rutaClean = rutaRelativa
+          ? path.join(rutaRelativa, dirent.name).replace(/\\/g, "/")
+          : dirent.name;
+        return {
+          nombre: dirent.name,
+          tipo: dirent.isDirectory() ? "carpeta" : "archivo",
+          ruta: rutaClean,
+          url: !dirent.isDirectory()
+            ? `/uploads/drive/usuario_${userId}/${rutaClean}`
+            : null,
+          es_propio: true, // Marcamos que es mío
+        };
+      });
+    }
 
-    const elementos = fs.readdirSync(targetPath, { withFileTypes: true });
+    // B) LEER ARCHIVOS COMPARTIDOS CONMIGO (SOLO EN LA RAÍZ)
+    // Si estamos en la carpeta principal, buscamos en la BD qué nos han compartido
+    if (rutaRelativa === "") {
+      const [compartidos] = await db.query(
+        `SELECT dc.ruta_item, dc.tipo_item, dc.permiso, u.id as owner_id, u.nombre as owner_name
+         FROM drive_compartidos dc
+         JOIN usuarios u ON dc.propietario_id = u.id
+         WHERE dc.usuario_compartido_id = ?`,
+        [userId],
+      );
 
-    const respuesta = elementos.map((dirent) => {
-      const rutaClean = rutaRelativa
-        ? path.join(rutaRelativa, dirent.name).replace(/\\/g, "/")
-        : dirent.name;
-      return {
-        nombre: dirent.name,
-        tipo: dirent.isDirectory() ? "carpeta" : "archivo",
-        ruta: rutaClean,
-        url: !dirent.isDirectory()
-          ? `/uploads/drive/usuario_${userId}/${rutaClean}`
-          : null,
-      };
-    });
+      // Procesamos los compartidos para que tengan el mismo formato visual
+      const itemsCompartidos = compartidos.map((item) => {
+        // Extraemos solo el nombre del archivo de la ruta completa
+        const nombreArchivo = path.basename(item.ruta_item);
+
+        return {
+          nombre: `[COMPARTIDO] ${nombreArchivo}`, // Le ponemos una marca visual
+          tipo: item.tipo_item, // 'archivo' o 'carpeta'
+          ruta: item.ruta_item, // Ruta original del dueño
+          // La URL apunta a la carpeta del DUEÑO, no la mía
+          url: `/uploads/drive/usuario_${item.owner_id}/${item.ruta_item}`,
+          es_propio: false,
+          permiso: item.permiso,
+        };
+      });
+
+      // Unimos las dos listas
+      respuesta = [...respuesta, ...itemsCompartidos];
+    }
+
+    // Ordenamos
     respuesta.sort((a, b) =>
       a.tipo === b.tipo ? 0 : a.tipo === "carpeta" ? -1 : 1,
     );
+
     res.json(respuesta);
   } catch (error) {
     console.error("Error Drive List:", error);
@@ -4925,10 +4962,19 @@ driveRouter.post("/folder", async (req, res) => {
 // 3. SUBIR ARCHIVO
 const driveStorage = multer.diskStorage({
   destination: function (req, file, cb) {
+    // ✅ AGREGAR ESTOS LOGS
+    console.log("📥 Backend recibió:");
+    console.log("- rutaActual del body:", req.body.rutaActual);
+    console.log("- Usuario ID:", req.user.id);
+
     const userPath = path.join(
       getUserRoot(req.user.id),
       req.body.rutaActual || "",
     );
+
+    // ✅ AGREGAR ESTE LOG
+    console.log("- Ruta completa destino:", userPath);
+
     if (!fs.existsSync(userPath)) fs.mkdirSync(userPath, { recursive: true });
     cb(null, userPath);
   },
@@ -8089,7 +8135,7 @@ apiRouter.post("/drive/enlace-publico", verifyToken, async (req, res) => {
       [ruta, tipo, usuarioId, token, fechaExpiracion],
     );
 
-    const enlacePublico = `https://universidadsigloxxi.com/drive/publico/${token}`;
+    const enlacePublico = `https://api-universidad-c5o8.onrender.com/drive/publico/${token}`;
 
     res.json({ enlace: enlacePublico, token });
   } catch (error) {
@@ -8144,36 +8190,58 @@ apiRouter.delete("/drive/enlace-publico", verifyToken, async (req, res) => {
   }
 });
 
-// 9. Acceder a recurso público (sin auth)
+// 9. DESCARGAR ARCHIVO PÚBLICO (SIN LOGIN)
 app.get("/drive/publico/:token", async (req, res) => {
   const { token } = req.params;
 
   try {
+    // 1. Buscar el token en la BD
     const [enlaces] = await db.query(
-      `SELECT ruta_item, tipo_item, fecha_expiracion
+      `SELECT ruta_item, tipo_item, fecha_expiracion, propietario_id
        FROM drive_enlaces_publicos
        WHERE token = ? AND activo = 1`,
       [token],
     );
 
     if (enlaces.length === 0) {
-      return res.status(404).send("Enlace no válido");
+      return res
+        .status(404)
+        .send("<h1>Error 404: Enlace no válido o eliminado.</h1>");
     }
 
     const enlace = enlaces[0];
 
+    // 2. Verificar expiración
     if (
       enlace.fecha_expiracion &&
       new Date(enlace.fecha_expiracion) < new Date()
     ) {
-      return res.status(410).send("Enlace expirado");
+      return res
+        .status(410)
+        .send("<h1>Error 410: Este enlace ha expirado.</h1>");
     }
 
-    // Aquí puedes servir el archivo real o redirigir
-    res.json({ ruta: enlace.ruta_item, tipo: enlace.tipo_item });
+    // 3. Construir la ruta física al archivo
+    // NOTA: El archivo está en la carpeta del PROPIETARIO, no en 'publico'
+    const rutaFisica = path.join(
+      uploadsDir,
+      "drive",
+      `usuario_${enlace.propietario_id}`,
+      enlace.ruta_item,
+    );
+
+    // 4. Verificar que el archivo existe en disco
+    if (!fs.existsSync(rutaFisica)) {
+      return res
+        .status(404)
+        .send("<h1>El archivo físico ya no existe en el servidor.</h1>");
+    }
+
+    // 5. ENVIAR EL ARCHIVO (Descarga directa)
+    res.download(rutaFisica);
   } catch (error) {
     console.error("Error accediendo a recurso:", error);
-    res.status(500).send("Error al acceder al recurso");
+    res.status(500).send("Error interno al procesar la descarga.");
   }
 });
 

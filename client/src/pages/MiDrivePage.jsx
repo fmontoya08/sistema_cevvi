@@ -93,10 +93,18 @@ const MiDrivePage = () => {
     const file = e.target.files[0];
     if (!file) return;
 
+    // ✅ AGREGAR ESTOS LOGS
+    console.log("🔍 Estado actual:");
+    console.log("- rutaActual:", rutaActual);
+    console.log("- Archivo:", file.name);
+
     setSubiendo(true);
     const formData = new FormData();
-    formData.append("archivo", file);
     formData.append("rutaActual", rutaActual);
+    formData.append("archivo", file);
+
+    // ✅ AGREGAR ESTE LOG
+    console.log("- FormData rutaActual:", formData.get("rutaActual"));
 
     try {
       const token = localStorage.getItem("token");
