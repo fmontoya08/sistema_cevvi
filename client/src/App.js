@@ -129,7 +129,7 @@ ChartJS.register(
 // --- CONFIGURACIÓN DE MARCA Y COLORES ---
 const BRAND = {
   name: "Centro universitario Siglo XXI", // O el nombre de tu escuela
-  logo: "/logo.png",
+  logo: "plataforma/logo.png",
   colors: {
     primary: "#a72a34", // Rojo Vino (Botones, Headers activos)
     secondary: "#bb9a5a", // Dorado (Iconos, Detalles)
@@ -650,9 +650,9 @@ const AdminLayout = () => {
 
           <div className="w-24 h-24 mb-3 flex items-center justify-center">
             <img
-              src={BRAND.logo}
-              alt="Logo"
-              className="w-full h-full object-contain"
+              src={process.env.PUBLIC_URL + "/logo.png"}
+              alt="Logo Universidad"
+              className="mx-auto h-20 w-auto object-contain mb-4"
             />
           </div>
           <h2
@@ -833,9 +833,9 @@ const DocenteLayout = () => {
 
           <div className="w-24 h-24 mb-3 flex items-center justify-center">
             <img
-              src={BRAND.logo}
-              alt="Logo"
-              className="w-full h-full object-contain"
+              src={process.env.PUBLIC_URL + "/logo.png"}
+              alt="Logo Universidad"
+              className="mx-auto h-20 w-auto object-contain mb-4"
             />
           </div>
           <h2
@@ -1015,9 +1015,9 @@ const AlumnoLayout = () => {
 
           <div className="w-24 h-24 mb-3 flex items-center justify-center">
             <img
-              src={BRAND.logo}
-              alt="Logo"
-              className="w-full h-full object-contain"
+              src={process.env.PUBLIC_URL + "/logo.png"}
+              alt="Logo Universidad"
+              className="mx-auto h-20 w-auto object-contain mb-4"
             />
           </div>
           <h2
@@ -1286,12 +1286,9 @@ const LoginPage = () => {
         {/* --- SECCIÓN LOGO --- */}
         <div className="text-center">
           <img
-            src="/logo.png"
+            src={process.env.PUBLIC_URL + "/logo.png"}
             alt="Logo Universidad"
             className="mx-auto h-20 w-auto object-contain mb-4"
-            onError={(e) => {
-              e.target.style.display = "none";
-            }}
           />
           <h2 className="text-3xl font-bold text-gray-900">Iniciar Sesión</h2>
           <p className="text-sm text-gray-500 mt-2">Plataforma Institucional</p>
@@ -10243,24 +10240,29 @@ const DetalleCursoDocentePage = () => {
                 {/* COLUMNA ALUMNO: FOTO + DATOS (CORREGIDO) */}
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center">
+                    {/* FOTO DE PERFIL (Igual que en MiPerfil) */}
                     <div className="flex-shrink-0 h-10 w-10">
-                      {/* FOTO: Usamos la URL del servidor o un avatar por defecto */}
                       <img
                         className="h-10 w-10 rounded-full object-cover border border-gray-200"
                         src={
                           alumno.foto_perfil
-                            ? `https://api-universidad-c5o8.onrender.com${alumno.foto_perfil}`
+                            ? `https://api-universidad-c5o8.onrender.com/uploads/perfiles/${alumno.foto_perfil}`
                             : `https://ui-avatars.com/api/?name=${alumno.nombre}+${alumno.apellido_paterno}&background=random`
                         }
                         alt=""
+                        onError={(e) => {
+                          e.target.src = `https://ui-avatars.com/api/?name=${alumno.nombre}+${alumno.apellido_paterno}&background=random`;
+                        }}
                       />
                     </div>
+
+                    {/* DATOS DEL ALUMNO */}
                     <div className="ml-4">
-                      {/* NOMBRE: Usamos 'nombre' y 'apellido_paterno' que SÍ vienen del backend */}
-                      <div className="text-sm font-bold text-gray-900">
-                        {alumno.nombre} {alumno.apellido_paterno}
+                      <div className="text-sm font-medium text-gray-900">
+                        {alumno.nombre} {alumno.apellido_paterno}{" "}
+                        {alumno.apellido_materno}
                       </div>
-                      <div className="text-xs text-gray-500">
+                      <div className="text-sm text-gray-500">
                         {alumno.matricula}
                       </div>
                     </div>

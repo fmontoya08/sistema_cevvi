@@ -7447,7 +7447,7 @@ apiRouter.get(
     try {
       // 1. Obtener LISTA DE ALUMNOS
       const [alumnos] = await db.query(
-        `SELECT u.id, u.nombre, u.apellido_paterno, u.matricula 
+        `SELECT u.id, u.nombre, u.apellido_paterno, u.matricula, u.foto_perfil
        FROM usuarios u
        JOIN grupo_alumnos ga ON u.id = ga.alumno_id
        WHERE ga.grupo_id = ? AND u.rol = 'alumno'
@@ -7566,6 +7566,7 @@ apiRouter.get(
           id: alumno.id,
           nombre: `${alumno.nombre} ${alumno.apellido_paterno}`,
           matricula: alumno.matricula,
+          foto_perfil: alumno.foto_perfil,
           tareas: misTareas,
           examenes: misExamenes,
           asistencia: porcentajeAsistencia,

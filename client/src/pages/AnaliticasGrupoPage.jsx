@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import axios from "axios";
 import { FileText, CheckCircle, Users, Award, Download } from "lucide-react";
+import * as XLSX from "xlsx";
 
 const AnaliticasGrupoPage = () => {
   const { grupoId, asignaturaId } = useParams();
@@ -31,6 +32,55 @@ const AnaliticasGrupoPage = () => {
   if (!data)
     return <div className="p-10 text-center">No hay datos disponibles.</div>;
 
+  // Función para exportar a Excel
+  const handleExportarExcel = () => {
+    if (!data) return;
+
+    // 1. Preparamos las filas para el Excel
+    const datosParaExcel = data.filas.map((alumno) => {
+      // Datos básicos
+      const fila = {
+        Estudiante: alumno.nombre,
+        Matrícula: alumno.matricula,
+      };
+
+      // Agregamos las Tareas dinámicamente (usamos el índice para coincidir con las columnas)
+      data.columnasTareas.forEach((col, index) => {
+        const tarea = alumno.tareas[index]; // Asumimos mismo orden que columnas
+        fila[`Tarea: ${col.titulo}`] = tarea ? tarea.nota : "-";
+      });
+
+      // Agregamos los Exámenes dinámicamente
+      data.columnasExamenes.forEach((col, index) => {
+        const examen = alumno.examenes[index];
+        fila[`Examen: ${col.titulo}`] = examen ? examen.nota : "-";
+      });
+
+      // Datos finales
+      fila["Asistencia (%)"] = `${alumno.asistencia}%`;
+      fila["Promedio Final"] = alumno.promedio;
+
+      return fila;
+    });
+
+    // 2. Creamos la hoja de cálculo (Worksheet)
+    const hoja = XLSX.utils.json_to_sheet(datosParaExcel);
+
+    // Ajustamos el ancho de las columnas (opcional, para que se vea bonito)
+    const wscols = [{ wch: 30 }, { wch: 15 }]; // Ancho para Nombre y Matrícula
+    hoja["!cols"] = wscols;
+
+    // 3. Creamos el libro (Workbook)
+    const libro = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(libro, hoja, "Calificaciones");
+
+    // 4. Descargamos el archivo
+    XLSX.writeFile(
+      libro,
+      `Reporte_Grupo_${grupoId}_Asignatura_${asignaturaId}.xlsx`,
+    );
+  };
+
   // Función para pintar celdas según calificación
   const getColor = (nota) => {
     if (nota >= 90) return "text-green-600 font-bold bg-green-50";
@@ -52,8 +102,11 @@ const AnaliticasGrupoPage = () => {
         </div>
 
         {/* Botón decorativo (funcionalidad futura: exportar a Excel) */}
-        <button className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-gray-100 shadow-sm">
-          <Download size={18} /> Exportar
+        <button
+          onClick={handleExportarExcel} // <--- AGREGAMOS ESTO
+          className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-gray-100 shadow-sm transition-colors"
+        >
+          <Download size={18} /> Exportar Excel
         </button>
       </div>
 
@@ -160,12 +213,26 @@ const AnaliticasGrupoPage = () => {
                   key={alumno.id}
                   className="hover:bg-gray-50 transition-colors"
                 >
-                  {/* ALUMNO */}
+                  {/* ALUMNO - CÓDIGO CORREGIDO CON FOTO */}
                   <td className="px-6 py-4 whitespace-nowrap sticky left-0 bg-white z-10 border-r border-gray-100">
                     <div className="flex items-center">
-                      <div className="flex-shrink-0 h-8 w-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-700 font-bold text-xs">
-                        {alumno.nombre.charAt(0)}
+                      {/* CÓDIGO NUEVO: FOTO DE PERFIL */}
+                      <div className="flex-shrink-0 h-10 w-10">
+                        <img
+                          className="h-10 w-10 rounded-full object-cover border border-gray-200"
+                          src={
+                            alumno.foto_perfil
+                              ? `https://api-universidad-c5o8.onrender.com/uploads/perfiles/${alumno.foto_perfil}`
+                              : `https://ui-avatars.com/api/?name=${alumno.nombre}&background=random`
+                          }
+                          alt=""
+                          onError={(e) => {
+                            e.target.src = `https://ui-avatars.com/api/?name=${alumno.nombre}&background=random`;
+                          }}
+                        />
                       </div>
+                      {/* FIN CÓDIGO NUEVO */}
+
                       <div className="ml-4">
                         <div className="text-sm font-medium text-gray-900">
                           {alumno.nombre}
