@@ -276,9 +276,9 @@ const CalendarioAdmin = () => {
     }
 
     try {
-      await api.post("/api/eventos-admin", {
+      await api.post("/eventos-admin", {
         title: tituloFinal,
-        start: arg.dateStr,
+        start: `${arg.dateStr}T12:00:00`,
         modalidad: modalidadBD,
       });
       cargarEventos();
@@ -291,7 +291,7 @@ const CalendarioAdmin = () => {
     if (window.confirm(`¿Eliminar "${info.event.title}"?`)) {
       try {
         await api.delete(
-          `/api/eventos-admin/${info.event.extendedProps.id || info.event.id}`,
+          `/eventos-admin/${info.event.extendedProps.id || info.event.id}`,
         );
         info.event.remove();
       } catch (error) {

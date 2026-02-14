@@ -7908,6 +7908,275 @@ apiRouter.get(
     }
   },
 );
+
+// ==========================================
+// MÓDULO DE COMPARTIR - DRIVE
+// ==========================================
+
+// 1. Obtener usuarios con quienes está compartido
+apiRouter.get("/drive/compartidos", verifyToken, async (req, res) => {
+  const { ruta, tipo } = req.query;
+  const usuarioId = req.user.id;
+
+  try {
+    const [compartidos] = await db.query(
+      `SELECT 
+        dc.id,
+        dc.permiso,
+        dc.fecha_compartido,
+        u.id as usuario_id,
+        u.nombre,
+        u.apellido_paterno,
+        u.matricula,
+        u.foto_perfil,
+        u.rol
+      FROM drive_compartidos dc
+      JOIN usuarios u ON dc.usuario_compartido_id = u.id
+      WHERE dc.ruta_item = ? 
+        AND dc.tipo_item = ? 
+        AND dc.propietario_id = ?
+      ORDER BY dc.fecha_compartido DESC`,
+      [ruta, tipo, usuarioId],
+    );
+
+    res.json(compartidos);
+  } catch (error) {
+    console.error("Error obteniendo compartidos:", error);
+    res.status(500).send("Error al obtener usuarios compartidos");
+  }
+});
+
+// 2. Buscar usuarios
+apiRouter.get("/drive/buscar-usuarios", verifyToken, async (req, res) => {
+  const { q } = req.query;
+  const usuarioId = req.user.id;
+
+  if (!q || q.length < 2) {
+    return res.json([]);
+  }
+
+  try {
+    const [usuarios] = await db.query(
+      `SELECT 
+        id, 
+        nombre, 
+        apellido_paterno, 
+        apellido_materno,
+        matricula, 
+        foto_perfil, 
+        rol,
+        email_personal
+      FROM usuarios 
+      WHERE id != ? 
+        AND (
+          nombre LIKE ? 
+          OR apellido_paterno LIKE ? 
+          OR matricula LIKE ?
+          OR email_personal LIKE ?
+        )
+        AND activo = 1
+      LIMIT 10`,
+      [usuarioId, `%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`],
+    );
+
+    res.json(usuarios);
+  } catch (error) {
+    console.error("Error buscando usuarios:", error);
+    res.status(500).send("Error al buscar usuarios");
+  }
+});
+
+// 3. Compartir archivo/carpeta
+apiRouter.post("/drive/compartir", verifyToken, async (req, res) => {
+  const { ruta, tipo, usuario_id, permiso } = req.body;
+  const propietarioId = req.user.id;
+
+  if (!ruta || !tipo || !usuario_id || !permiso) {
+    return res.status(400).send("Faltan datos requeridos");
+  }
+
+  if (!["ver", "editar", "descargar"].includes(permiso)) {
+    return res.status(400).send("Permiso inválido");
+  }
+
+  try {
+    if (parseInt(usuario_id) === propietarioId) {
+      return res.status(400).send("No puedes compartir contigo mismo");
+    }
+
+    await db.query(
+      `INSERT INTO drive_compartidos 
+        (ruta_item, tipo_item, propietario_id, usuario_compartido_id, permiso)
+      VALUES (?, ?, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE permiso = ?`,
+      [ruta, tipo, propietarioId, usuario_id, permiso, permiso],
+    );
+
+    res.json({ message: "Compartido exitosamente" });
+  } catch (error) {
+    console.error("Error compartiendo:", error);
+    res.status(500).send("Error al compartir");
+  }
+});
+
+// 4. Eliminar acceso
+apiRouter.delete("/drive/compartir/:id", verifyToken, async (req, res) => {
+  const { id } = req.params;
+  const usuarioId = req.user.id;
+
+  try {
+    const [result] = await db.query(
+      `DELETE FROM drive_compartidos 
+       WHERE id = ? AND propietario_id = ?`,
+      [id, usuarioId],
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).send("Compartido no encontrado");
+    }
+
+    res.json({ message: "Acceso eliminado" });
+  } catch (error) {
+    console.error("Error eliminando acceso:", error);
+    res.status(500).send("Error al eliminar acceso");
+  }
+});
+
+// 5. Cambiar permiso
+apiRouter.put("/drive/compartir/:id", verifyToken, async (req, res) => {
+  const { id } = req.params;
+  const { permiso } = req.body;
+  const usuarioId = req.user.id;
+
+  if (!["ver", "editar", "descargar"].includes(permiso)) {
+    return res.status(400).send("Permiso inválido");
+  }
+
+  try {
+    await db.query(
+      `UPDATE drive_compartidos 
+       SET permiso = ?
+       WHERE id = ? AND propietario_id = ?`,
+      [permiso, id, usuarioId],
+    );
+
+    res.json({ message: "Permiso actualizado" });
+  } catch (error) {
+    console.error("Error actualizando permiso:", error);
+    res.status(500).send("Error al actualizar permiso");
+  }
+});
+
+// 6. Generar enlace público
+apiRouter.post("/drive/enlace-publico", verifyToken, async (req, res) => {
+  const { ruta, tipo, dias_expiracion } = req.body;
+  const usuarioId = req.user.id;
+
+  try {
+    const crypto = require("crypto");
+    const token = crypto.randomBytes(32).toString("hex");
+
+    let fechaExpiracion = null;
+    if (dias_expiracion && dias_expiracion > 0) {
+      fechaExpiracion = new Date();
+      fechaExpiracion.setDate(fechaExpiracion.getDate() + dias_expiracion);
+    }
+
+    await db.query(
+      `INSERT INTO drive_enlaces_publicos 
+        (ruta_item, tipo_item, propietario_id, token, fecha_expiracion)
+      VALUES (?, ?, ?, ?, ?)`,
+      [ruta, tipo, usuarioId, token, fechaExpiracion],
+    );
+
+    const enlacePublico = `https://universidadsigloxxi.com/drive/publico/${token}`;
+
+    res.json({ enlace: enlacePublico, token });
+  } catch (error) {
+    console.error("Error generando enlace:", error);
+    res.status(500).send("Error al generar enlace");
+  }
+});
+
+// 7. Obtener enlace público existente
+apiRouter.get("/drive/enlace-publico", verifyToken, async (req, res) => {
+  const { ruta, tipo } = req.query;
+  const usuarioId = req.user.id;
+
+  try {
+    const [enlaces] = await db.query(
+      `SELECT token, fecha_expiracion
+       FROM drive_enlaces_publicos
+       WHERE ruta_item = ? AND tipo_item = ? AND propietario_id = ? AND activo = 1
+       ORDER BY fecha_creacion DESC LIMIT 1`,
+      [ruta, tipo, usuarioId],
+    );
+
+    if (enlaces.length === 0) {
+      return res.json({ enlace: null });
+    }
+
+    const enlace = `https://universidadsigloxxi.com/drive/publico/${enlaces[0].token}`;
+    res.json({ enlace });
+  } catch (error) {
+    console.error("Error obteniendo enlace:", error);
+    res.status(500).send("Error al obtener enlace");
+  }
+});
+
+// 8. Desactivar enlace
+apiRouter.delete("/drive/enlace-publico", verifyToken, async (req, res) => {
+  const { ruta, tipo } = req.query;
+  const usuarioId = req.user.id;
+
+  try {
+    await db.query(
+      `UPDATE drive_enlaces_publicos 
+       SET activo = 0
+       WHERE ruta_item = ? AND tipo_item = ? AND propietario_id = ?`,
+      [ruta, tipo, usuarioId],
+    );
+
+    res.json({ message: "Enlace desactivado" });
+  } catch (error) {
+    console.error("Error desactivando enlace:", error);
+    res.status(500).send("Error al desactivar enlace");
+  }
+});
+
+// 9. Acceder a recurso público (sin auth)
+app.get("/drive/publico/:token", async (req, res) => {
+  const { token } = req.params;
+
+  try {
+    const [enlaces] = await db.query(
+      `SELECT ruta_item, tipo_item, fecha_expiracion
+       FROM drive_enlaces_publicos
+       WHERE token = ? AND activo = 1`,
+      [token],
+    );
+
+    if (enlaces.length === 0) {
+      return res.status(404).send("Enlace no válido");
+    }
+
+    const enlace = enlaces[0];
+
+    if (
+      enlace.fecha_expiracion &&
+      new Date(enlace.fecha_expiracion) < new Date()
+    ) {
+      return res.status(410).send("Enlace expirado");
+    }
+
+    // Aquí puedes servir el archivo real o redirigir
+    res.json({ ruta: enlace.ruta_item, tipo: enlace.tipo_item });
+  } catch (error) {
+    console.error("Error accediendo a recurso:", error);
+    res.status(500).send("Error al acceder al recurso");
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Servidor corriendo en http://localhost:${PORT}`);
 });
