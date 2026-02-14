@@ -11524,10 +11524,15 @@ const AulaVirtualPage = () => {
       {/* 1. ENCABEZADO TIPO DASHBOARD (Fondo Blanco, Sombra Suave) */}
       <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
         <div>
-          <h2 className="text-3xl font-bold text-gray-800 tracking-tight">
-            Aula Virtual
+          {/* AQUI MOSTRAMOS EL NOMBRE DE LA ASIGNATURA */}
+          <h2 className="text-3xl font-bold text-gray-800 tracking-tight flex flex-col">
+            <span>{config.nombre_asignatura || "Aula Virtual"}</span>
+            <span className="text-sm font-medium text-gray-500 mt-1">
+              Grupo: {config.nombre_grupo}
+            </span>
           </h2>
-          <div className="flex items-center gap-2 mt-2">
+
+          <div className="flex items-center gap-2 mt-3">
             {/* Badges de Estado con diseño sutil */}
             <span
               className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border ${

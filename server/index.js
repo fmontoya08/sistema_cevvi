@@ -5051,7 +5051,7 @@ async function getOrCreateAulaConfig(grupoId, asignaturaId) {
   );
   // Luego, selecciónalo. Ahora estamos seguros de que existe.
   const [[config]] = await db.query(
-    `SELECT avc.*, g.modalidad, g.estatus 
+    `SELECT avc.*, g.modalidad, g.estatus, g.nombre_grupo, a.nombre_asignatura, a.clave_asignatura 
      FROM aula_virtual_config avc
      JOIN grupos g ON avc.grupo_id = g.id 
      WHERE avc.grupo_id = ? AND avc.asignatura_id = ?`,
