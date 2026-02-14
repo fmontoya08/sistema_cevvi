@@ -799,6 +799,7 @@ const DocenteLayout = () => {
     { icon: Home, label: "Mis Cursos", path: "/docente/dashboard" },
     { icon: Mail, label: "Correo Institucional", path: "/docente/correo" },
     { icon: UploadCloud, label: "Mi Nube", path: "/docente/mi-nube" },
+    { icon: Calendar, label: "Calendario", path: "/docente/calendario" },
     // Puedes agregar más items aquí si el docente tiene más secciones
   ];
 
@@ -11730,6 +11731,17 @@ const AulaVirtualPage = () => {
               )}
             </div>
 
+            {config.descripcion_curso && (
+              <div className="bg-blue-50 p-6 rounded-2xl border border-blue-100 shadow-sm">
+                <h4 className="font-bold text-blue-800 text-lg mb-2 flex items-center gap-2">
+                  <Sparkles size={20} /> Bienvenida / Descripción General
+                </h4>
+                <p className="text-gray-700 text-sm leading-relaxed whitespace-pre-wrap">
+                  {config.descripcion_curso}
+                </p>
+              </div>
+            )}
+
             {/* Grid de Información */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div className="space-y-4">
@@ -13734,6 +13746,10 @@ function App() {
               <Route path="/docente/correo" element={<CorreoPage />} />
               <Route path="/docente/mi-nube" element={<MiDrivePage />} />
               <Route path="/docente/mi-perfil" element={<MiPerfilPage />} />
+              <Route
+                path="/docente/calendario"
+                element={<CalendarioAlumno />}
+              />
 
               {/* Gestión del Curso */}
               <Route

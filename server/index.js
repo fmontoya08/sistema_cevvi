@@ -7643,12 +7643,13 @@ app.delete("/api/eventos-admin/:id", verificarAdmin, async (req, res) => {
     res.status(500).send("Error al eliminar");
   }
 });
+
 // ==========================================
-// MÓDULO CALENDARIO (LADO ALUMNO)
+// MÓDULO CALENDARIO (LADO ALUMNO Y DOCENTE)
 // ==========================================
 
-// 1. Middleware para verificar que sea Alumno
-const verificarAlumno = (req, res, next) => {
+// 1. Middleware COMPARTIDO (Permite Alumno y Docente)
+const verificarLecturaCalendario = (req, res, next) => {
   const authHeader = req.headers["authorization"];
   if (!authHeader) return res.sendStatus(401);
 
@@ -7656,21 +7657,24 @@ const verificarAlumno = (req, res, next) => {
   jwt.verify(token, JWT_SECRET, (err, user) => {
     if (err) return res.sendStatus(403);
 
-    if (user.rol.toLowerCase() !== "alumno") {
-      return res.status(403).send("Acceso denegado: Solo alumnos.");
+    const rol = user.rol.toLowerCase();
+
+    // AQUÍ ESTÁ EL CAMBIO: Permitimos entrar si es alumno O docente
+    if (rol !== "alumno" && rol !== "docente") {
+      return res.status(403).send("Acceso denegado: Solo alumnos y docentes.");
     }
     req.user = user;
     next();
   });
 };
 
-// 2. Ruta Inteligente: Obtener eventos (CORREGIDA PARA TU BASE DE DATOS)
-app.get("/api/eventos-alumno", verificarAlumno, async (req, res) => {
+// 2. Ruta Inteligente: Obtener eventos (AHORA PARA AMBOS)
+app.get("/api/eventos-alumno", verificarLecturaCalendario, async (req, res) => {
   try {
     const { id } = req.user;
 
-    // A) Averiguamos la modalidad mirando DIRECTAMENTE en la tabla usuarios
-    // Hacemos JOIN con grupos usando el 'grupo_id' que ya tiene el usuario
+    // A) Intentamos averiguar la modalidad del usuario
+    // Si es alumno, tendrá grupo. Si es docente, usualmente no, por lo que no traerá nada.
     const [info] = await db.query(
       `
         SELECT g.modalidad 
@@ -7682,27 +7686,28 @@ app.get("/api/eventos-alumno", verificarAlumno, async (req, res) => {
       [id],
     );
 
-    // Si no encontramos grupo o modalidad, asumimos 'presencial' por seguridad
-    const modalidadAlumno =
+    // Si encontramos modalidad (es alumno), la usamos.
+    // Si NO encontramos (es docente o alumno sin grupo), asumimos 'presencial' por defecto
+    // para que vea los eventos generales y presenciales.
+    const modalidadUsuario =
       info.length > 0 && info[0].modalidad ? info[0].modalidad : "presencial";
 
-    console.log(`Alumno ID: ${id} | Modalidad detectada: ${modalidadAlumno}`);
-
-    // B) Buscamos sus eventos (Generales + Su Modalidad)
+    // B) Buscamos los eventos (Generales + Modalidad Detectada)
     const [eventos] = await db.query(
       `
         SELECT * FROM eventos 
         WHERE modalidad = 'general' OR modalidad = ?
     `,
-      [modalidadAlumno],
+      [modalidadUsuario],
     );
 
     res.json(eventos);
   } catch (error) {
-    console.error("Error calendario alumno:", error);
+    console.error("Error calendario lectura:", error);
     res.status(500).send("Error al obtener calendario");
   }
 });
+
 // ==========================================
 // MÓDULO FINANZAS (ALUMNO)
 // ==========================================
