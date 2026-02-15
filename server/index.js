@@ -4861,71 +4861,79 @@ const driveRouter = express.Router();
 const getUserRoot = (userId) =>
   path.join(uploadsDir, "drive", `usuario_${userId}`);
 
-// 1. LISTAR ARCHIVOS (PROPIOS + COMPARTIDOS)
+// 1. LISTAR ARCHIVOS (Soporte para carpetas compartidas)
 driveRouter.get("/list", async (req, res) => {
   try {
     const userId = req.user.id;
     const rutaRelativa = req.query.ruta || "";
+    // NUEVO: Recibimos el ID del dueño de la carpeta que estamos viendo
+    const ownerIdParam = req.query.ownerId;
 
-    // Seguridad básica de rutas
     if (rutaRelativa.includes(".."))
       return res.status(400).send({ message: "Ruta inválida" });
 
-    const userRoot = getUserRoot(userId);
+    // LÓGICA DE DUEÑO:
+    // Si me mandan un ownerId y NO es el mío, significa que estoy explorando la carpeta de otro.
+    // Si no mandan nada, asumo que es mi propia carpeta.
+    const targetUserId =
+      ownerIdParam && ownerIdParam !== "null" ? ownerIdParam : userId;
+
+    // Construimos la ruta física basada en el usuario objetivo (Yo o el Admin)
+    const userRoot = path.join(uploadsDir, "drive", `usuario_${targetUserId}`);
     const targetPath = path.join(userRoot, rutaRelativa);
+
     let respuesta = [];
 
-    // A) LEER ARCHIVOS FÍSICOS (Lo que ya tenías)
+    // A) LEER ARCHIVOS FÍSICOS (Del usuario objetivo)
     if (fs.existsSync(targetPath)) {
       const elementos = fs.readdirSync(targetPath, { withFileTypes: true });
       respuesta = elementos.map((dirent) => {
         const rutaClean = rutaRelativa
           ? path.join(rutaRelativa, dirent.name).replace(/\\/g, "/")
           : dirent.name;
+
         return {
           nombre: dirent.name,
           tipo: dirent.isDirectory() ? "carpeta" : "archivo",
           ruta: rutaClean,
-          url: !dirent.isDirectory()
-            ? `/uploads/drive/usuario_${userId}/${rutaClean}`
-            : null,
-          es_propio: true, // Marcamos que es mío
+          // La URL de descarga siempre debe apuntar al dueño real del archivo
+          url: `/uploads/drive/usuario_${targetUserId}/${rutaClean}`,
+          es_propio: parseInt(targetUserId) === userId, // ¿Es mío o prestado?
+          owner_id: targetUserId, // Devolvemos quién es el dueño para seguir navegando
         };
       });
     }
 
-    // B) LEER ARCHIVOS COMPARTIDOS CONMIGO (SOLO EN LA RAÍZ)
-    // Si estamos en la carpeta principal, buscamos en la BD qué nos han compartido
-    if (rutaRelativa === "") {
+    // B) LEER LO QUE ME COMPARTIERON (SOLO SI ESTOY EN MI RAÍZ)
+    // Solo mostramos "Compartidos conmigo" si estoy en mi propia raíz (userId == targetUserId y sin ruta)
+    if (parseInt(targetUserId) === userId && rutaRelativa === "") {
       const [compartidos] = await db.query(
-        `SELECT dc.ruta_item, dc.tipo_item, dc.permiso, u.id as owner_id, u.nombre as owner_name
+        `SELECT dc.ruta_item, dc.tipo_item, dc.permiso, u.id as owner_id, u.nombre, u.apellido_paterno
          FROM drive_compartidos dc
          JOIN usuarios u ON dc.propietario_id = u.id
          WHERE dc.usuario_compartido_id = ?`,
         [userId],
       );
 
-      // Procesamos los compartidos para que tengan el mismo formato visual
       const itemsCompartidos = compartidos.map((item) => {
-        // Extraemos solo el nombre del archivo de la ruta completa
         const nombreArchivo = path.basename(item.ruta_item);
-
         return {
-          nombre: `[COMPARTIDO] ${nombreArchivo}`, // Le ponemos una marca visual
-          tipo: item.tipo_item, // 'archivo' o 'carpeta'
-          ruta: item.ruta_item, // Ruta original del dueño
-          // La URL apunta a la carpeta del DUEÑO, no la mía
+          // Agregamos el nombre del dueño para identificar fácil
+          nombre: `📁 ${nombreArchivo} (de ${item.nombre})`,
+          tipo: item.tipo_item,
+          ruta: item.ruta_item,
           url: `/uploads/drive/usuario_${item.owner_id}/${item.ruta_item}`,
           es_propio: false,
           permiso: item.permiso,
+          owner_id: item.owner_id, // <--- IMPORTANTE: El ID del dueño real (Admin)
+          es_compartido_root: true, // Marca para saber que este es el punto de entrada
         };
       });
 
-      // Unimos las dos listas
       respuesta = [...respuesta, ...itemsCompartidos];
     }
 
-    // Ordenamos
+    // Ordenar
     respuesta.sort((a, b) =>
       a.tipo === b.tipo ? 0 : a.tipo === "carpeta" ? -1 : 1,
     );

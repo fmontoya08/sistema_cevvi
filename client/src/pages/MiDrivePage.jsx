@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import * as XLSX from "xlsx";
 import axios from "axios";
 import {
   Folder,
@@ -25,8 +26,200 @@ import {
   Loader,
 } from "lucide-react";
 
+const ExcelEditorModal = ({ archivo, onClose, onSave }) => {
+  const [data, setData] = useState([]);
+  const [guardando, setGuardando] = useState(false);
+
+  useEffect(() => {
+    const leerArchivo = async () => {
+      try {
+        const response = await axios.get(
+          `https://api-universidad-c5o8.onrender.com${archivo.url}`,
+          { responseType: "arraybuffer" },
+        );
+        const workbook = XLSX.read(response.data, { type: "array" });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+
+        // Obtenemos los datos como matriz (filas y columnas)
+        let jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+        // Si está vacío, iniciamos con una celda
+        if (!jsonData || jsonData.length === 0) jsonData = [[""]];
+
+        // Normalizar: Asegurar que todas las filas tengan el mismo número de columnas
+        const maxCols = Math.max(...jsonData.map((row) => row.length));
+        const normalizedData = jsonData.map((row) => {
+          const newRow = [...row];
+          while (newRow.length < maxCols) newRow.push("");
+          return newRow;
+        });
+
+        setData(normalizedData);
+      } catch (error) {
+        alert("No se pudo leer el Excel.");
+        onClose();
+      }
+    };
+    leerArchivo();
+  }, [archivo]);
+
+  // Editar celda
+  const handleCellChange = (rowIndex, colIndex, value) => {
+    const newData = [...data];
+    newData[rowIndex][colIndex] = value;
+    setData(newData);
+  };
+
+  // Agregar Fila (Abajo)
+  const agregarFila = () => {
+    const numCols = data.length > 0 ? data[0].length : 1;
+    const nuevaFila = new Array(numCols).fill("");
+    setData([...data, nuevaFila]);
+  };
+
+  // Agregar Columna (A la derecha)
+  const agregarColumna = () => {
+    const newData = data.map((row) => [...row, ""]); // Agregamos un espacio vacío a cada fila
+    if (newData.length === 0) newData.push([""]); // Si no había filas, creamos una
+    setData(newData);
+  };
+
+  // Generar letras de columna (A, B, C... AA, AB...)
+  const getColumnLabel = (index) => {
+    let label = "";
+    let i = index;
+    while (i >= 0) {
+      label = String.fromCharCode((i % 26) + 65) + label;
+      i = Math.floor(i / 26) - 1;
+    }
+    return label;
+  };
+
+  const guardar = async () => {
+    setGuardando(true);
+    try {
+      const newWorkbook = XLSX.utils.book_new();
+      const newWorksheet = XLSX.utils.aoa_to_sheet(data);
+      XLSX.utils.book_append_sheet(newWorkbook, newWorksheet, "Hoja1");
+      const excelBuffer = XLSX.write(newWorkbook, {
+        bookType: "xlsx",
+        type: "array",
+      });
+      const blob = new Blob([excelBuffer], {
+        type: "application/octet-stream",
+      });
+
+      const file = new File([blob], archivo.nombre, {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+
+      await onSave(file, archivo.ruta);
+      onClose();
+    } catch (error) {
+      alert("Error al guardar.");
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/90 z-50 flex flex-col p-4 animate-in fade-in">
+      <div className="bg-white rounded-lg flex-1 flex flex-col overflow-hidden shadow-2xl">
+        {/* Header */}
+        <div className="p-3 border-b flex flex-col md:flex-row justify-between items-center bg-green-50 gap-3">
+          <h3 className="font-bold text-green-800 flex gap-2 items-center">
+            <FileText size={20} /> {archivo.nombre}
+          </h3>
+
+          <div className="flex gap-2">
+            {/* BOTONES DE ACCIÓN */}
+            <button
+              onClick={agregarFila}
+              className="px-3 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 flex items-center gap-1 text-sm font-bold"
+            >
+              <Plus size={14} /> Fila
+            </button>
+            <button
+              onClick={agregarColumna}
+              className="px-3 py-1.5 bg-purple-50 text-purple-700 border border-purple-200 rounded hover:bg-purple-100 flex items-center gap-1 text-sm font-bold"
+            >
+              <Plus size={14} /> Columna
+            </button>
+
+            <div className="w-px h-8 bg-gray-300 mx-1"></div>
+
+            <button
+              onClick={onClose}
+              className="px-3 py-1.5 text-gray-600 hover:bg-gray-200 rounded text-sm"
+            >
+              Cerrar
+            </button>
+            <button
+              onClick={guardar}
+              disabled={guardando}
+              className="px-4 py-1.5 bg-green-600 text-white font-bold rounded hover:bg-green-700 flex items-center gap-2 text-sm shadow-sm"
+            >
+              {guardando ? "Guardando..." : "Guardar"}
+            </button>
+          </div>
+        </div>
+
+        {/* Tabla Estilo Excel */}
+        <div className="flex-1 overflow-auto bg-gray-200 relative">
+          <table className="border-collapse bg-white text-sm table-fixed">
+            <thead>
+              <tr>
+                {/* Esquina vacía */}
+                <th className="bg-gray-100 border border-gray-300 w-10 sticky top-0 left-0 z-20"></th>
+                {/* Cabeceras de Columna (A, B, C...) */}
+                {data[0]?.map((_, i) => (
+                  <th
+                    key={i}
+                    className="bg-gray-100 border border-gray-300 p-1 min-w-[100px] font-bold text-gray-600 sticky top-0 z-10 select-none"
+                  >
+                    {getColumnLabel(i)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {data.map((row, r) => (
+                <tr key={r}>
+                  {/* Número de Fila (1, 2, 3...) */}
+                  <td className="bg-gray-100 border border-gray-300 text-center font-bold text-gray-500 sticky left-0 z-10 select-none">
+                    {r + 1}
+                  </td>
+
+                  {/* Celdas */}
+                  {row.map((cell, c) => (
+                    <td
+                      key={c}
+                      className="border border-gray-300 p-0 relative min-w-[100px] h-8"
+                    >
+                      <input
+                        className="w-full h-full px-2 border-none outline-none focus:ring-2 focus:ring-green-500 focus:bg-green-50 focus:z-20 absolute inset-0 text-gray-800"
+                        value={cell || ""}
+                        onChange={(e) => handleCellChange(r, c, e.target.value)}
+                      />
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {/* Espacio extra al final para scroll cómodo */}
+          <div className="h-20"></div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const MiDrivePage = () => {
   const [rutaActual, setRutaActual] = useState("");
+  const [ownerActual, setOwnerActual] = useState(null);
   const [items, setItems] = useState([]);
   const [cargando, setCargando] = useState(false);
   const [subiendo, setSubiendo] = useState(false);
@@ -48,6 +241,9 @@ const MiDrivePage = () => {
   const [copiado, setCopiado] = useState(false);
   const [diasExpiracion, setDiasExpiracion] = useState(7);
 
+  const [editorExcelOpen, setEditorExcelOpen] = useState(false);
+  const [archivoParaEditar, setArchivoParaEditar] = useState(null);
+
   // Cargar datos
   useEffect(() => {
     cargarDrive();
@@ -57,8 +253,9 @@ const MiDrivePage = () => {
     setCargando(true);
     try {
       const token = localStorage.getItem("token");
+      // Enviamos el ownerActual en la URL
       const res = await axios.get(
-        `https://api-universidad-c5o8.onrender.com/api/drive/list?ruta=${rutaActual}`,
+        `https://api-universidad-c5o8.onrender.com/api/drive/list?ruta=${rutaActual}&ownerId=${ownerActual || ""}`,
         {
           headers: { Authorization: `Bearer ${token}` },
         },
@@ -70,6 +267,10 @@ const MiDrivePage = () => {
       setCargando(false);
     }
   };
+
+  useEffect(() => {
+    cargarDrive();
+  }, [rutaActual, ownerActual]);
 
   // --- ACCIONES BÁSICAS ---
 
@@ -86,6 +287,65 @@ const MiDrivePage = () => {
       cargarDrive();
     } catch (error) {
       alert("Error al crear carpeta");
+    }
+  };
+
+  const handleGuardarExcel = async (nuevoArchivo, rutaCompleta) => {
+    // Calculamos la carpeta padre basándonos en la ruta del archivo
+    // Ejemplo: "Carpetas/Trabajo/excel.xlsx" -> "Carpetas/Trabajo"
+    const partes = rutaCompleta.split("/");
+    partes.pop(); // Quitamos el nombre del archivo
+    const carpetaPadre = partes.join("/");
+
+    // Usamos FormData igual que en tu subida normal
+    const formData = new FormData();
+    formData.append("rutaActual", carpetaPadre); // IMPORTANTE: Ruta primero
+    formData.append("archivo", nuevoArchivo);
+
+    try {
+      const token = localStorage.getItem("token");
+      await axios.post(
+        "https://api-universidad-c5o8.onrender.com/api/drive/upload",
+        formData,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "multipart/form-data",
+          },
+        },
+      );
+      cargarDrive(); // Recargamos para ver la fecha actualizada
+      alert("Archivo actualizado con éxito.");
+    } catch (e) {
+      console.error(e);
+      alert("Error al sobrescribir el archivo.");
+    }
+  };
+
+  const handleClickItem = (item) => {
+    if (item.tipo === "carpeta") {
+      // AQUI ESTÁ LA CLAVE:
+      // Si es un ítem compartido desde raíz, le pasamos su owner_id.
+      // Si es una carpeta normal, pasamos null para conservar el estado actual.
+      const idDueno = item.es_compartido_root ? item.owner_id : null;
+
+      // Limpiamos el nombre visual "(de Admin)" para la ruta real
+      const nombreReal = item.es_compartido_root
+        ? item.ruta.split("/").pop() // Usamos el nombre real de la ruta
+        : item.nombre;
+
+      entrarCarpeta(nombreReal, idDueno);
+    } else {
+      // ... lógica de Excel o Abrir archivo (igual que antes) ...
+      if (item.nombre.match(/\.(xlsx|xls|csv)$/i)) {
+        setArchivoParaEditar(item);
+        setEditorExcelOpen(true);
+      } else {
+        window.open(
+          `https://api-universidad-c5o8.onrender.com${item.url}`,
+          "_blank",
+        );
+      }
     }
   };
 
@@ -337,14 +597,28 @@ const MiDrivePage = () => {
     }
   };
 
-  // Navegación
-  const entrarCarpeta = (nombre) =>
+  // MODIFICAR: Navegación "Entrar Carpeta"
+  const entrarCarpeta = (nombre, nuevoOwnerId) => {
+    // Si me pasan un nuevo ID (ej: al hacer clic en carpeta compartida), lo uso.
+    // Si no, mantengo el que ya tenía (ej: navegando dentro de subcarpetas del admin).
+    if (nuevoOwnerId) setOwnerActual(nuevoOwnerId);
+
     setRutaActual(rutaActual ? `${rutaActual}/${nombre}` : nombre);
+  };
+
+  // MODIFICAR: Navegación "Ir Arriba" (Atrás)
   const irArriba = () => {
     if (!rutaActual) return;
     const partes = rutaActual.split("/");
     partes.pop();
-    setRutaActual(partes.join("/"));
+    const nuevaRuta = partes.join("/");
+
+    setRutaActual(nuevaRuta);
+
+    // Si volvemos a la raíz absoluta, reseteamos el owner a "mí mismo"
+    if (nuevaRuta === "") {
+      setOwnerActual(null);
+    }
   };
 
   return (
@@ -432,14 +706,7 @@ const MiDrivePage = () => {
                 {/* Contenido principal */}
                 <div
                   className="w-full flex flex-col items-center cursor-pointer"
-                  onClick={() =>
-                    item.tipo === "carpeta"
-                      ? entrarCarpeta(item.nombre)
-                      : window.open(
-                          `https://api-universidad-c5o8.onrender.com${item.url}`,
-                          "_blank",
-                        )
-                  }
+                  onClick={() => handleClickItem(item)}
                 >
                   <div className="w-16 h-16 mb-3 flex items-center justify-center text-gray-500">
                     {item.tipo === "carpeta" ? (
@@ -718,8 +985,17 @@ const MiDrivePage = () => {
             </div>
           </div>
         )}
-      </div>
-    </div>
+        {/* MODAL EDITOR EXCEL */}
+        {editorExcelOpen && archivoParaEditar && (
+          <ExcelEditorModal
+            archivo={archivoParaEditar}
+            onClose={() => setEditorExcelOpen(false)}
+            onSave={handleGuardarExcel}
+          />
+        )}
+      </div>{" "}
+      {/* Cierre de max-w-7xl */}
+    </div> // Cierre del div principal
   );
 };
 
