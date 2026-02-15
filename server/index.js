@@ -1130,21 +1130,20 @@ app.get("/api/email/folder/:boxName", verifyToken, async (req, res) => {
   }
 });
 
-// 2. LEER MENSAJE (Ahora soporta carpetas: Inbox, Sent, Trash)
+// RUTA PARA LEER UN MENSAJE (SOPORTE COMPLETO DE ADJUNTOS)
 app.get("/api/email/mensaje/:uid", verifyToken, async (req, res) => {
   const { uid } = req.params;
-  const { folder } = req.query; // <--- LEEMOS LA CARPETA DE LA URL (?folder=sent)
+  // Leemos la carpeta desde el query param (ej: ?folder=sent)
+  // Si no viene, asumimos INBOX.
+  const folderParam = req.query.folder || "inbox";
 
-  console.log(`[EMAIL DEBUG] Buscando UID: ${uid} en carpeta: ${folder}`);
+  // Mapeo de nombres de carpeta del frontend a nombres reales del sistema IMAP
+  let folderSystemName = "INBOX";
+  if (folderParam === "sent") folderSystemName = "INBOX.Sent"; // O prueba "Sent"
+  if (folderParam === "trash") folderSystemName = "INBOX.Trash"; // O prueba "Trash"
 
   try {
     const mailConfig = await getUserEmailCredentials(req.user.id);
-
-    // TRADUCCIÓN DE CARPETAS (Igual que en la ruta de lista)
-    let folderSystemName = "INBOX";
-    if (folder === "sent") folderSystemName = "INBOX.Sent";
-    if (folder === "trash") folderSystemName = "INBOX.Trash";
-
     const config = {
       imap: {
         user: mailConfig.user,
@@ -1152,31 +1151,30 @@ app.get("/api/email/mensaje/:uid", verifyToken, async (req, res) => {
         host: mailConfig.host,
         port: mailConfig.imapPort,
         tls: true,
-        authTimeout: 20000,
+        authTimeout: 10000,
         tlsOptions: { rejectUnauthorized: false },
       },
     };
 
     const connection = await imaps.connect(config);
 
-    // INTENTAMOS ABRIR LA CARPETA CORRECTA
+    // Intentar abrir la carpeta correcta
     try {
       await connection.openBox(folderSystemName);
-    } catch (err) {
-      // Fallback por si acaso
-      if (folder === "sent") await connection.openBox("Sent");
-      else if (folder === "trash") await connection.openBox("Trash");
+    } catch (e) {
+      // Fallback: A veces los servidores llaman a la carpeta solo "Sent" en lugar de "INBOX.Sent"
+      if (folderParam === "sent") await connection.openBox("Sent");
+      else if (folderParam === "trash") await connection.openBox("Trash");
       else await connection.openBox("INBOX");
     }
 
     const searchCriteria = [["UID", parseInt(uid, 10)]];
     const fetchOptions = { bodies: [""], markSeen: true };
-
     const messages = await connection.search(searchCriteria, fetchOptions);
 
     if (!messages.length) {
       connection.end();
-      return res.status(404).send("Correo no encontrado en esta carpeta");
+      return res.status(404).send("Correo no encontrado");
     }
 
     const all = messages[0].parts.find((part) => part.which === "");
@@ -1184,15 +1182,28 @@ app.get("/api/email/mensaje/:uid", verifyToken, async (req, res) => {
 
     connection.end();
 
+    // --- ESTA PARTE ES LA CLAVE PARA VER LOS ARCHIVOS ---
+    const adjuntosProcesados = parsed.attachments
+      ? parsed.attachments.map((att) => ({
+          filename: att.filename,
+          contentType: att.contentType,
+          size: att.size,
+          // Convertimos el contenido binario a Base64 para que el navegador lo entienda
+          content: att.content.toString("base64"),
+          contentId: att.contentId,
+        }))
+      : [];
+
     res.json({
       asunto: parsed.subject,
       de: parsed.from?.text,
-      para: parsed.to?.text, // Agregamos 'para' que es útil en enviados
+      para: parsed.to?.text, // Importante para la carpeta Enviados
       fecha: parsed.date,
       html: parsed.html || parsed.textAsHtml || parsed.text,
+      adjuntos: adjuntosProcesados, // <-- AQUÍ VAN TUS ARCHIVOS
     });
   } catch (error) {
-    console.error("ERROR MENSAJE:", error);
+    console.error("Error leyendo mensaje:", error);
     res.status(500).send("Error al abrir el correo");
   }
 });

@@ -17,6 +17,7 @@ import {
   Download,
   Plus,
   Loader,
+  PenTool,
   Lock,
 } from "lucide-react";
 
@@ -47,10 +48,10 @@ const CorreoPage = () => {
   const [configurado, setConfigurado] = useState(null);
   const [passwordInput, setPasswordInput] = useState("");
 
-  // UI States
-  const [carpetaActual, setCarpetaActual] = useState("inbox");
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  // UI States (Header Tabs)
+  const [carpetaActual, setCarpetaActual] = useState("inbox"); // 'inbox', 'sent', 'trash'
   const [modoRedactar, setModoRedactar] = useState(false);
+  const [activeMobileView, setActiveMobileView] = useState("list");
 
   // Data States
   const [correos, setCorreos] = useState([]);
@@ -58,8 +59,8 @@ const CorreoPage = () => {
   const [cargando, setCargando] = useState(false);
 
   // Detail States
-  const [correoSeleccionado, setCorreoSeleccionado] = useState(null); // ID seleccionado
-  const [detalleCorreo, setDetalleCorreo] = useState(null); // Objeto completo
+  const [correoSeleccionado, setCorreoSeleccionado] = useState(null);
+  const [detalleCorreo, setDetalleCorreo] = useState(null);
   const [cargandoMensaje, setCargandoMensaje] = useState(false);
 
   // Compose States
@@ -112,8 +113,9 @@ const CorreoPage = () => {
   const cargarCarpeta = async (nombre) => {
     setCargando(true);
     setCorreos([]);
-    setCorreoSeleccionado(null); // Resetea la vista al cambiar carpeta
+    setCorreoSeleccionado(null);
     setDetalleCorreo(null);
+    setActiveMobileView("list");
     try {
       const res = await axios.get(`${API_URL}/folder/${nombre}`, authHeaders);
       setCorreos(res.data);
@@ -126,6 +128,7 @@ const CorreoPage = () => {
 
   const cargarDetalle = async (uid) => {
     setCorreoSeleccionado(uid);
+    setActiveMobileView("detail");
     setDetalleCorreo(null);
     setCargandoMensaje(true);
     try {
@@ -161,15 +164,12 @@ const CorreoPage = () => {
     });
 
     try {
-      // CORRECCIÓN CRÍTICA: NO poner 'Content-Type': 'multipart/form-data' manual
-      // Axios lo hace solo. Si lo pones manual, rompes el boundary.
-      await axios.post(`${API_URL}/enviar`, formData, authHeaders);
-
+      await axios.post(`${API_URL}/enviar`, formData, authHeaders); // Axios pone el Content-Type solo
       alert("Enviado con éxito");
       setModoRedactar(false);
       setNuevoCorreo({ destinatario: "", asunto: "", mensaje: "" });
       setArchivosAdjuntos([]);
-      setCarpetaActual("sent"); // Ir a enviados
+      setCarpetaActual("sent");
     } catch (error) {
       console.error(error);
       alert("Error al enviar.");
@@ -208,323 +208,301 @@ const CorreoPage = () => {
     );
 
   return (
-    <div className="flex h-screen bg-gray-50 font-sans overflow-hidden relative">
-      {/* 1. SIDEBAR (Menú) */}
-      {/* En móvil es un overlay, en desktop es estático */}
-      <aside
-        className={`
-        fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 transform transition-transform duration-300 md:relative md:translate-x-0
-        ${sidebarOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"}
-      `}
-      >
-        <div className="p-5 flex items-center justify-between border-b border-gray-100 h-16">
-          <div className="flex items-center gap-2 text-red-800 font-bold text-lg">
-            <Mail /> WebMail
+    <div className="flex flex-col h-screen bg-white font-sans overflow-hidden">
+      {/* 1. HEADER (Navegación + Buscador + Acciones) */}
+      <header className="h-16 bg-[#1e1e1e] text-white flex items-center justify-between px-4 shadow-md z-20 shrink-0">
+        {/* Logo / Título */}
+        <div className="flex items-center gap-2 font-bold text-lg mr-4 hidden md:flex">
+          <div className="w-8 h-8 bg-[#a72a34] rounded-lg flex items-center justify-center">
+            M
           </div>
-          <button onClick={() => setSidebarOpen(false)} className="md:hidden">
-            <X />
-          </button>
+          <span>Mail</span>
         </div>
 
-        <div className="p-4">
-          <button
-            onClick={() => {
-              setModoRedactar(true);
-              setSidebarOpen(false);
-            }}
-            className="w-full py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold shadow-md flex items-center justify-center gap-2 transition-all mb-4"
-          >
-            <Plus size={20} /> Redactar
-          </button>
+        {/* Pestañas de Navegación (Tabs) */}
+        <nav className="flex bg-gray-800 rounded-lg p-1 mr-4 overflow-x-auto no-scrollbar">
+          <TabButton
+            label="Recibidos"
+            active={carpetaActual === "inbox"}
+            icon={Inbox}
+            onClick={() => setCarpetaActual("inbox")}
+          />
+          <TabButton
+            label="Enviados"
+            active={carpetaActual === "sent"}
+            icon={Send}
+            onClick={() => setCarpetaActual("sent")}
+          />
+          <TabButton
+            label="Papelera"
+            active={carpetaActual === "trash"}
+            icon={Trash2}
+            onClick={() => setCarpetaActual("trash")}
+          />
+        </nav>
 
-          <nav className="space-y-1">
-            <SidebarLink
-              icon={Inbox}
-              label="Recibidos"
-              active={carpetaActual === "inbox"}
-              onClick={() => {
-                setCarpetaActual("inbox");
-                setSidebarOpen(false);
-              }}
-            />
-            <SidebarLink
-              icon={Send}
-              label="Enviados"
-              active={carpetaActual === "sent"}
-              onClick={() => {
-                setCarpetaActual("sent");
-                setSidebarOpen(false);
-              }}
-            />
-            <SidebarLink
-              icon={Trash2}
-              label="Papelera"
-              active={carpetaActual === "trash"}
-              onClick={() => {
-                setCarpetaActual("trash");
-                setSidebarOpen(false);
-              }}
-            />
-          </nav>
-        </div>
-      </aside>
-
-      {/* Sombra del sidebar en móvil */}
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black/20 z-40 md:hidden"
-          onClick={() => setSidebarOpen(false)}
-        ></div>
-      )}
-
-      {/* 2. AREA PRINCIPAL (Lista + Detalle) */}
-      <div className="flex-1 flex flex-col h-full overflow-hidden relative">
-        {/* HEADER SUPERIOR */}
-        <div className="h-16 bg-white border-b border-gray-200 flex items-center px-4 gap-3 shrink-0">
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="md:hidden p-2 text-gray-600 hover:bg-gray-100 rounded-full"
-          >
-            <Menu />
-          </button>
-          <div className="flex-1 relative max-w-md">
+        {/* Buscador y Botón Redactar */}
+        <div className="flex items-center gap-3 flex-1 justify-end">
+          <div className="relative w-full max-w-xs hidden sm:block">
             <Search
               className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-              size={16}
+              size={14}
             />
             <input
-              className="w-full pl-9 pr-4 py-2 bg-gray-100 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-red-100 transition-all"
-              placeholder={`Buscar en ${carpetaActual}...`}
+              className="w-full pl-9 pr-3 py-1.5 bg-gray-700 border-none rounded-full text-sm text-white placeholder-gray-400 focus:ring-2 focus:ring-[#a72a34] outline-none"
+              placeholder="Buscar..."
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
             />
           </div>
+
           <button
-            onClick={() => cargarCarpeta(carpetaActual)}
-            className={`p-2 text-gray-500 hover:bg-gray-100 rounded-full ${cargando ? "animate-spin" : ""}`}
+            onClick={() => setModoRedactar(true)}
+            className="flex items-center gap-2 bg-[#a72a34] hover:bg-[#8f242d] text-white px-4 py-2 rounded-lg font-bold text-sm shadow-lg transition-transform active:scale-95"
           >
-            <RefreshCw size={18} />
+            <Plus size={18} />{" "}
+            <span className="hidden md:inline">Redactar</span>
           </button>
         </div>
+      </header>
 
-        {/* CONTENEDOR SPLIT */}
-        <div className="flex-1 flex overflow-hidden relative">
-          {/* A. LISTA DE CORREOS */}
-          <div
-            className={`
-            flex-1 flex flex-col overflow-y-auto bg-white border-r border-gray-200 transition-all duration-300
-            ${correoSeleccionado ? "hidden md:flex md:w-1/3 md:max-w-sm" : "w-full"} 
-          `}
-          >
+      {/* 2. ÁREA DE CONTENIDO (Split View) */}
+      <div className="flex-1 flex overflow-hidden relative">
+        {/* A. LISTA DE CORREOS */}
+        <div
+          className={`
+          flex flex-col bg-white border-r border-gray-200 h-full overflow-hidden transition-all duration-300
+          ${activeMobileView === "detail" ? "hidden md:flex md:w-80 lg:w-96" : "w-full md:w-80 lg:w-96"} 
+        `}
+        >
+          <div className="p-3 border-b bg-gray-50 flex justify-between items-center text-xs font-bold text-gray-500 uppercase">
+            <span>
+              {carpetaActual === "inbox" ? "Bandeja de Entrada" : carpetaActual}
+            </span>
+            <button
+              onClick={() => cargarCarpeta(carpetaActual)}
+              className={`p-1.5 hover:bg-gray-200 rounded-full ${cargando ? "animate-spin" : ""}`}
+            >
+              <RefreshCw size={14} />
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto">
             {cargando && correos.length === 0 ? (
-              <div className="p-10 text-center text-gray-400">Cargando...</div>
+              <div className="p-10 text-center text-gray-400 text-sm">
+                Cargando...
+              </div>
             ) : correosFiltrados.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full text-gray-400 opacity-50">
-                <Inbox size={48} className="mb-2" />
-                <p>Carpeta vacía</p>
+              <div className="flex flex-col items-center justify-center h-full text-gray-400 opacity-50 p-6 text-center">
+                <Inbox size={40} className="mb-2" />
+                <p className="text-sm">No hay mensajes aquí.</p>
               </div>
             ) : (
-              <div className="divide-y divide-gray-50">
+              <div className="divide-y divide-gray-100">
                 {correosFiltrados.map((c) => (
                   <div
                     key={c.id}
                     onClick={() => cargarDetalle(c.id)}
                     className={`p-4 cursor-pointer hover:bg-gray-50 transition-colors ${correoSeleccionado === c.id ? "bg-red-50 border-l-4 border-red-600" : "border-l-4 border-transparent"}`}
                   >
-                    <div className="flex justify-between mb-1">
-                      <span className="font-bold text-gray-800 text-sm truncate w-2/3">
+                    <div className="flex justify-between items-center mb-1">
+                      <span
+                        className={`text-xs ${correoSeleccionado === c.id ? "font-bold text-gray-900" : "font-semibold text-gray-700"} truncate w-2/3`}
+                      >
                         {carpetaActual === "sent" ? `Para: ${c.para}` : c.de}
                       </span>
-                      <span className="text-xs text-gray-400">
+                      <span className="text-[10px] text-gray-400">
                         {formatDate(c.fecha)}
                       </span>
                     </div>
-                    <div className="text-sm text-gray-600 truncate font-medium">
+                    <div
+                      className={`text-sm mb-1 truncate ${correoSeleccionado === c.id ? "font-bold text-gray-800" : "text-gray-600"}`}
+                    >
                       {c.asunto || "(Sin asunto)"}
                     </div>
-                    <div className="text-xs text-gray-400 truncate mt-1">
-                      Pulsa para leer...
+                    <div className="text-xs text-gray-400 truncate">
+                      Pulsa para leer el mensaje...
                     </div>
                   </div>
                 ))}
               </div>
             )}
           </div>
+        </div>
 
-          {/* B. VISTA DETALLE (Panel Derecho / Pantalla completa móvil) */}
-          <div
-            className={`
-             flex-1 bg-gray-50 flex flex-col h-full overflow-hidden absolute inset-0 z-10 md:static md:z-0
-             ${correoSeleccionado ? "translate-x-0" : "translate-x-full md:translate-x-0"}
-             transition-transform duration-300
-          `}
-          >
-            {correoSeleccionado ? (
-              <>
-                {/* Header del Detalle */}
-                <div className="h-14 bg-white border-b border-gray-200 px-4 flex items-center justify-between shrink-0">
-                  <button
-                    onClick={() => setCorreoSeleccionado(null)}
-                    className="md:hidden flex items-center gap-1 text-gray-600 font-bold px-2 py-1 rounded hover:bg-gray-100"
-                  >
-                    <ArrowLeft size={18} /> Regresar
-                  </button>
-                  <div className="flex gap-2 ml-auto">
-                    <button className="p-2 text-gray-500 hover:bg-gray-100 rounded hover:text-red-600">
-                      <Trash2 size={18} />
-                    </button>
-                    <button className="p-2 text-gray-500 hover:bg-gray-100 rounded">
-                      <MoreVertical size={18} />
-                    </button>
+        {/* B. VISTA DETALLE */}
+        <div
+          className={`
+           flex-1 bg-gray-50 flex flex-col h-full overflow-hidden absolute inset-0 z-10 md:static md:z-0
+           ${activeMobileView === "list" ? "translate-x-full md:translate-x-0" : "translate-x-0"}
+           transition-transform duration-300 md:bg-gray-50
+        `}
+        >
+          {correoSeleccionado ? (
+            <>
+              {/* Header Detalle (Solo en Móvil) */}
+              <div className="h-14 bg-white border-b border-gray-200 px-4 flex items-center justify-between shrink-0 md:hidden">
+                <button
+                  onClick={() => {
+                    setActiveMobileView("list");
+                    setCorreoSeleccionado(null);
+                  }}
+                  className="flex items-center gap-1 text-gray-600 font-bold px-2 py-1 rounded hover:bg-gray-100"
+                >
+                  <ArrowLeft size={18} /> Volver
+                </button>
+              </div>
+
+              {/* Contenido */}
+              <div className="flex-1 overflow-y-auto p-4 md:p-8">
+                {cargandoMensaje ? (
+                  <div className="flex justify-center pt-20">
+                    <Loader className="animate-spin text-red-600" />
                   </div>
-                </div>
-
-                {/* Cuerpo del Detalle */}
-                <div className="flex-1 overflow-y-auto p-4 md:p-8">
-                  {cargandoMensaje ? (
-                    <div className="flex justify-center pt-20">
-                      <Loader className="animate-spin text-red-600" />
-                    </div>
-                  ) : detalleCorreo ? (
-                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 min-h-[50vh] flex flex-col">
-                      <div className="p-6 border-b border-gray-100">
-                        <h1 className="text-xl md:text-2xl font-bold text-gray-800 mb-4">
+                ) : detalleCorreo ? (
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 min-h-[60vh] flex flex-col">
+                    {/* Info Correo */}
+                    <div className="p-6 border-b border-gray-100">
+                      <div className="flex justify-between items-start mb-4">
+                        <h1 className="text-xl font-bold text-gray-800 flex-1 mr-4">
                           {detalleCorreo.asunto}
                         </h1>
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-red-100 text-red-700 flex items-center justify-center font-bold">
-                            {getInitials(detalleCorreo.de)}
-                          </div>
-                          <div className="flex-1">
-                            <div className="flex justify-between">
-                              <p className="font-bold text-gray-900 text-sm">
-                                {detalleCorreo.de}
-                              </p>
-                              <p className="text-xs text-gray-400 hidden sm:block">
-                                {new Date(detalleCorreo.fecha).toLocaleString()}
-                              </p>
-                            </div>
-                            <p className="text-xs text-gray-500">
-                              Para: {detalleCorreo.para || "Mí"}
-                            </p>
-                          </div>
+                        <span className="text-xs text-gray-400 whitespace-nowrap">
+                          {new Date(detalleCorreo.fecha).toLocaleString()}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-red-100 text-red-700 flex items-center justify-center font-bold text-sm">
+                          {getInitials(detalleCorreo.de)}
+                        </div>
+                        <div>
+                          <p className="font-bold text-gray-900 text-sm">
+                            {detalleCorreo.de}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            Para: {detalleCorreo.para || "Mí"}
+                          </p>
                         </div>
                       </div>
+                    </div>
 
-                      {/* HTML Content */}
-                      <div className="p-6 flex-1 text-gray-700 text-sm leading-relaxed overflow-x-auto">
-                        <div
-                          dangerouslySetInnerHTML={{
-                            __html: detalleCorreo.html,
-                          }}
-                        />
-                      </div>
+                    {/* Cuerpo HTML */}
+                    <div className="p-6 flex-1 text-gray-800 text-sm leading-relaxed overflow-x-auto font-sans">
+                      <div
+                        dangerouslySetInnerHTML={{ __html: detalleCorreo.html }}
+                      />
+                    </div>
 
-                      {/* Adjuntos */}
-                      {detalleCorreo.adjuntos &&
-                        detalleCorreo.adjuntos.length > 0 && (
-                          <div className="p-4 bg-gray-50 border-t border-gray-100">
-                            <h4 className="text-xs font-bold text-gray-500 uppercase mb-3 flex items-center gap-2">
-                              <Paperclip size={14} /> Adjuntos (
-                              {detalleCorreo.adjuntos.length})
-                            </h4>
-                            <div className="flex flex-wrap gap-3">
-                              {detalleCorreo.adjuntos.map((att, idx) => {
-                                const isImage =
-                                  att.contentType.startsWith("image/");
-                                return (
-                                  <div
-                                    key={idx}
-                                    onClick={() => descargarAdjunto(att)}
-                                    className="cursor-pointer group relative border border-gray-200 bg-white rounded-lg p-2 w-40 hover:shadow-md transition-all"
-                                  >
-                                    <div className="h-24 bg-gray-100 rounded mb-2 overflow-hidden flex items-center justify-center">
-                                      {isImage ? (
-                                        <img
-                                          src={`data:${att.contentType};base64,${att.content}`}
-                                          className="w-full h-full object-cover"
-                                          alt="adjunto"
-                                        />
-                                      ) : (
-                                        <FileText
-                                          size={32}
-                                          className="text-gray-400"
-                                        />
-                                      )}
-                                    </div>
-                                    <p className="text-xs text-gray-700 truncate font-medium">
-                                      {att.filename}
-                                    </p>
-                                    <p className="text-[10px] text-gray-400">
-                                      {(att.size / 1024).toFixed(1)} KB
-                                    </p>
+                    {/* Adjuntos */}
+                    {detalleCorreo.adjuntos &&
+                      detalleCorreo.adjuntos.length > 0 && (
+                        <div className="p-4 bg-gray-50 border-t border-gray-100 rounded-b-xl">
+                          <h4 className="text-xs font-bold text-gray-500 uppercase mb-3 flex items-center gap-2">
+                            <Paperclip size={14} />{" "}
+                            {detalleCorreo.adjuntos.length} Archivos Adjuntos
+                          </h4>
+                          <div className="flex flex-wrap gap-3">
+                            {detalleCorreo.adjuntos.map((att, idx) => {
+                              const isImage =
+                                att.contentType.startsWith("image/");
+                              return (
+                                <div
+                                  key={idx}
+                                  onClick={() => descargarAdjunto(att)}
+                                  className="cursor-pointer group relative border border-gray-200 bg-white rounded-lg p-2 w-48 hover:shadow-md transition-all"
+                                >
+                                  <div className="h-24 bg-gray-100 rounded mb-2 overflow-hidden flex items-center justify-center">
+                                    {isImage ? (
+                                      <img
+                                        src={`data:${att.contentType};base64,${att.content}`}
+                                        className="w-full h-full object-cover"
+                                        alt="adjunto"
+                                      />
+                                    ) : (
+                                      <FileText
+                                        size={32}
+                                        className="text-gray-400"
+                                      />
+                                    )}
                                   </div>
-                                );
-                              })}
-                            </div>
+                                  <p className="text-xs text-gray-700 truncate font-medium">
+                                    {att.filename}
+                                  </p>
+                                  <p className="text-[10px] text-gray-400">
+                                    {(att.size / 1024).toFixed(1)} KB
+                                  </p>
+
+                                  <button className="absolute top-2 right-2 bg-white p-1.5 rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-opacity text-blue-600">
+                                    <Download size={14} />
+                                  </button>
+                                </div>
+                              );
+                            })}
                           </div>
-                        )}
-                    </div>
-                  ) : (
-                    <div className="text-center text-red-500 mt-10">
-                      Error cargando el mensaje.
-                    </div>
-                  )}
-                </div>
-              </>
-            ) : (
-              /* Estado Vacío (Desktop) */
-              <div className="hidden md:flex flex-col items-center justify-center h-full text-gray-400">
-                <div className="w-24 h-24 bg-gray-200 rounded-full flex items-center justify-center mb-4">
-                  <Mail size={48} className="text-gray-400" />
-                </div>
-                <p>Selecciona un correo para leerlo.</p>
+                        </div>
+                      )}
+                  </div>
+                ) : (
+                  <div className="text-center text-red-500 mt-10">
+                    Error cargando mensaje.
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            </>
+          ) : (
+            /* Estado Vacío (Desktop) */
+            <div className="hidden md:flex flex-col items-center justify-center h-full text-gray-400">
+              <div className="w-24 h-24 bg-gray-200 rounded-full flex items-center justify-center mb-4">
+                <Mail size={48} className="text-gray-400" />
+              </div>
+              <p className="font-medium">Selecciona un correo para leerlo.</p>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* MODAL REDACTAR */}
+      {/* MODAL REDACTAR (Simplificado y Funcional) */}
       {modoRedactar && (
-        <div className="fixed inset-0 bg-black/60 z-[60] flex items-end md:items-center justify-center sm:p-4 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white w-full md:w-[600px] h-[90vh] md:h-auto md:rounded-xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-10">
-            <div className="bg-gray-900 text-white p-4 flex justify-between items-center shrink-0">
+        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm animate-in zoom-in-95">
+          <div className="bg-white w-full max-w-2xl h-[80vh] md:h-auto rounded-xl shadow-2xl flex flex-col overflow-hidden">
+            <div className="bg-[#1e1e1e] text-white px-5 py-3 flex justify-between items-center shrink-0">
               <h3 className="font-bold">Nuevo Mensaje</h3>
               <button onClick={() => setModoRedactar(false)}>
                 <X size={20} />
               </button>
             </div>
 
-            <form
-              onSubmit={enviarCorreo}
-              className="flex-1 flex flex-col overflow-hidden"
-            >
-              <div className="p-4 space-y-3 overflow-y-auto flex-1">
-                <input
-                  className="w-full border-b border-gray-200 py-2 outline-none focus:border-red-600 transition-colors"
-                  placeholder="Para: (ejemplo@correo.com)"
-                  type="email"
-                  required
-                  value={nuevoCorreo.destinatario}
-                  onChange={(e) =>
-                    setNuevoCorreo({
-                      ...nuevoCorreo,
-                      destinatario: e.target.value,
-                    })
-                  }
-                />
-                <input
-                  className="w-full border-b border-gray-200 py-2 outline-none focus:border-red-600 font-bold transition-colors"
-                  placeholder="Asunto"
-                  required
-                  value={nuevoCorreo.asunto}
-                  onChange={(e) =>
-                    setNuevoCorreo({ ...nuevoCorreo, asunto: e.target.value })
-                  }
-                />
+            <form onSubmit={enviarCorreo} className="flex-1 flex flex-col">
+              <div className="p-5 space-y-4 overflow-y-auto flex-1">
+                <div className="border-b border-gray-200 pb-1">
+                  <input
+                    className="w-full py-1 outline-none text-sm text-gray-800 placeholder-gray-400"
+                    placeholder="Para: (ejemplo@correo.com)"
+                    type="email"
+                    required
+                    value={nuevoCorreo.destinatario}
+                    onChange={(e) =>
+                      setNuevoCorreo({
+                        ...nuevoCorreo,
+                        destinatario: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+                <div className="border-b border-gray-200 pb-1">
+                  <input
+                    className="w-full py-1 outline-none font-bold text-sm text-gray-800 placeholder-gray-400"
+                    placeholder="Asunto"
+                    required
+                    value={nuevoCorreo.asunto}
+                    onChange={(e) =>
+                      setNuevoCorreo({ ...nuevoCorreo, asunto: e.target.value })
+                    }
+                  />
+                </div>
                 <textarea
-                  className="w-full h-full min-h-[200px] resize-none outline-none text-gray-700 mt-2"
+                  className="w-full h-full min-h-[200px] resize-none outline-none text-gray-700 text-sm"
                   placeholder="Escribe tu mensaje aquí..."
                   required
                   value={nuevoCorreo.mensaje}
@@ -533,15 +511,15 @@ const CorreoPage = () => {
                   }
                 ></textarea>
 
-                {/* Lista de Adjuntos a Enviar */}
+                {/* Chips de Adjuntos */}
                 {archivosAdjuntos.length > 0 && (
-                  <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100">
+                  <div className="flex flex-wrap gap-2 pt-2">
                     {archivosAdjuntos.map((file, i) => (
                       <div
                         key={i}
-                        className="bg-gray-100 px-3 py-1 rounded-full text-xs flex items-center gap-2 border border-gray-200"
+                        className="bg-gray-100 px-3 py-1 rounded-full text-xs flex items-center gap-2 border border-gray-300"
                       >
-                        <span className="max-w-[200px] truncate">
+                        <span className="max-w-[150px] truncate">
                           {file.name}
                         </span>
                         <button
@@ -561,9 +539,8 @@ const CorreoPage = () => {
                 )}
               </div>
 
-              <div className="p-3 border-t border-gray-100 flex justify-between items-center bg-gray-50 shrink-0">
+              <div className="p-4 border-t border-gray-100 flex justify-between items-center bg-gray-50">
                 <div className="flex gap-1">
-                  {/* Botón Clip */}
                   <button
                     type="button"
                     onClick={() => fileInputRef.current.click()}
@@ -572,7 +549,6 @@ const CorreoPage = () => {
                   >
                     <Paperclip size={20} />
                   </button>
-                  {/* Botón Imagen (Hace lo mismo) */}
                   <button
                     type="button"
                     onClick={() => fileInputRef.current.click()}
@@ -600,7 +576,7 @@ const CorreoPage = () => {
                   <button
                     type="submit"
                     disabled={enviando}
-                    className="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2 disabled:opacity-70 shadow-sm transition-all text-sm"
+                    className="bg-[#a72a34] hover:bg-[#8f242d] text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2 disabled:opacity-70 shadow-md transition-all text-sm"
                   >
                     {enviando ? (
                       "Enviando..."
@@ -620,14 +596,13 @@ const CorreoPage = () => {
   );
 };
 
-// Componente Helper
-const SidebarLink = ({ icon: Icon, label, active, onClick }) => (
+// Tabs del Header
+const TabButton = ({ label, active, icon: Icon, onClick }) => (
   <button
     onClick={onClick}
-    className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${active ? "bg-red-50 text-red-700" : "text-gray-600 hover:bg-gray-100"}`}
+    className={`flex items-center gap-2 px-4 py-1.5 rounded-md text-sm font-medium transition-all whitespace-nowrap ${active ? "bg-gray-700 text-white shadow-sm" : "text-gray-400 hover:text-white hover:bg-gray-700"}`}
   >
-    <Icon size={18} className={active ? "text-red-600" : "text-gray-400"} />
-    {label}
+    <Icon size={14} /> {label}
   </button>
 );
 
