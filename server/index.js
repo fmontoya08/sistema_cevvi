@@ -1197,82 +1197,102 @@ app.get("/api/email/mensaje/:uid", verifyToken, async (req, res) => {
   }
 });
 
-// 3. ENVIAR (Ruta Universal: /api/email/enviar)
-// 3. ENVIAR CORREO (Y GUARDAR COPIA EN ENVIADOS)
-app.post("/api/email/enviar", verifyToken, async (req, res) => {
-  const { destinatario, asunto, mensaje } = req.body;
-
-  try {
-    const mailConfig = await getUserEmailCredentials(req.user.id);
-
-    // PASO A: ENVIAR EL CORREO (SMTP)
-    let transporter = nodemailer.createTransport({
-      host: mailConfig.host,
-      port: mailConfig.smtpPort,
-      secure: true,
-      auth: { user: mailConfig.user, pass: mailConfig.password },
-      tls: { rejectUnauthorized: false },
-    });
-
-    await transporter.sendMail({
-      from: `"Universidad Siglo XXI" <${mailConfig.user}>`,
-      to: destinatario,
-      subject: asunto,
-      html: mensaje,
-    });
-
-    // PASO B: GUARDAR COPIA EN "ENVIADOS" (IMAP)
-    // Esto es lo que faltaba: Creamos el archivo "físico" del correo para guardarlo
+// 3. ENVIAR CORREO (UNIVERSAL - SOPORTE ADJUNTOS)
+// Usamos 'upload.array' para procesar los archivos que vienen del frontend
+app.post(
+  "/api/email/enviar",
+  verifyToken,
+  upload.array("adjuntos"),
+  async (req, res) => {
     try {
-      const mail = new MailComposer({
-        from: `"${mailConfig.user}" <${mailConfig.user}>`,
+      // Multer procesa el form-data y pone los campos en req.body y los archivos en req.files
+      const { destinatario, asunto, mensaje } = req.body;
+      const files = req.files || [];
+
+      // 1. Obtener credenciales del usuario
+      const mailConfig = await getUserEmailCredentials(req.user.id);
+
+      // 2. Configurar transporte SMTP
+      let transporter = nodemailer.createTransport({
+        host: mailConfig.host,
+        port: mailConfig.smtpPort,
+        secure: true,
+        auth: { user: mailConfig.user, pass: mailConfig.password },
+        tls: { rejectUnauthorized: false },
+      });
+
+      // 3. Preparar adjuntos para Nodemailer
+      const attachments = files.map((f) => ({
+        filename: f.originalname,
+        path: f.path,
+      }));
+
+      // 4. Enviar correo real
+      await transporter.sendMail({
+        from: `"Universidad Siglo XXI" <${mailConfig.user}>`,
         to: destinatario,
         subject: asunto,
         html: mensaje,
-        date: new Date(), // Importante para que salga con fecha de hoy
+        attachments: attachments, // <--- Aquí van los archivos
       });
 
-      const message = await mail.compile().build(); // Convertimos a formato crudo
-
-      // Nos conectamos solo para guardar
-      const config = {
-        imap: {
-          user: mailConfig.user,
-          password: mailConfig.password,
-          host: mailConfig.host,
-          port: mailConfig.imapPort,
-          tls: true,
-          authTimeout: 10000,
-          tlsOptions: { rejectUnauthorized: false },
-        },
-      };
-
-      const connection = await imaps.connect(config);
-
-      // Intentamos guardar en "INBOX.Sent" (Estándar cPanel) o "Sent"
+      // 5. Guardar copia en "Enviados" (IMAP)
       try {
-        await connection.append(message, { mailbox: "INBOX.Sent" });
-        console.log("[EMAIL DEBUG] Guardado en INBOX.Sent");
-      } catch (err) {
-        console.log("[EMAIL DEBUG] INBOX.Sent falló, probando Sent...");
-        await connection.append(message, { mailbox: "Sent" });
+        // Necesitamos recrear el mail object con los adjuntos para guardarlo
+        const mailOptions = {
+          from: `"${mailConfig.user}" <${mailConfig.user}>`,
+          to: destinatario,
+          subject: asunto,
+          html: mensaje,
+          attachments: attachments,
+          date: new Date(),
+        };
+
+        const mail = new MailComposer(mailOptions);
+        const message = await mail.compile().build();
+
+        const configImap = {
+          imap: {
+            user: mailConfig.user,
+            password: mailConfig.password,
+            host: mailConfig.host,
+            port: mailConfig.imapPort,
+            tls: true,
+            authTimeout: 10000,
+            tlsOptions: { rejectUnauthorized: false },
+          },
+        };
+
+        const connection = await imaps.connect(configImap);
+        // Intentar guardar en carpeta Sent
+        try {
+          await connection.append(message, { mailbox: "INBOX.Sent" });
+        } catch (e) {
+          // Si falla, intentar solo "Sent"
+          await connection.append(message, { mailbox: "Sent" });
+        }
+        connection.end();
+      } catch (saveError) {
+        console.error(
+          "Correo enviado, pero error al guardar en Enviados:",
+          saveError,
+        );
       }
 
-      connection.end();
-    } catch (saveError) {
-      console.error(
-        "El correo se envió, pero falló al guardarse en Enviados:",
-        saveError,
-      );
-      // No devolvemos error al usuario porque el correo SÍ salió.
-    }
+      // 6. Limpiar archivos temporales del servidor (IMPORTANTE)
+      files.forEach((f) => {
+        fs.unlink(f.path, (err) => {
+          if (err) console.error("Error borrando temp:", err);
+        });
+      });
 
-    res.json({ message: "Enviado y guardado correctamente" });
-  } catch (error) {
-    console.error("Error envío:", error.message);
-    res.status(500).send("Error al enviar");
-  }
-});
+      res.json({ message: "Enviado y guardado correctamente" });
+    } catch (error) {
+      console.error("Error envío:", error);
+      res.status(500).send("Error al enviar: " + error.message);
+    }
+  },
+);
 
 // --- RUTAS DE ADMIN ---
 const adminRouter = express.Router();

@@ -1,29 +1,29 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import {
   X,
   Mail,
   RefreshCw,
   Send,
-  Lock,
   Inbox,
   Trash2,
   Menu,
   Search,
-  ChevronLeft,
-  User,
+  ArrowLeft,
   Paperclip,
   MoreVertical,
-  Star,
-  AlertCircle,
+  FileText,
+  Image as ImageIcon,
+  Download,
+  Plus,
+  Loader,
+  Lock,
 } from "lucide-react";
 
 // --- UTILIDADES ---
 const getInitials = (name) => {
   if (!name) return "?";
-  // Si es un correo (contiene @), tomamos la primera letra
   if (name.includes("@")) return name.charAt(0).toUpperCase();
-  // Si es un nombre, tomamos iniciales
   return name
     .split(" ")
     .map((n) => n[0])
@@ -36,9 +36,7 @@ const formatDate = (dateString) => {
   if (!dateString) return "";
   const date = new Date(dateString);
   const now = new Date();
-  const isToday = date.toDateString() === now.toDateString();
-
-  if (isToday) {
+  if (date.toDateString() === now.toDateString()) {
     return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   }
   return date.toLocaleDateString([], { month: "short", day: "numeric" });
@@ -49,32 +47,34 @@ const CorreoPage = () => {
   const [configurado, setConfigurado] = useState(null);
   const [passwordInput, setPasswordInput] = useState("");
 
-  // Navegación y UI
+  // UI States
   const [carpetaActual, setCarpetaActual] = useState("inbox");
-  const [sidebarOpen, setSidebarOpen] = useState(false); // Móvil
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [modoRedactar, setModoRedactar] = useState(false);
 
-  // Datos
+  // Data States
   const [correos, setCorreos] = useState([]);
   const [busqueda, setBusqueda] = useState("");
   const [cargando, setCargando] = useState(false);
 
-  // Lectura
-  const [correoSeleccionado, setCorreoSeleccionado] = useState(null); // ID del correo en lista
-  const [detalleCorreo, setDetalleCorreo] = useState(null); // Contenido completo
+  // Detail States
+  const [correoSeleccionado, setCorreoSeleccionado] = useState(null); // ID seleccionado
+  const [detalleCorreo, setDetalleCorreo] = useState(null); // Objeto completo
   const [cargandoMensaje, setCargandoMensaje] = useState(false);
 
-  // Formulario Nuevo Correo
+  // Compose States
   const [nuevoCorreo, setNuevoCorreo] = useState({
     destinatario: "",
     asunto: "",
     mensaje: "",
   });
+  const [archivosAdjuntos, setArchivosAdjuntos] = useState([]);
   const [enviando, setEnviando] = useState(false);
+  const fileInputRef = useRef(null);
 
   const token = localStorage.getItem("token");
   const authHeaders = { headers: { Authorization: `Bearer ${token}` } };
-  const API_URL = "https://api-universidad-c5o8.onrender.com/api/email"; // Ojo: en prod usar tu URL real si cambia
+  const API_URL = "https://api-universidad-c5o8.onrender.com/api/email";
 
   // --- EFECTOS ---
   useEffect(() => {
@@ -85,15 +85,12 @@ const CorreoPage = () => {
     if (configurado) cargarCarpeta(carpetaActual);
   }, [carpetaActual, configurado]);
 
-  // --- API CALLS ---
+  // --- API ---
   const verificarEstado = async () => {
     try {
       const res = await axios.get(`${API_URL}/status`, authHeaders);
       setConfigurado(res.data.configurado);
     } catch (error) {
-      console.error(error);
-      // Si falla status (ej token expirado), el interceptor global debería manejarlo,
-      // pero por si acaso seteamos false para mostrar login.
       setConfigurado(false);
     }
   };
@@ -108,36 +105,29 @@ const CorreoPage = () => {
       );
       setConfigurado(true);
     } catch (error) {
-      alert("Error al conectar. Verifica tu contraseña.");
+      alert("Error al conectar.");
     }
   };
 
-  const cargarCarpeta = async (nombreCarpeta) => {
+  const cargarCarpeta = async (nombre) => {
     setCargando(true);
     setCorreos([]);
-    setCorreoSeleccionado(null);
+    setCorreoSeleccionado(null); // Resetea la vista al cambiar carpeta
     setDetalleCorreo(null);
     try {
-      const res = await axios.get(
-        `${API_URL}/folder/${nombreCarpeta}`,
-        authHeaders,
-      );
+      const res = await axios.get(`${API_URL}/folder/${nombre}`, authHeaders);
       setCorreos(res.data);
     } catch (error) {
-      console.error("Error carpeta:", error);
+      console.error(error);
     } finally {
       setCargando(false);
     }
   };
 
-  const cargarDetalleCorreo = async (uid) => {
+  const cargarDetalle = async (uid) => {
     setCorreoSeleccionado(uid);
     setDetalleCorreo(null);
     setCargandoMensaje(true);
-
-    // En móvil cerramos sidebar si estaba abierto
-    setSidebarOpen(false);
-
     try {
       const res = await axios.get(
         `${API_URL}/mensaje/${uid}?folder=${carpetaActual}`,
@@ -145,104 +135,93 @@ const CorreoPage = () => {
       );
       setDetalleCorreo(res.data);
     } catch (error) {
-      console.error(error);
-      alert("No se pudo cargar el mensaje.");
+      alert("No se pudo cargar.");
     } finally {
       setCargandoMensaje(false);
+    }
+  };
+
+  const handleFileChange = (e) => {
+    if (e.target.files) {
+      setArchivosAdjuntos([...archivosAdjuntos, ...Array.from(e.target.files)]);
     }
   };
 
   const enviarCorreo = async (e) => {
     e.preventDefault();
     setEnviando(true);
+
+    const formData = new FormData();
+    formData.append("destinatario", nuevoCorreo.destinatario);
+    formData.append("asunto", nuevoCorreo.asunto);
+    formData.append("mensaje", nuevoCorreo.mensaje);
+
+    archivosAdjuntos.forEach((file) => {
+      formData.append("adjuntos", file);
+    });
+
     try {
-      await axios.post(`${API_URL}/enviar`, nuevoCorreo, authHeaders);
-      alert("Mensaje enviado con éxito");
+      // CORRECCIÓN CRÍTICA: NO poner 'Content-Type': 'multipart/form-data' manual
+      // Axios lo hace solo. Si lo pones manual, rompes el boundary.
+      await axios.post(`${API_URL}/enviar`, formData, authHeaders);
+
+      alert("Enviado con éxito");
       setModoRedactar(false);
       setNuevoCorreo({ destinatario: "", asunto: "", mensaje: "" });
-      setCarpetaActual("sent");
+      setArchivosAdjuntos([]);
+      setCarpetaActual("sent"); // Ir a enviados
     } catch (error) {
-      alert("Error al enviar el correo.");
+      console.error(error);
+      alert("Error al enviar.");
     } finally {
       setEnviando(false);
     }
   };
 
-  // --- FILTRADO LOCAL ---
+  const descargarAdjunto = (archivo) => {
+    const link = document.createElement("a");
+    link.href = `data:${archivo.contentType};base64,${archivo.content}`;
+    link.download = archivo.filename;
+    link.click();
+  };
+
   const correosFiltrados = correos.filter(
     (c) =>
       c.asunto.toLowerCase().includes(busqueda.toLowerCase()) ||
       c.de.toLowerCase().includes(busqueda.toLowerCase()),
   );
 
-  // --- RENDER LOGIN (Si no está configurado) ---
-  if (configurado === false) {
+  // --- RENDER LOGIN ---
+  if (configurado === false)
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full text-center border border-gray-100">
-          <div className="w-20 h-20 bg-[#a72a34]/10 text-[#a72a34] rounded-full flex items-center justify-center mx-auto mb-6">
-            <Mail size={40} />
-          </div>
-          <h2 className="text-3xl font-bold text-gray-800 mb-2">
-            Correo Institucional
-          </h2>
-          <p className="text-gray-500 mb-8">
-            Para acceder a tu bandeja, ingresa la contraseña de tu cuenta de
-            correo asignada.
-          </p>
-          <form onSubmit={guardarConfiguracion} className="space-y-5">
-            <div className="text-left">
-              <label className="text-xs font-bold text-gray-500 uppercase ml-1">
-                Contraseña
-              </label>
-              <input
-                type="password"
-                required
-                className="w-full p-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#a72a34] outline-none transition-all"
-                placeholder="••••••••"
-                value={passwordInput}
-                onChange={(e) => setPasswordInput(e.target.value)}
-              />
-            </div>
-            <button
-              type="submit"
-              className="w-full bg-[#a72a34] text-white py-4 rounded-xl font-bold hover:bg-[#8f242d] transition-transform active:scale-95 shadow-lg shadow-red-900/20"
-            >
-              Conectar Bandeja
-            </button>
-          </form>
-        </div>
-      </div>
+      <LoginScreen
+        onSubmit={guardarConfiguracion}
+        pass={passwordInput}
+        setPass={setPasswordInput}
+      />
     );
-  }
-
   if (configurado === null)
     return (
       <div className="flex h-screen items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#a72a34]"></div>
+        <Loader className="animate-spin text-red-600" />
       </div>
     );
 
   return (
-    <div className="flex h-screen bg-gray-100 overflow-hidden font-sans">
-      {/* 1. SIDEBAR (Navegación) */}
+    <div className="flex h-screen bg-gray-50 font-sans overflow-hidden relative">
+      {/* 1. SIDEBAR (Menú) */}
+      {/* En móvil es un overlay, en desktop es estático */}
       <aside
         className={`
-          fixed inset-y-0 left-0 z-40 w-64 bg-[#1e1e1e] text-white transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0
-          ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}
-        `}
+        fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 transform transition-transform duration-300 md:relative md:translate-x-0
+        ${sidebarOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"}
+      `}
       >
-        <div className="p-6 flex items-center justify-between border-b border-gray-800">
-          <span className="text-lg font-bold tracking-wider flex items-center gap-2">
-            <div className="w-8 h-8 bg-[#a72a34] rounded flex items-center justify-center">
-              M
-            </div>
-            MAIL
-          </span>
-          <button
-            onClick={() => setSidebarOpen(false)}
-            className="md:hidden text-gray-400"
-          >
+        <div className="p-5 flex items-center justify-between border-b border-gray-100 h-16">
+          <div className="flex items-center gap-2 text-red-800 font-bold text-lg">
+            <Mail /> WebMail
+          </div>
+          <button onClick={() => setSidebarOpen(false)} className="md:hidden">
             <X />
           </button>
         </div>
@@ -253,22 +232,22 @@ const CorreoPage = () => {
               setModoRedactar(true);
               setSidebarOpen(false);
             }}
-            className="w-full bg-[#a72a34] hover:bg-[#8f242d] text-white py-3 rounded-xl font-bold shadow-lg shadow-red-900/30 flex items-center justify-center gap-2 transition-all mb-6"
+            className="w-full py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold shadow-md flex items-center justify-center gap-2 transition-all mb-4"
           >
-            <span className="text-xl">+</span> Nuevo Mensaje
+            <Plus size={20} /> Redactar
           </button>
 
           <nav className="space-y-1">
-            <SidebarItem
+            <SidebarLink
               icon={Inbox}
-              label="Bandeja de Entrada"
+              label="Recibidos"
               active={carpetaActual === "inbox"}
               onClick={() => {
                 setCarpetaActual("inbox");
                 setSidebarOpen(false);
               }}
             />
-            <SidebarItem
+            <SidebarLink
               icon={Send}
               label="Enviados"
               active={carpetaActual === "sent"}
@@ -277,7 +256,7 @@ const CorreoPage = () => {
                 setSidebarOpen(false);
               }}
             />
-            <SidebarItem
+            <SidebarLink
               icon={Trash2}
               label="Papelera"
               active={carpetaActual === "trash"}
@@ -288,262 +267,245 @@ const CorreoPage = () => {
             />
           </nav>
         </div>
-
-        {/* Footer Sidebar */}
-        <div className="absolute bottom-0 w-full p-4 border-t border-gray-800 bg-[#1e1e1e]">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center">
-              <User size={16} />
-            </div>
-            <div>
-              <p className="text-xs font-bold text-gray-300">
-                Cuenta Configurada
-              </p>
-              <p className="text-[10px] text-green-500 flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>{" "}
-                En línea
-              </p>
-            </div>
-          </div>
-        </div>
       </aside>
 
-      {/* 2. LISTA DE CORREOS (Panel Central) */}
-      <div
-        className={`flex-1 flex flex-col min-w-0 bg-white border-r border-gray-200 ${correoSeleccionado ? "hidden md:flex md:w-1/3 md:max-w-md" : "w-full"}`}
-      >
-        {/* Header Lista */}
-        <div className="h-16 border-b border-gray-100 flex items-center px-4 justify-between bg-white">
-          <div className="flex items-center gap-3 w-full">
-            <button
-              onClick={() => setSidebarOpen(true)}
-              className="md:hidden text-gray-500"
-            >
-              <Menu />
-            </button>
-            <div className="relative flex-1">
-              <Search
-                className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
-                size={16}
-              />
-              <input
-                type="text"
-                placeholder="Buscar..."
-                className="w-full pl-9 pr-4 py-2 bg-gray-100 border-none rounded-lg text-sm focus:ring-2 focus:ring-[#a72a34]/50 outline-none"
-                value={busqueda}
-                onChange={(e) => setBusqueda(e.target.value)}
-              />
-            </div>
-            <button
-              onClick={() => cargarCarpeta(carpetaActual)}
-              className={`p-2 rounded-full hover:bg-gray-100 text-gray-500 ${cargando ? "animate-spin" : ""}`}
-            >
-              <RefreshCw size={18} />
-            </button>
+      {/* Sombra del sidebar en móvil */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/20 z-40 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        ></div>
+      )}
+
+      {/* 2. AREA PRINCIPAL (Lista + Detalle) */}
+      <div className="flex-1 flex flex-col h-full overflow-hidden relative">
+        {/* HEADER SUPERIOR */}
+        <div className="h-16 bg-white border-b border-gray-200 flex items-center px-4 gap-3 shrink-0">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="md:hidden p-2 text-gray-600 hover:bg-gray-100 rounded-full"
+          >
+            <Menu />
+          </button>
+          <div className="flex-1 relative max-w-md">
+            <Search
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+              size={16}
+            />
+            <input
+              className="w-full pl-9 pr-4 py-2 bg-gray-100 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-red-100 transition-all"
+              placeholder={`Buscar en ${carpetaActual}...`}
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+            />
           </div>
+          <button
+            onClick={() => cargarCarpeta(carpetaActual)}
+            className={`p-2 text-gray-500 hover:bg-gray-100 rounded-full ${cargando ? "animate-spin" : ""}`}
+          >
+            <RefreshCw size={18} />
+          </button>
         </div>
 
-        {/* Lista Scrollable */}
-        <div className="flex-1 overflow-y-auto">
-          {cargando && correos.length === 0 ? (
-            <div className="p-8 text-center text-gray-400 text-sm">
-              Cargando correos...
-            </div>
-          ) : correosFiltrados.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-gray-400 p-8">
-              <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4">
-                <Inbox size={32} className="opacity-50" />
+        {/* CONTENEDOR SPLIT */}
+        <div className="flex-1 flex overflow-hidden relative">
+          {/* A. LISTA DE CORREOS */}
+          <div
+            className={`
+            flex-1 flex flex-col overflow-y-auto bg-white border-r border-gray-200 transition-all duration-300
+            ${correoSeleccionado ? "hidden md:flex md:w-1/3 md:max-w-sm" : "w-full"} 
+          `}
+          >
+            {cargando && correos.length === 0 ? (
+              <div className="p-10 text-center text-gray-400">Cargando...</div>
+            ) : correosFiltrados.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full text-gray-400 opacity-50">
+                <Inbox size={48} className="mb-2" />
+                <p>Carpeta vacía</p>
               </div>
-              <p>No hay correos aquí.</p>
-            </div>
-          ) : (
-            <div className="divide-y divide-gray-100">
-              {correosFiltrados.map((email) => (
-                <div
-                  key={email.id}
-                  onClick={() => cargarDetalleCorreo(email.id)}
-                  className={`
-                      p-4 cursor-pointer hover:bg-blue-50 transition-colors relative
-                      ${correoSeleccionado === email.id ? "bg-blue-50 border-l-4 border-[#a72a34]" : "border-l-4 border-transparent"}
-                    `}
-                >
-                  <div className="flex justify-between items-start mb-1">
-                    <div className="flex items-center gap-2 overflow-hidden">
-                      <div
-                        className={`
-                             w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-bold text-white
-                             ${correoSeleccionado === email.id ? "bg-[#a72a34]" : "bg-gray-400"}
-                          `}
-                      >
-                        {getInitials(
-                          carpetaActual === "sent" ? email.para : email.de,
-                        )}
-                      </div>
-                      <span
-                        className={`text-sm truncate ${correoSeleccionado === email.id ? "font-bold text-gray-900" : "font-medium text-gray-700"}`}
-                      >
-                        {carpetaActual === "sent"
-                          ? `Para: ${email.para}`
-                          : email.de}
+            ) : (
+              <div className="divide-y divide-gray-50">
+                {correosFiltrados.map((c) => (
+                  <div
+                    key={c.id}
+                    onClick={() => cargarDetalle(c.id)}
+                    className={`p-4 cursor-pointer hover:bg-gray-50 transition-colors ${correoSeleccionado === c.id ? "bg-red-50 border-l-4 border-red-600" : "border-l-4 border-transparent"}`}
+                  >
+                    <div className="flex justify-between mb-1">
+                      <span className="font-bold text-gray-800 text-sm truncate w-2/3">
+                        {carpetaActual === "sent" ? `Para: ${c.para}` : c.de}
+                      </span>
+                      <span className="text-xs text-gray-400">
+                        {formatDate(c.fecha)}
                       </span>
                     </div>
-                    <span className="text-[10px] text-gray-400 whitespace-nowrap ml-2">
-                      {formatDate(email.fecha)}
-                    </span>
+                    <div className="text-sm text-gray-600 truncate font-medium">
+                      {c.asunto || "(Sin asunto)"}
+                    </div>
+                    <div className="text-xs text-gray-400 truncate mt-1">
+                      Pulsa para leer...
+                    </div>
                   </div>
-                  <div className="pl-10">
-                    <h4
-                      className={`text-sm truncate mb-1 ${correoSeleccionado === email.id ? "font-semibold text-gray-800" : "text-gray-600"}`}
-                    >
-                      {email.asunto || "(Sin Asunto)"}
-                    </h4>
-                    <p className="text-xs text-gray-400 truncate">
-                      Haz clic para leer el contenido completo del mensaje.
-                    </p>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* B. VISTA DETALLE (Panel Derecho / Pantalla completa móvil) */}
+          <div
+            className={`
+             flex-1 bg-gray-50 flex flex-col h-full overflow-hidden absolute inset-0 z-10 md:static md:z-0
+             ${correoSeleccionado ? "translate-x-0" : "translate-x-full md:translate-x-0"}
+             transition-transform duration-300
+          `}
+          >
+            {correoSeleccionado ? (
+              <>
+                {/* Header del Detalle */}
+                <div className="h-14 bg-white border-b border-gray-200 px-4 flex items-center justify-between shrink-0">
+                  <button
+                    onClick={() => setCorreoSeleccionado(null)}
+                    className="md:hidden flex items-center gap-1 text-gray-600 font-bold px-2 py-1 rounded hover:bg-gray-100"
+                  >
+                    <ArrowLeft size={18} /> Regresar
+                  </button>
+                  <div className="flex gap-2 ml-auto">
+                    <button className="p-2 text-gray-500 hover:bg-gray-100 rounded hover:text-red-600">
+                      <Trash2 size={18} />
+                    </button>
+                    <button className="p-2 text-gray-500 hover:bg-gray-100 rounded">
+                      <MoreVertical size={18} />
+                    </button>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
+
+                {/* Cuerpo del Detalle */}
+                <div className="flex-1 overflow-y-auto p-4 md:p-8">
+                  {cargandoMensaje ? (
+                    <div className="flex justify-center pt-20">
+                      <Loader className="animate-spin text-red-600" />
+                    </div>
+                  ) : detalleCorreo ? (
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 min-h-[50vh] flex flex-col">
+                      <div className="p-6 border-b border-gray-100">
+                        <h1 className="text-xl md:text-2xl font-bold text-gray-800 mb-4">
+                          {detalleCorreo.asunto}
+                        </h1>
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-red-100 text-red-700 flex items-center justify-center font-bold">
+                            {getInitials(detalleCorreo.de)}
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex justify-between">
+                              <p className="font-bold text-gray-900 text-sm">
+                                {detalleCorreo.de}
+                              </p>
+                              <p className="text-xs text-gray-400 hidden sm:block">
+                                {new Date(detalleCorreo.fecha).toLocaleString()}
+                              </p>
+                            </div>
+                            <p className="text-xs text-gray-500">
+                              Para: {detalleCorreo.para || "Mí"}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* HTML Content */}
+                      <div className="p-6 flex-1 text-gray-700 text-sm leading-relaxed overflow-x-auto">
+                        <div
+                          dangerouslySetInnerHTML={{
+                            __html: detalleCorreo.html,
+                          }}
+                        />
+                      </div>
+
+                      {/* Adjuntos */}
+                      {detalleCorreo.adjuntos &&
+                        detalleCorreo.adjuntos.length > 0 && (
+                          <div className="p-4 bg-gray-50 border-t border-gray-100">
+                            <h4 className="text-xs font-bold text-gray-500 uppercase mb-3 flex items-center gap-2">
+                              <Paperclip size={14} /> Adjuntos (
+                              {detalleCorreo.adjuntos.length})
+                            </h4>
+                            <div className="flex flex-wrap gap-3">
+                              {detalleCorreo.adjuntos.map((att, idx) => {
+                                const isImage =
+                                  att.contentType.startsWith("image/");
+                                return (
+                                  <div
+                                    key={idx}
+                                    onClick={() => descargarAdjunto(att)}
+                                    className="cursor-pointer group relative border border-gray-200 bg-white rounded-lg p-2 w-40 hover:shadow-md transition-all"
+                                  >
+                                    <div className="h-24 bg-gray-100 rounded mb-2 overflow-hidden flex items-center justify-center">
+                                      {isImage ? (
+                                        <img
+                                          src={`data:${att.contentType};base64,${att.content}`}
+                                          className="w-full h-full object-cover"
+                                          alt="adjunto"
+                                        />
+                                      ) : (
+                                        <FileText
+                                          size={32}
+                                          className="text-gray-400"
+                                        />
+                                      )}
+                                    </div>
+                                    <p className="text-xs text-gray-700 truncate font-medium">
+                                      {att.filename}
+                                    </p>
+                                    <p className="text-[10px] text-gray-400">
+                                      {(att.size / 1024).toFixed(1)} KB
+                                    </p>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                    </div>
+                  ) : (
+                    <div className="text-center text-red-500 mt-10">
+                      Error cargando el mensaje.
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              /* Estado Vacío (Desktop) */
+              <div className="hidden md:flex flex-col items-center justify-center h-full text-gray-400">
+                <div className="w-24 h-24 bg-gray-200 rounded-full flex items-center justify-center mb-4">
+                  <Mail size={48} className="text-gray-400" />
+                </div>
+                <p>Selecciona un correo para leerlo.</p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* 3. PANEL DE LECTURA (Derecha) */}
-      <div
-        className={`flex-1 bg-gray-50 flex-col h-full ${!correoSeleccionado ? "hidden md:flex" : "flex absolute inset-0 z-50 md:static"}`}
-      >
-        {correoSeleccionado ? (
-          <>
-            {/* Toolbar Lectura */}
-            <div className="h-16 bg-white border-b border-gray-200 px-4 flex items-center justify-between flex-shrink-0">
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => setCorreoSeleccionado(null)}
-                  className="md:hidden p-2 hover:bg-gray-100 rounded-full"
-                >
-                  <ChevronLeft />
-                </button>
-                <div className="flex gap-2 text-gray-500">
-                  <button className="p-2 hover:bg-gray-100 rounded hover:text-red-600">
-                    <Trash2 size={18} />
-                  </button>
-                  <button className="p-2 hover:bg-gray-100 rounded hover:text-yellow-500">
-                    <Star size={18} />
-                  </button>
-                  <button className="p-2 hover:bg-gray-100 rounded">
-                    <AlertCircle size={18} />
-                  </button>
-                </div>
-              </div>
-              <div className="text-gray-400">
-                <MoreVertical size={20} />
-              </div>
-            </div>
-
-            {/* Contenido Mensaje */}
-            <div className="flex-1 overflow-y-auto p-6 md:p-10">
-              {cargandoMensaje ? (
-                <div className="space-y-6 animate-pulse">
-                  <div className="h-8 bg-gray-200 rounded w-3/4"></div>
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-gray-200 rounded-full"></div>
-                    <div className="space-y-2">
-                      <div className="h-4 bg-gray-200 rounded w-48"></div>
-                      <div className="h-3 bg-gray-200 rounded w-32"></div>
-                    </div>
-                  </div>
-                  <div className="space-y-2 pt-8">
-                    <div className="h-4 bg-gray-200 rounded w-full"></div>
-                    <div className="h-4 bg-gray-200 rounded w-full"></div>
-                    <div className="h-4 bg-gray-200 rounded w-2/3"></div>
-                  </div>
-                </div>
-              ) : detalleCorreo ? (
-                <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-100 min-h-full">
-                  {/* Cabecera del Mensaje */}
-                  <div className="border-b border-gray-100 pb-6 mb-6">
-                    <h2 className="text-2xl font-bold text-gray-900 mb-6">
-                      {detalleCorreo.asunto}
-                    </h2>
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 text-white rounded-full flex items-center justify-center text-lg font-bold shadow-md">
-                          {getInitials(detalleCorreo.de)}
-                        </div>
-                        <div>
-                          <p className="font-bold text-gray-800 text-sm">
-                            {detalleCorreo.de}
-                          </p>
-                          {detalleCorreo.para && (
-                            <p className="text-xs text-gray-500">
-                              Para: {detalleCorreo.para}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-xs text-gray-500">
-                          {new Date(detalleCorreo.fecha).toLocaleDateString()}
-                        </p>
-                        <p className="text-xs text-gray-400">
-                          {new Date(detalleCorreo.fecha).toLocaleTimeString()}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Cuerpo HTML */}
-                  <div
-                    className="prose max-w-none text-gray-700 text-sm leading-relaxed"
-                    dangerouslySetInnerHTML={{ __html: detalleCorreo.html }}
-                  />
-                </div>
-              ) : (
-                <div className="text-center text-red-500 mt-10">
-                  Error al cargar mensaje.
-                </div>
-              )}
-            </div>
-          </>
-        ) : (
-          /* Estado Vacío (Desktop) */
-          <div className="flex-1 flex flex-col items-center justify-center text-gray-400 p-8 bg-gray-50">
-            <div className="w-32 h-32 bg-gray-200 rounded-full flex items-center justify-center mb-6">
-              <Mail size={64} className="text-gray-400" />
-            </div>
-            <h3 className="text-xl font-bold text-gray-600">
-              Selecciona un correo
-            </h3>
-            <p className="text-sm">
-              Elige un mensaje de la lista para leerlo aquí.
-            </p>
-          </div>
-        )}
-      </div>
-
-      {/* MODAL REDACTAR (Flotante) */}
+      {/* MODAL REDACTAR */}
       {modoRedactar && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col h-[80vh] md:h-auto">
-            <div className="bg-[#1e1e1e] text-white px-6 py-4 flex justify-between items-center">
+        <div className="fixed inset-0 bg-black/60 z-[60] flex items-end md:items-center justify-center sm:p-4 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white w-full md:w-[600px] h-[90vh] md:h-auto md:rounded-xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-10">
+            <div className="bg-gray-900 text-white p-4 flex justify-between items-center shrink-0">
               <h3 className="font-bold">Nuevo Mensaje</h3>
-              <button
-                onClick={() => setModoRedactar(false)}
-                className="hover:text-red-400"
-              >
-                <X />
+              <button onClick={() => setModoRedactar(false)}>
+                <X size={20} />
               </button>
             </div>
+
             <form
               onSubmit={enviarCorreo}
-              className="flex-1 flex flex-col p-6 space-y-4 overflow-y-auto"
+              className="flex-1 flex flex-col overflow-hidden"
             >
-              <div>
+              <div className="p-4 space-y-3 overflow-y-auto flex-1">
                 <input
+                  className="w-full border-b border-gray-200 py-2 outline-none focus:border-red-600 transition-colors"
+                  placeholder="Para: (ejemplo@correo.com)"
                   type="email"
                   required
-                  placeholder="Para"
-                  className="w-full py-2 border-b border-gray-200 focus:border-[#a72a34] outline-none text-sm"
                   value={nuevoCorreo.destinatario}
                   onChange={(e) =>
                     setNuevoCorreo({
@@ -552,56 +514,93 @@ const CorreoPage = () => {
                     })
                   }
                 />
-              </div>
-              <div>
                 <input
-                  type="text"
-                  required
+                  className="w-full border-b border-gray-200 py-2 outline-none focus:border-red-600 font-bold transition-colors"
                   placeholder="Asunto"
-                  className="w-full py-2 border-b border-gray-200 focus:border-[#a72a34] outline-none font-bold text-sm"
+                  required
                   value={nuevoCorreo.asunto}
                   onChange={(e) =>
                     setNuevoCorreo({ ...nuevoCorreo, asunto: e.target.value })
                   }
                 />
-              </div>
-              <textarea
-                required
-                placeholder="Escribe tu mensaje aquí..."
-                className="flex-1 w-full py-4 outline-none text-sm resize-none min-h-[200px]"
-                value={nuevoCorreo.mensaje}
-                onChange={(e) =>
-                  setNuevoCorreo({ ...nuevoCorreo, mensaje: e.target.value })
-                }
-              ></textarea>
+                <textarea
+                  className="w-full h-full min-h-[200px] resize-none outline-none text-gray-700 mt-2"
+                  placeholder="Escribe tu mensaje aquí..."
+                  required
+                  value={nuevoCorreo.mensaje}
+                  onChange={(e) =>
+                    setNuevoCorreo({ ...nuevoCorreo, mensaje: e.target.value })
+                  }
+                ></textarea>
 
-              <div className="flex justify-between items-center pt-4 border-t border-gray-100">
-                <div className="flex gap-2 text-gray-400">
+                {/* Lista de Adjuntos a Enviar */}
+                {archivosAdjuntos.length > 0 && (
+                  <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100">
+                    {archivosAdjuntos.map((file, i) => (
+                      <div
+                        key={i}
+                        className="bg-gray-100 px-3 py-1 rounded-full text-xs flex items-center gap-2 border border-gray-200"
+                      >
+                        <span className="max-w-[200px] truncate">
+                          {file.name}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setArchivosAdjuntos(
+                              archivosAdjuntos.filter((_, idx) => idx !== i),
+                            )
+                          }
+                          className="text-gray-500 hover:text-red-600"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="p-3 border-t border-gray-100 flex justify-between items-center bg-gray-50 shrink-0">
+                <div className="flex gap-1">
+                  {/* Botón Clip */}
                   <button
                     type="button"
-                    className="p-2 hover:bg-gray-100 rounded"
+                    onClick={() => fileInputRef.current.click()}
+                    className="p-2 text-gray-600 hover:bg-gray-200 rounded-lg transition-colors"
+                    title="Adjuntar archivo"
                   >
                     <Paperclip size={20} />
                   </button>
+                  {/* Botón Imagen (Hace lo mismo) */}
                   <button
                     type="button"
-                    className="p-2 hover:bg-gray-100 rounded"
+                    onClick={() => fileInputRef.current.click()}
+                    className="p-2 text-gray-600 hover:bg-gray-200 rounded-lg transition-colors"
+                    title="Insertar imagen"
                   >
-                    <span className="font-bold font-serif text-lg">A</span>
+                    <ImageIcon size={20} />
                   </button>
+                  <input
+                    type="file"
+                    multiple
+                    ref={fileInputRef}
+                    className="hidden"
+                    onChange={handleFileChange}
+                  />
                 </div>
-                <div className="flex gap-3">
+                <div className="flex gap-2">
                   <button
                     type="button"
                     onClick={() => setModoRedactar(false)}
-                    className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg font-medium text-sm"
+                    className="px-4 py-2 text-gray-600 hover:bg-gray-200 rounded-lg font-medium text-sm"
                   >
                     Descartar
                   </button>
                   <button
                     type="submit"
                     disabled={enviando}
-                    className="px-6 py-2 bg-[#a72a34] text-white rounded-lg font-bold hover:bg-[#8f242d] flex items-center gap-2 shadow-md disabled:opacity-70 text-sm"
+                    className="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2 disabled:opacity-70 shadow-sm transition-all text-sm"
                   >
                     {enviando ? (
                       "Enviando..."
@@ -621,18 +620,42 @@ const CorreoPage = () => {
   );
 };
 
-// Componente Helper para Sidebar
-const SidebarItem = ({ icon: Icon, label, active, onClick }) => (
+// Componente Helper
+const SidebarLink = ({ icon: Icon, label, active, onClick }) => (
   <button
     onClick={onClick}
-    className={`
-      w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors
-      ${active ? "bg-gray-800 text-white border-l-4 border-[#a72a34]" : "text-gray-400 hover:text-white hover:bg-gray-800"}
-    `}
+    className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${active ? "bg-red-50 text-red-700" : "text-gray-600 hover:bg-gray-100"}`}
   >
-    <Icon size={18} className={active ? "text-[#a72a34]" : ""} />
+    <Icon size={18} className={active ? "text-red-600" : "text-gray-400"} />
     {label}
   </button>
+);
+
+const LoginScreen = ({ onSubmit, pass, setPass }) => (
+  <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
+    <div className="bg-white p-8 rounded-xl shadow-lg w-full max-w-sm text-center">
+      <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
+        <Lock size={32} />
+      </div>
+      <h2 className="text-2xl font-bold mb-2">Acceso a Correo</h2>
+      <form onSubmit={onSubmit} className="space-y-4 mt-6">
+        <input
+          type="password"
+          required
+          className="w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-red-500"
+          placeholder="Contraseña institucional"
+          value={pass}
+          onChange={(e) => setPass(e.target.value)}
+        />
+        <button
+          type="submit"
+          className="w-full bg-red-600 text-white py-3 rounded-lg font-bold hover:bg-red-700 transition"
+        >
+          Entrar
+        </button>
+      </form>
+    </div>
+  </div>
 );
 
 export default CorreoPage;
