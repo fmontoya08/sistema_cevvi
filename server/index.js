@@ -1382,18 +1382,16 @@ adminRouter.get("/email/inbox", async (req, res) => {
   }
 });
 
-// 2. LEER MENSAJE INDIVIDUAL (Dinámico)
 adminRouter.get("/email/mensaje/:uid", async (req, res) => {
   const { uid } = req.params;
   try {
     const mailConfig = await getUserEmailCredentials(req.user.id);
-
     const config = {
       imap: {
-        user: mailConfig.user, // <--- CAMBIA mailConfig POR mailConfig
-        password: mailConfig.password, // <--- CAMBIA mailConfig POR mailConfig
-        host: mailConfig.host, // <--- CAMBIA mailConfig POR mailConfig
-        port: mailConfig.imapPort, // <--- CAMBIA mailConfig POR mailConfig
+        user: mailConfig.user,
+        password: mailConfig.password,
+        host: mailConfig.host,
+        port: mailConfig.imapPort,
         tls: true,
         authTimeout: 10000,
         tlsOptions: { rejectUnauthorized: false },
@@ -1417,11 +1415,24 @@ adminRouter.get("/email/mensaje/:uid", async (req, res) => {
 
     connection.end();
 
+    // PROCESAR ADJUNTOS A BASE64 PARA EL FRONTEND
+    const adjuntosProcesados = parsed.attachments
+      ? parsed.attachments.map((att) => ({
+          filename: att.filename,
+          contentType: att.contentType,
+          size: att.size,
+          // Convertimos el buffer a string base64 para que React pueda mostrarlo
+          content: att.content.toString("base64"),
+          contentId: att.contentId,
+        }))
+      : [];
+
     res.json({
       asunto: parsed.subject,
       de: parsed.from?.text,
       fecha: parsed.date,
       html: parsed.html || parsed.textAsHtml || parsed.text,
+      adjuntos: adjuntosProcesados, // <--- ENVIAMOS LOS ADJUNTOS
     });
   } catch (error) {
     console.error("Error mensaje dinámico:", error.message);
@@ -1429,31 +1440,54 @@ adminRouter.get("/email/mensaje/:uid", async (req, res) => {
   }
 });
 
-// 3. ENVIAR CORREO (Dinámico)
-adminRouter.post("/email/enviar", async (req, res) => {
-  try {
-    const mailConfig = await getUserEmailCredentials(req.user.id);
+// 2. RUTA ENVIAR CORREO (SOPORTE PARA ARCHIVOS)
+// Usamos 'upload.array' para permitir múltiples archivos
+adminRouter.post(
+  "/email/enviar",
+  upload.array("adjuntos"),
+  async (req, res) => {
+    try {
+      const { destinatario, asunto, mensaje } = req.body;
+      const files = req.files || []; // Archivos subidos por Multer
 
-    let transporter = nodemailer.createTransport({
-      host: mailConfig.host,
-      port: mailConfig.smtpPort,
-      secure: true,
-      auth: { user: mailConfig.user, pass: mailConfig.password },
-      tls: { rejectUnauthorized: false },
-    });
+      const mailConfig = await getUserEmailCredentials(req.user.id);
 
-    await transporter.sendMail({
-      from: `"Universidad Siglo XXI" <${mailConfig.user}>`,
-      to: req.body.destinatario,
-      subject: req.body.asunto,
-      html: req.body.mensaje,
-    });
-    res.json({ message: "Enviado correctamente" });
-  } catch (error) {
-    console.error("Error envío dinámico:", error.message);
-    res.status(500).send("Error al enviar");
-  }
-});
+      let transporter = nodemailer.createTransport({
+        host: mailConfig.host,
+        port: mailConfig.smtpPort,
+        secure: true,
+        auth: { user: mailConfig.user, pass: mailConfig.password },
+        tls: { rejectUnauthorized: false },
+      });
+
+      // Preparamos los adjuntos para Nodemailer
+      const attachments = files.map((f) => ({
+        filename: f.originalname,
+        path: f.path,
+      }));
+
+      await transporter.sendMail({
+        from: `"Universidad Siglo XXI" <${mailConfig.user}>`,
+        to: destinatario,
+        subject: asunto,
+        html: mensaje,
+        attachments: attachments, // <--- AGREGAMOS ESTO
+      });
+
+      // Limpieza: Borrar archivos temporales después de enviar
+      files.forEach((f) => {
+        fs.unlink(f.path, (err) => {
+          if (err) console.error("Error borrando temp:", err);
+        });
+      });
+
+      res.json({ message: "Enviado correctamente" });
+    } catch (error) {
+      console.error("Error envío dinámico:", error.message);
+      res.status(500).send("Error al enviar");
+    }
+  },
+);
 
 // --- RUTAS DE GESTIÓN FINANCIERA (ADMIN --> ALUMNO) ---
 

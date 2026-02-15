@@ -324,27 +324,39 @@ const MiDrivePage = () => {
 
   const handleClickItem = (item) => {
     if (item.tipo === "carpeta") {
-      // AQUI ESTÁ LA CLAVE:
-      // Si es un ítem compartido desde raíz, le pasamos su owner_id.
-      // Si es una carpeta normal, pasamos null para conservar el estado actual.
+      // Lógica de carpetas (la que ya tenías)
       const idDueno = item.es_compartido_root ? item.owner_id : null;
-
-      // Limpiamos el nombre visual "(de Admin)" para la ruta real
       const nombreReal = item.es_compartido_root
-        ? item.ruta.split("/").pop() // Usamos el nombre real de la ruta
+        ? item.ruta.split("/").pop()
         : item.nombre;
-
       entrarCarpeta(nombreReal, idDueno);
     } else {
-      // ... lógica de Excel o Abrir archivo (igual que antes) ...
-      if (item.nombre.match(/\.(xlsx|xls|csv)$/i)) {
-        setArchivoParaEditar(item);
-        setEditorExcelOpen(true);
-      } else {
+      // --- LÓGICA DE ARCHIVOS ---
+
+      const extension = item.nombre.split(".").pop().toLowerCase();
+
+      // 1. EXCEL -> Editor
+      if (["xlsx", "xls", "csv"].includes(extension)) {
+        // Validar permiso: Si no es mío y no tengo permiso de editar, solo descargo
+        if (!item.es_propio && item.permiso !== "editar") {
+          handleDescargar(item);
+        } else {
+          setArchivoParaEditar(item);
+          setEditorExcelOpen(true);
+        }
+      }
+      // 2. PDF / IMAGEN / TXT -> Visualizar en Pestaña
+      else if (
+        ["pdf", "jpg", "jpeg", "png", "gif", "txt"].includes(extension)
+      ) {
         window.open(
           `https://api-universidad-c5o8.onrender.com${item.url}`,
           "_blank",
         );
+      }
+      // 3. WORD / PPT / ZIP / OTROS -> Descargar Directo
+      else {
+        handleDescargar(item);
       }
     }
   };
@@ -384,6 +396,33 @@ const MiDrivePage = () => {
     } finally {
       setSubiendo(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  // --- FUNCIÓN DE DESCARGA FORZADA ---
+  const handleDescargar = async (item) => {
+    try {
+      const response = await axios.get(
+        `https://api-universidad-c5o8.onrender.com${item.url}`,
+        {
+          responseType: "blob", // Importante: recibir como archivo binario
+        },
+      );
+
+      // Crear un enlace temporal en el navegador
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", item.nombre); // Forzar nombre del archivo
+      document.body.appendChild(link);
+      link.click();
+
+      // Limpieza
+      link.parentNode.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Error al descargar:", error);
+      alert("No se pudo descargar el archivo.");
     }
   };
 
@@ -698,65 +737,135 @@ const MiDrivePage = () => {
               </div>
             )}
 
-            {items.map((item) => (
-              <div
-                key={item.nombre}
-                className="group relative bg-white p-4 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition"
-              >
-                {/* Contenido principal */}
+            {items.map((item) => {
+              // Determinamos qué permisos tiene el usuario sobre este ítem
+              const puedeEditar = item.es_propio || item.permiso === "editar";
+              const puedeBorrar = item.es_propio; // Solo el dueño borra (regla de seguridad)
+              const esExcel = item.nombre.match(/\.(xlsx|xls|csv)$/i);
+              const esVisualizable = item.nombre.match(
+                /\.(pdf|jpg|png|jpeg|gif)$/i,
+              );
+
+              return (
                 <div
-                  className="w-full flex flex-col items-center cursor-pointer"
-                  onClick={() => handleClickItem(item)}
+                  key={item.nombre}
+                  className="group relative bg-white p-4 rounded-xl shadow-sm border border-gray-100 hover:shadow-lg hover:-translate-y-1 transition-all duration-200"
                 >
-                  <div className="w-16 h-16 mb-3 flex items-center justify-center text-gray-500">
-                    {item.tipo === "carpeta" ? (
-                      <Folder
-                        size={64}
-                        className="text-yellow-400 fill-yellow-50"
-                      />
-                    ) : item.nombre.match(/\.(jpg|png|jpeg)$/i) ? (
-                      <img
-                        src={`https://api-universidad-c5o8.onrender.com${item.url}`}
-                        className="w-full h-full object-cover rounded"
-                        alt={item.nombre}
-                      />
-                    ) : (
-                      <FileText size={50} className="text-blue-400" />
+                  {/* --- ÁREA CLICKEABLE (ICONO Y NOMBRE) --- */}
+                  <div
+                    className="w-full flex flex-col items-center cursor-pointer"
+                    onClick={() => handleClickItem(item)}
+                  >
+                    {/* Icono según tipo */}
+                    <div className="w-16 h-16 mb-3 flex items-center justify-center text-gray-500">
+                      {item.tipo === "carpeta" ? (
+                        <Folder
+                          size={64}
+                          className="text-yellow-400 fill-yellow-50"
+                        />
+                      ) : item.nombre.match(/\.(jpg|png|jpeg)$/i) ? (
+                        <img
+                          src={`https://api-universidad-c5o8.onrender.com${item.url}`}
+                          className="w-full h-full object-cover rounded shadow-sm"
+                          alt={item.nombre}
+                        />
+                      ) : esExcel ? (
+                        <FileText size={50} className="text-green-500" />
+                      ) : item.nombre.endsWith(".pdf") ? (
+                        <FileText size={50} className="text-red-500" />
+                      ) : (
+                        <FileText size={50} className="text-blue-400" />
+                      )}
+                    </div>
+
+                    {/* Nombre del archivo */}
+                    <p
+                      className="text-sm font-medium text-gray-700 truncate w-full text-center"
+                      title={item.nombre}
+                    >
+                      {item.nombre}
+                    </p>
+                  </div>
+
+                  {/* --- BARRA DE ACCIONES (Aparece en Hover) --- */}
+                  <div className="absolute top-2 right-2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 backdrop-blur-sm rounded-lg p-1 shadow-sm">
+                    {/* 1. BOTÓN DESCARGAR (Siempre visible para archivos) */}
+                    {item.tipo !== "carpeta" && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDescargar(item);
+                        }}
+                        className="p-1.5 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                        title="Descargar"
+                      >
+                        <Download size={16} />
+                      </button>
+                    )}
+
+                    {/* 2. BOTÓN EDITAR (Solo Excel y con permiso) */}
+                    {item.tipo !== "carpeta" && esExcel && puedeEditar && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setArchivoParaEditar(item);
+                          setEditorExcelOpen(true);
+                        }}
+                        className="p-1.5 text-gray-600 hover:text-green-600 hover:bg-green-50 rounded-md transition-colors"
+                        title="Editar Hoja de Cálculo"
+                      >
+                        <Edit size={16} />
+                      </button>
+                    )}
+
+                    {/* 3. BOTÓN VER (Solo PDF/Imágenes) */}
+                    {item.tipo !== "carpeta" && esVisualizable && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          window.open(
+                            `https://api-universidad-c5o8.onrender.com${item.url}`,
+                            "_blank",
+                          );
+                        }}
+                        className="p-1.5 text-gray-600 hover:text-purple-600 hover:bg-purple-50 rounded-md transition-colors"
+                        title="Visualizar"
+                      >
+                        <Eye size={16} />
+                      </button>
+                    )}
+
+                    {/* 4. BOTÓN COMPARTIR (Solo Dueño) */}
+                    {item.es_propio && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          abrirModalCompartir(item);
+                        }}
+                        className="p-1.5 text-gray-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors"
+                        title="Compartir"
+                      >
+                        <Share2 size={16} />
+                      </button>
+                    )}
+
+                    {/* 5. BOTÓN BORRAR (Solo Dueño) */}
+                    {puedeBorrar && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          eliminarItem(item.ruta, item.tipo);
+                        }}
+                        className="p-1.5 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                        title="Eliminar"
+                      >
+                        <Trash2 size={16} />
+                      </button>
                     )}
                   </div>
-                  <p className="text-sm font-medium text-gray-700 truncate w-full text-center">
-                    {item.nombre}
-                  </p>
                 </div>
-
-                {/* Botones de acción */}
-                <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition">
-                  {/* Botón Compartir */}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      abrirModalCompartir(item);
-                    }}
-                    className="p-1.5 text-blue-500 hover:text-blue-600 hover:bg-blue-50 rounded-full"
-                    title="Compartir"
-                  >
-                    <Share2 size={16} />
-                  </button>
-
-                  {/* Botón Eliminar */}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      eliminarItem(item.ruta, item.tipo);
-                    }}
-                    className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-full"
-                    title="Eliminar"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
