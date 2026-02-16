@@ -48,3 +48,72 @@
   cursor: pointer;
   padding: 2px 5px;
 }
+
+/* Contenedor principal de la pizarra */
+.pizarra-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: #f9fafb;
+  display: flex;
+  flex-direction: column;
+  z-index: 9999;
+  overflow: hidden;
+}
+
+/* Header de la pizarra */
+.pizarra-header {
+  height: 64px;
+  background-color: white;
+  border-bottom: 1px solid #e5e7eb;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1rem;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+  z-index: 10000;
+  flex-shrink: 0;
+}
+
+/* Contenedor del editor Tldraw */
+.pizarra-editor {
+  flex: 1;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Asegurar que Tldraw ocupe todo el espacio disponible */
+.pizarra-editor > div {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Forzar visibilidad de la UI de Tldraw */
+.tlui-layout {
+  z-index: 9998 !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+}
+
+/* Asegurar que el canvas tenga el fondo correcto */
+.tl-canvas {
+  background-color: white;
+}
+
+/* Resetear text-align para evitar conflictos */
+.pizarra-container,
+.pizarra-editor,
+.tldraw,
+.tl-container {
+  text-align: left !important;
+}

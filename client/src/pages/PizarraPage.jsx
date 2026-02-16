@@ -1,68 +1,85 @@
-import React, { useState } from "react";
-// Importamos Excalidraw y su función de exportación
-import { Excalidraw, exportToBlob } from "@excalidraw/excalidraw";
+import React, { useState, useCallback } from "react";
+import { Tldraw, getDefaultCdnBaseUrl } from "tldraw";
+import "tldraw/tldraw.css";
 import axios from "axios";
-import { Save, Download, ArrowLeft, Loader, Trash2 } from "lucide-react";
+import { Save, Download, ArrowLeft, Loader } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 const PizarraPage = () => {
   const navigate = useNavigate();
-  // Estado para controlar la API interna de la pizarra
-  const [excalidrawAPI, setExcalidrawAPI] = useState(null);
+  const [editor, setEditor] = useState(null);
   const [guardando, setGuardando] = useState(false);
 
-  // --- FUNCIÓN GUARDAR (Local y Nube) ---
-  const procesarImagen = async () => {
-    if (!excalidrawAPI) return null;
+  const handleMount = useCallback((editor) => {
+    console.log("✅ Editor montado correctamente");
+    setEditor(editor);
+  }, []);
 
-    // Obtener los elementos dibujados
-    const elements = excalidrawAPI.getSceneElements();
-    if (!elements || elements.length === 0) {
-      alert("El lienzo está vacío.");
-      return null;
-    }
-
-    // Convertir a imagen PNG
-    const blob = await exportToBlob({
-      elements,
-      mimeType: "image/png",
-      appState: {
-        ...excalidrawAPI.getAppState(),
-        exportBackground: true, // Fondo blanco
-        viewBackgroundColor: "#ffffff",
-      },
-      files: excalidrawAPI.getFiles(),
+  const convertirSvgAPng = async (editorInstance, shapeIds) => {
+    const svgElement = await editorInstance.getSvg(shapeIds, {
+      scale: 1,
+      background: true,
     });
+    if (!svgElement) throw new Error("No se pudo generar el SVG");
 
-    return blob;
+    const svgString = new XMLSerializer().serializeToString(svgElement);
+    const svg64 = btoa(unescape(encodeURIComponent(svgString)));
+    const image64 = `data:image/svg+xml;base64,${svg64}`;
+
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext("2d");
+        ctx.fillStyle = "white";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0);
+        canvas.toBlob((blob) => {
+          if (blob) resolve(blob);
+          else reject(new Error("Fallo conversión"));
+        }, "image/png");
+      };
+      img.onerror = (e) => reject(e);
+      img.src = image64;
+    });
   };
 
   const descargarImagen = async () => {
-    const blob = await procesarImagen();
-    if (!blob) return;
-
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `Dibujo_${Date.now()}.png`;
-    link.click();
-    window.URL.revokeObjectURL(url);
+    if (!editor) return;
+    try {
+      const shapeIds = Array.from(editor.getCurrentPageShapeIds());
+      if (shapeIds.length === 0) return alert("El lienzo está vacío.");
+      const blob = await convertirSvgAPng(editor, shapeIds);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `Dibujo_${Date.now()}.png`;
+      link.click();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error(e);
+      alert("Error al generar la imagen.");
+    }
   };
 
   const guardarEnNube = async () => {
+    if (!editor) return;
     setGuardando(true);
     try {
-      const blob = await procesarImagen();
-      if (!blob) return;
-
+      const shapeIds = Array.from(editor.getCurrentPageShapeIds());
+      if (shapeIds.length === 0) {
+        setGuardando(false);
+        return alert("Dibuja algo antes de guardar.");
+      }
+      const blob = await convertirSvgAPng(editor, shapeIds);
       const file = new File([blob], `Taller_Creativo_${Date.now()}.png`, {
         type: "image/png",
       });
-
       const formData = new FormData();
-      formData.append("rutaActual", ""); // Guardar en raíz
+      formData.append("rutaActual", "");
       formData.append("archivo", file);
-
       const token = localStorage.getItem("token");
       await axios.post(
         "https://api-universidad-c5o8.onrender.com/api/drive/upload",
@@ -74,7 +91,6 @@ const PizarraPage = () => {
           },
         },
       );
-
       alert("¡Guardado en 'Mi Nube' con éxito!");
     } catch (error) {
       console.error(error);
@@ -85,44 +101,148 @@ const PizarraPage = () => {
   };
 
   return (
-    <div style={{ height: "100vh", display: "flex", flexDirection: "column" }}>
-      {/* HEADER */}
-      <div className="h-16 bg-white border-b flex items-center justify-between px-4 shadow-sm z-10 shrink-0">
-        <div className="flex items-center gap-3">
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        width: "100vw",
+        height: "100vh",
+        overflow: "hidden",
+        backgroundColor: "#f9fafb",
+      }}
+    >
+      {/* CAPA 1: La Pizarra al fondo ocupando todo */}
+      <div
+        style={{
+          width: "100%",
+          height: "100%",
+          position: "absolute",
+          top: 0,
+          left: 0,
+          zIndex: 0,
+        }}
+      >
+        <Tldraw
+          onMount={handleMount}
+          options={{
+            // 🔥 Configuración para producción - usa el CDN por defecto de tldraw
+            baseUrl: getDefaultCdnBaseUrl(),
+          }}
+        />
+      </div>
+
+      {/* CAPA 2: El Header flotando encima */}
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          height: "64px",
+          backgroundColor: "rgba(255, 255, 255, 0.9)",
+          backdropFilter: "blur(8px)",
+          borderBottom: "1px solid #e5e7eb",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "0 1rem",
+          boxShadow: "0 1px 3px 0 rgba(0, 0, 0, 0.1)",
+          zIndex: 50,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
           <button
             onClick={() => navigate(-1)}
-            className="p-2 hover:bg-gray-100 rounded-full text-gray-600"
+            style={{
+              padding: "0.5rem",
+              borderRadius: "9999px",
+              cursor: "pointer",
+              border: "none",
+              backgroundColor: "transparent",
+              color: "#374151",
+              fontWeight: "bold",
+            }}
+            onMouseEnter={(e) => (e.target.style.backgroundColor = "#e5e7eb")}
+            onMouseLeave={(e) =>
+              (e.target.style.backgroundColor = "transparent")
+            }
           >
             <ArrowLeft />
           </button>
-          <h1 className="font-bold text-gray-800 text-lg flex flex-col leading-tight">
+          <h1
+            style={{
+              fontWeight: "bold",
+              color: "#1f2937",
+              fontSize: "1.125rem",
+              display: "flex",
+              flexDirection: "column",
+              lineHeight: "1.25",
+              userSelect: "none",
+            }}
+          >
             <span>Taller Creativo</span>
-            <span className="text-xs text-[#a72a34] font-normal">
-              Excalidraw
+            <span
+              style={{
+                fontSize: "0.75rem",
+                color: "#a72a34",
+                fontWeight: "normal",
+              }}
+            >
+              Pedagogía y Psicología
             </span>
           </h1>
         </div>
 
-        <div className="flex gap-2">
-          <button
-            onClick={() => {
-              if (window.confirm("¿Borrar todo?")) excalidrawAPI.resetScene();
-            }}
-            className="flex items-center gap-2 px-3 py-2 text-sm font-bold text-red-500 bg-red-50 hover:bg-red-100 rounded-lg mr-2"
-          >
-            <Trash2 size={18} /> Borrar
-          </button>
+        <div style={{ display: "flex", gap: "0.5rem" }}>
           <button
             onClick={descargarImagen}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              padding: "0.5rem 1rem",
+              fontSize: "0.875rem",
+              fontWeight: "bold",
+              color: "#374151",
+              backgroundColor: "white",
+              border: "1px solid #d1d5db",
+              borderRadius: "0.5rem",
+              cursor: "pointer",
+              boxShadow: "0 1px 2px 0 rgba(0, 0, 0, 0.05)",
+            }}
+            onMouseEnter={(e) => (e.target.style.backgroundColor = "#f3f4f6")}
+            onMouseLeave={(e) => (e.target.style.backgroundColor = "white")}
           >
-            <Download size={18} />{" "}
-            <span className="hidden sm:inline">Descargar</span>
+            <Download size={18} />
+            <span
+              style={{ display: window.innerWidth < 640 ? "none" : "inline" }}
+            >
+              Descargar
+            </span>
           </button>
           <button
             onClick={guardarEnNube}
             disabled={guardando}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-white bg-[#a72a34] hover:bg-[#8f242d] rounded-lg shadow-md disabled:opacity-70"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              padding: "0.5rem 1rem",
+              fontSize: "0.875rem",
+              fontWeight: "bold",
+              color: "white",
+              backgroundColor: guardando ? "rgba(167, 42, 52, 0.7)" : "#a72a34",
+              border: "none",
+              borderRadius: "0.5rem",
+              boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
+              cursor: guardando ? "not-allowed" : "pointer",
+            }}
+            onMouseEnter={(e) => {
+              if (!guardando) e.target.style.backgroundColor = "#8f242d";
+            }}
+            onMouseLeave={(e) => {
+              if (!guardando) e.target.style.backgroundColor = "#a72a34";
+            }}
           >
             {guardando ? (
               <Loader className="animate-spin" size={18} />
@@ -132,25 +252,6 @@ const PizarraPage = () => {
             {guardando ? "Guardando..." : "Guardar en Nube"}
           </button>
         </div>
-      </div>
-
-      {/* CONTENEDOR DE EXCALIDRAW */}
-      <div className="flex-1 w-full h-full relative">
-        <Excalidraw
-          excalidrawAPI={(api) => setExcalidrawAPI(api)}
-          langCode="es-ES" // Idioma Español
-          initialData={{
-            appState: { viewBackgroundColor: "#ffffff" }, // Fondo blanco por defecto
-          }}
-          UIOptions={{
-            canvasActions: {
-              saveAsImage: false, // Ocultamos los botones nativos para usar los nuestros
-              saveToActiveFile: false,
-              loadScene: false,
-              export: false,
-            },
-          }}
-        />
       </div>
     </div>
   );

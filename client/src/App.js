@@ -13,6 +13,7 @@ import ExamenesPage from "./pages/ExamenesPage"; // <--- IMPORTANTE
 import ResultadosExamenPage from "./pages/ResultadosExamenPage";
 import RevisarExamenPage from "./pages/RevisarExamenPage";
 import PizarraPage from "./pages/PizarraPage";
+import "tldraw/tldraw.css";
 
 import React, {
   useState,
