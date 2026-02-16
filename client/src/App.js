@@ -12,6 +12,7 @@ import TomarExamenPage from "./pages/TomarExamenPage";
 import ExamenesPage from "./pages/ExamenesPage"; // <--- IMPORTANTE
 import ResultadosExamenPage from "./pages/ResultadosExamenPage";
 import RevisarExamenPage from "./pages/RevisarExamenPage";
+import PizarraPage from "./pages/PizarraPage";
 
 import React, {
   useState,
@@ -98,6 +99,7 @@ import {
   Loader,
   Folder,
   PlusCircle,
+  PenTool, // <-- NUEVO PARA LA PIZARRA
 } from "lucide-react";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
@@ -1086,6 +1088,8 @@ const AlumnoLayout = () => {
     { icon: Calendar, label: "Calendario", path: "/alumno/calendario" },
     { icon: User, label: "Mi Perfil", path: "/alumno/mi-perfil" },
     { icon: Mail, label: "Correo Institucional", path: "/alumno/correo" },
+    { icon: PenTool, label: "Taller Creativo", path: "/alumno/pizarra" },
+    { icon: UploadCloud, label: "Mi Nube", path: "/alumno/mi-nube" },
   ];
 
   return (
@@ -13914,6 +13918,7 @@ function App() {
                 path="/alumno/dashboard"
                 element={<AlumnoDashboardPage />}
               />
+              <Route path="/alumno/mi-nube" element={<MiDrivePage />} />
               <Route
                 path="/alumno/dashboard"
                 element={<AlumnoDashboardPage />}
@@ -13931,6 +13936,7 @@ function App() {
                 path="/alumno/mis-solicitudes"
                 element={<MisSolicitudesPage />}
               />
+              <Route path="/alumno/pizarra" element={<PizarraPage />} />
               <Route
                 path="/alumno/examen/:examenId/resolver"
                 element={<TomarExamenPage />}
