@@ -11330,22 +11330,89 @@ const AulaVirtualPage = () => {
           className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-principal focus:border-principal"
         ></textarea>
       </div>
-      <div>
-        <label
-          htmlFor="evaluacion"
-          className="block text-sm font-medium text-gray-700"
-        >
-          Criterios de Evaluación
-        </label>
-        <textarea
-          name="evaluacion"
-          id="evaluacion"
-          rows="3"
-          value={formData.evaluacion}
-          onChange={handleChange}
-          placeholder="Ej: Tareas 50%, Examen Final 30%, Participación 20%"
-          className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-principal focus:border-principal"
-        ></textarea>
+      {/* SECCIÓN DE PORCENTAJES DE EVALUACIÓN */}
+      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+        <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
+          <Award size={18} className="text-[#a72a34]" /> Criterios de Evaluación
+          (%)
+        </h4>
+        <div className="grid grid-cols-3 gap-4">
+          <div>
+            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
+              Tareas
+            </label>
+            <input
+              type="number"
+              min="0"
+              max="100"
+              className="w-full p-2 border rounded-lg font-bold text-center"
+              value={formData.porcentaje_tareas || 0}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  porcentaje_tareas: parseInt(e.target.value),
+                })
+              }
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
+              Exámenes
+            </label>
+            <input
+              type="number"
+              min="0"
+              max="100"
+              className="w-full p-2 border rounded-lg font-bold text-center"
+              value={formData.porcentaje_examenes || 0}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  porcentaje_examenes: parseInt(e.target.value),
+                })
+              }
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
+              Asistencia
+            </label>
+            <input
+              type="number"
+              min="0"
+              max="100"
+              className="w-full p-2 border rounded-lg font-bold text-center"
+              value={formData.porcentaje_asistencia || 0}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  porcentaje_asistencia: parseInt(e.target.value),
+                })
+              }
+            />
+          </div>
+        </div>
+
+        {/* Validación visual */}
+        <div className="mt-3 text-right">
+          <span
+            className={`text-sm font-bold ${formData.porcentaje_tareas + formData.porcentaje_examenes + formData.porcentaje_asistencia === 100 ? "text-green-600" : "text-red-500"}`}
+          >
+            Total:{" "}
+            {(formData.porcentaje_tareas || 0) +
+              (formData.porcentaje_examenes || 0) +
+              (formData.porcentaje_asistencia || 0)}
+            %
+          </span>
+          {formData.porcentaje_tareas +
+            formData.porcentaje_examenes +
+            formData.porcentaje_asistencia !==
+            100 && (
+            <p className="text-xs text-red-500">
+              La suma debe ser exactamente 100%.
+            </p>
+          )}
+        </div>
       </div>
       <div>
         <label

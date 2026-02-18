@@ -5223,6 +5223,9 @@ docenteRouter.put(
         horario,
         contacto_docente,
         notificar_inicio, // <--- 1. RECIBIMOS ESTA NUEVA VARIABLE
+        porcentaje_tareas, // <--- NUEVOS CAMPOS
+        porcentaje_examenes,
+        porcentaje_asistencia,
       } = req.body;
       const docente_id = req.user.id;
 
@@ -5252,19 +5255,23 @@ docenteRouter.put(
 
       // ACTUALIZAR EN BD
       const sql = `
-        INSERT INTO aula_virtual_config (
-          grupo_id, asignatura_id, enlace_videollamada, descripcion_curso, 
-          objetivos, evaluacion, horario, contacto_docente 
-        ) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?) 
-        ON DUPLICATE KEY UPDATE 
-          enlace_videollamada = VALUES(enlace_videollamada), 
-          descripcion_curso = VALUES(descripcion_curso),
-          objetivos = VALUES(objetivos),
-          evaluacion = VALUES(evaluacion),
-          horario = VALUES(horario),
-          contacto_docente = VALUES(contacto_docente)
-      `;
+      INSERT INTO aula_virtual_config (
+        grupo_id, asignatura_id, enlace_videollamada, descripcion_curso, 
+        objetivos, evaluacion, horario, contacto_docente,
+        porcentaje_tareas, porcentaje_examenes, porcentaje_asistencia  -- <--- AGREGAR AQUÍ
+      ) 
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) 
+      ON DUPLICATE KEY UPDATE 
+        enlace_videollamada = VALUES(enlace_videollamada), 
+        descripcion_curso = VALUES(descripcion_curso),
+        objetivos = VALUES(objetivos),
+        evaluacion = VALUES(evaluacion),
+        horario = VALUES(horario),
+        contacto_docente = VALUES(contacto_docente),
+        porcentaje_tareas = VALUES(porcentaje_tareas),         -- <--- Y AQUÍ
+        porcentaje_examenes = VALUES(porcentaje_examenes),
+        porcentaje_asistencia = VALUES(porcentaje_asistencia)
+    `;
 
       await db.query(sql, [
         grupoId,
@@ -5275,6 +5282,9 @@ docenteRouter.put(
         evaluacion || null,
         horario || null,
         contacto_docente || null,
+        porcentaje_tareas || 0, // <--- AGREGAR VALORES AL ARRAY
+        porcentaje_examenes || 0,
+        porcentaje_asistencia || 0,
       ]);
 
       // --- NOTIFICACIONES ---
@@ -7554,7 +7564,7 @@ apiRouter.get(
   },
 );
 
-// --- NUEVO ENDPOINT: ANALÍTICAS GLOBALES (CON PROMEDIO CORREGIDO POR PORCENTAJES) ---
+// --- NUEVO ENDPOINT: ANALÍTICAS GLOBALES (CON PROMEDIO PONDERADO POR DOCENTE) ---
 apiRouter.get(
   "/analiticas/:grupoId/:asignaturaId",
   verifyToken,
@@ -7562,122 +7572,127 @@ apiRouter.get(
     const { grupoId, asignaturaId } = req.params;
 
     try {
-      // 1. Obtener LISTA DE ALUMNOS
+      // 0. OBTENER PORCENTAJES CONFIGURADOS POR EL DOCENTE
+      const [[config]] = await db.query(
+        "SELECT porcentaje_tareas, porcentaje_examenes, porcentaje_asistencia FROM aula_virtual_config WHERE grupo_id = ? AND asignatura_id = ?",
+        [grupoId, asignaturaId],
+      );
+
+      // Si no ha configurado nada, usamos los valores por defecto (40/40/20)
+      const pctTareas = config ? config.porcentaje_tareas || 40 : 40;
+      const pctExamen = config ? config.porcentaje_examenes || 40 : 40;
+      const pctAsistencia = config ? config.porcentaje_asistencia || 20 : 20;
+
+      // 1. OBTENER LISTA DE ALUMNOS INSCRITOS
       const [alumnos] = await db.query(
         `SELECT u.id, u.nombre, u.apellido_paterno, u.matricula, u.foto_perfil
-       FROM usuarios u
-       JOIN grupo_alumnos ga ON u.id = ga.alumno_id
-       WHERE ga.grupo_id = ? AND u.rol = 'alumno'
-       ORDER BY u.apellido_paterno ASC`,
+         FROM usuarios u
+         JOIN grupo_alumnos ga ON u.id = ga.alumno_id
+         WHERE ga.grupo_id = ? AND u.rol = 'alumno'
+         ORDER BY u.apellido_paterno ASC`,
         [grupoId],
       );
 
-      // 2. Obtener COLUMNAS (Tareas y Exámenes)
-      // Asumimos que las TAREAS valen 100 puntos por defecto
+      // 2. OBTENER COLUMNAS (Tareas y Exámenes)
+      // Tareas: Asumimos base 100
       const [colsTareas] = await db.query(
         "SELECT id, titulo, fecha_limite FROM tareas WHERE grupo_id = ? AND asignatura_id = ? ORDER BY fecha_creacion ASC",
         [grupoId, asignaturaId],
       );
 
-      // Para EXÁMENES, calculamos cuánto valen realmente sumando sus preguntas
+      // Exámenes: Obtenemos el valor total de puntos para normalizar a 100
       const [colsExamenes] = await db.query(
         `SELECT e.id, e.titulo, 
-       (SELECT IFNULL(SUM(puntos), 1) FROM preguntas WHERE examen_id = e.id) as puntos_maximos 
-       FROM examenes e 
-       WHERE e.grupo_id = ? AND e.asignatura_id = ?`,
+         (SELECT IFNULL(SUM(puntos), 1) FROM preguntas WHERE examen_id = e.id) as puntos_maximos 
+         FROM examenes e 
+         WHERE e.grupo_id = ? AND e.asignatura_id = ?`,
         [grupoId, asignaturaId],
       );
 
-      // 3. Obtener CALIFICACIONES
+      // 3. OBTENER CALIFICACIONES (Datos crudos)
       const [notasTareas] = await db.query(
         `SELECT te.alumno_id, te.tarea_id, te.calificacion 
-       FROM tareas_entregas te 
-       JOIN tareas t ON te.tarea_id = t.id 
-       WHERE t.grupo_id = ? AND t.asignatura_id = ?`,
+         FROM tareas_entregas te 
+         JOIN tareas t ON te.tarea_id = t.id 
+         WHERE t.grupo_id = ? AND t.asignatura_id = ?`,
         [grupoId, asignaturaId],
       );
 
       const [notasExamenes] = await db.query(
         `SELECT ie.alumno_id, ie.examen_id, ie.calificacion 
-       FROM intentos_examen ie 
-       JOIN examenes e ON ie.examen_id = e.id 
-       WHERE e.grupo_id = ? AND e.asignatura_id = ?`,
+         FROM intentos_examen ie 
+         JOIN examenes e ON ie.examen_id = e.id 
+         WHERE e.grupo_id = ? AND e.asignatura_id = ?`,
         [grupoId, asignaturaId],
       );
 
-      // 4. Calcular ASISTENCIA
+      // 4. CALCULAR ASISTENCIA
       const [totalSesiones] = await db.query(
         "SELECT COUNT(*) as total FROM clases_sesiones WHERE grupo_id = ? AND asignatura_id = ?",
         [grupoId, asignaturaId],
       );
-      const numSesiones = totalSesiones[0].total || 1;
+      const numSesiones = totalSesiones[0].total || 1; // Evitar división por cero
 
       const [asistencias] = await db.query(
         `SELECT a.alumno_id, COUNT(*) as presentes 
-       FROM asistencia a
-       JOIN clases_sesiones s ON a.sesion_id = s.id
-       WHERE s.grupo_id = ? AND s.asignatura_id = ? AND a.estatus = 'presente'
-       GROUP BY a.alumno_id`,
+         FROM asistencia a
+         JOIN clases_sesiones s ON a.sesion_id = s.id
+         WHERE s.grupo_id = ? AND s.asignatura_id = ? AND a.estatus = 'presente'
+         GROUP BY a.alumno_id`,
         [grupoId, asignaturaId],
       );
 
-      // --- PROCESAMIENTO INTELIGENTE ---
+      // --- 5. PROCESAMIENTO MATEMÁTICO (PONDERADO) ---
       const reporte = alumnos.map((alumno) => {
-        let sumaPorcentajes = 0;
-        let cantidadActividades = 0;
-
-        // a) Procesar Tareas (Base 100)
+        // A) Promedio de Tareas (Escala 0-100)
+        let sumaTareas = 0;
         const misTareas = colsTareas.map((col) => {
           const entrega = notasTareas.find(
             (n) => n.alumno_id === alumno.id && n.tarea_id === col.id,
           );
           const nota = entrega ? parseFloat(entrega.calificacion) : 0;
-
-          // Cálculo de porcentaje: (Nota / 100) * 100
-          // Si quieres que las tareas valgan distinto, habría que agregar columna 'puntos' a tareas
-          const porcentaje = nota; // Como base es 100, el porcentaje es igual a la nota
-
-          sumaPorcentajes += porcentaje;
-          cantidadActividades++;
-
+          sumaTareas += nota;
           return { id: col.id, nota };
         });
+        const promedioTareas =
+          colsTareas.length > 0 ? sumaTareas / colsTareas.length : 0;
 
-        // b) Procesar Exámenes (Base dinámica: 11, 5, etc.)
+        // B) Promedio de Exámenes (Normalizado a Escala 0-100)
+        let sumaExamenes = 0;
         const misExamenes = colsExamenes.map((col) => {
           const intento = notasExamenes.find(
             (n) => n.alumno_id === alumno.id && n.examen_id === col.id,
           );
-          const nota = intento ? parseFloat(intento.calificacion) : 0;
-          const max = parseFloat(col.puntos_maximos) || 1;
+          const notaCruda = intento ? parseFloat(intento.calificacion) : 0;
+          const maxPuntos = parseFloat(col.puntos_maximos) || 1;
 
-          // Convertimos a escala 0-100
-          const porcentaje = (nota / max) * 100;
+          // Regla de 3 para convertir a base 100
+          // Ejemplo: Sacó 8 de 10 puntos -> (8/10)*100 = 80
+          const notaBase100 = (notaCruda / maxPuntos) * 100;
 
-          sumaPorcentajes += porcentaje;
-          cantidadActividades++;
-
-          return { id: col.id, nota }; // Regresamos la nota original para mostrar en la tabla
+          sumaExamenes += notaBase100;
+          return { id: col.id, nota: Math.round(notaBase100) }; // Enviamos redondeado al front
         });
+        const promedioExamenes =
+          colsExamenes.length > 0 ? sumaExamenes / colsExamenes.length : 0;
 
-        // c) Procesar Asistencia (Ya viene en escala 0-100)
+        // C) Porcentaje de Asistencia (Escala 0-100)
         const dataAsistencia = asistencias.find(
           (a) => a.alumno_id === alumno.id,
         );
-        const presentes = dataAsistencia ? dataAsistencia.presentes : 0;
-        const porcentajeAsistencia = Math.round(
-          (presentes / numSesiones) * 100,
+        const diasPresente = dataAsistencia ? dataAsistencia.presentes : 0;
+        const promedioAsistencia =
+          numSesiones > 0 ? (diasPresente / numSesiones) * 100 : 0;
+
+        // D) CÁLCULO FINAL PONDERADO
+        // Fórmula: (PromedioTareas * %Tareas) + (PromedioExamen * %Examen) + (PromedioAsistencia * %Asistencia)
+        const valorTareas = (promedioTareas * pctTareas) / 100;
+        const valorExamen = (promedioExamenes * pctExamen) / 100;
+        const valorAsistencia = (promedioAsistencia * pctAsistencia) / 100;
+
+        const calificacionFinal = Math.round(
+          valorTareas + valorExamen + valorAsistencia,
         );
-
-        // OJO: Si quieres incluir la asistencia en el promedio final, descomenta esta línea:
-        // sumaPorcentajes += porcentajeAsistencia;
-        // cantidadActividades++;
-
-        // d) Promedio General (Basado en porcentajes)
-        const promedio =
-          cantidadActividades > 0
-            ? Math.round(sumaPorcentajes / cantidadActividades)
-            : 0;
 
         return {
           id: alumno.id,
@@ -7686,8 +7701,15 @@ apiRouter.get(
           foto_perfil: alumno.foto_perfil,
           tareas: misTareas,
           examenes: misExamenes,
-          asistencia: porcentajeAsistencia,
-          promedio,
+          asistencia: Math.round(promedioAsistencia), // Enviamos el % de asistencia para mostrar
+          promedio: calificacionFinal, // <--- Este es el valor que se guardará en el acta
+
+          // Datos extra por si quieres debuggear en el frontend
+          _debug: {
+            p_tareas: promedioTareas.toFixed(1),
+            p_examen: promedioExamenes.toFixed(1),
+            p_asist: promedioAsistencia.toFixed(1),
+          },
         };
       });
 
@@ -7695,6 +7717,12 @@ apiRouter.get(
         columnasTareas: colsTareas,
         columnasExamenes: colsExamenes,
         filas: reporte,
+        ponderacion: {
+          // Enviamos la configuración actual para mostrarla si quieres
+          tareas: pctTareas,
+          examenes: pctExamen,
+          asistencia: pctAsistencia,
+        },
       });
     } catch (error) {
       console.error(error);
