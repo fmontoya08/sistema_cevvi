@@ -13,7 +13,6 @@ import ExamenesPage from "./pages/ExamenesPage"; // <--- IMPORTANTE
 import ResultadosExamenPage from "./pages/ResultadosExamenPage";
 import RevisarExamenPage from "./pages/RevisarExamenPage";
 import PizarraPage from "./pages/PizarraPage";
-import "tldraw/tldraw.css";
 
 import React, {
   useState,
@@ -11281,7 +11280,7 @@ const AulaVirtualPage = () => {
             onClick={() =>
               setFormData((prev) => ({
                 ...prev,
-                enlace_videollamada: `https://meet.jit.si/CEVVI-G${grupoId}-A${asignaturaId}`,
+                enlace_videollamada: `https://meet.jit.si/SIGLOXXI-G${grupoId}-A${asignaturaId}`,
               }))
             }
             className="flex items-center px-3 py-2 text-sm text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100"

@@ -117,3 +117,58 @@
 .tl-container {
   text-align: left !important;
 }
+
+/* --- ESTILOS DE LA PIZARRA (TLDRAW) --- */
+
+/* 1. Contenedor Maestro: Se sale del flujo normal y ocupa toda la pantalla */
+.pizarra-wrapper {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  background-color: #f8f9fa !important;
+  z-index: 9999 !important; /* Encima de todo */
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  text-align: left !important; /* Forzar alineación izquierda */
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* 2. Header de la Pizarra */
+.pizarra-header {
+  height: 60px !important;
+  min-height: 60px !important;
+  background-color: white !important;
+  border-bottom: 1px solid #e5e7eb !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 0 16px !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+  z-index: 10000 !important; /* Encima del lienzo */
+}
+
+/* 3. Área del Canvas */
+.pizarra-canvas-area {
+  position: relative !important;
+  flex: 1 !important;
+  width: 100% !important;
+  height: 100% !important;
+  overflow: hidden !important;
+  background-color: white !important;
+}
+
+/* 4. Correcciones internas para Tldraw */
+.tl-container {
+  outline: none !important;
+}
+.tl-canvas {
+  outline: none !important;
+}
+/* Asegura que los menús de Tldraw se vean */
+.tlui-layout {
+  z-index: 500 !important;
+}

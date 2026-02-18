@@ -1,5 +1,7 @@
-import React, { useState, useCallback } from "react";
-import { Tldraw, getDefaultCdnBaseUrl } from "tldraw";
+import React, { useState, useCallback, useEffect } from "react";
+import ReactDOM from "react-dom";
+// 1. ELIMINAMOS 'exportToBlob' DE AQUÍ PORQUE DABA ERROR
+import { Tldraw } from "tldraw";
 import "tldraw/tldraw.css";
 import axios from "axios";
 import { Save, Download, ArrowLeft, Loader } from "lucide-react";
@@ -9,78 +11,105 @@ const PizarraPage = () => {
   const navigate = useNavigate();
   const [editor, setEditor] = useState(null);
   const [guardando, setGuardando] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
-  const handleMount = useCallback((editor) => {
-    console.log("✅ Editor montado correctamente");
-    setEditor(editor);
+  useEffect(() => {
+    setMounted(true);
+    const originalStyle = window.getComputedStyle(document.body).overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = originalStyle;
+      setMounted(false);
+    };
   }, []);
 
-  const convertirSvgAPng = async (editorInstance, shapeIds) => {
-    const svgElement = await editorInstance.getSvg(shapeIds, {
+  const handleMount = useCallback((editor) => {
+    setEditor(editor);
+    editor.zoomToFit();
+  }, []);
+
+  // --- LÓGICA DE GUARDADO MANUAL (A prueba de errores) ---
+  const generarImagen = async () => {
+    if (!editor) return null;
+
+    // 1. Obtener IDs de las formas
+    const shapeIds = editor.getCurrentPageShapeIds();
+    if (shapeIds.size === 0) return null;
+
+    // 2. Usar el método nativo del editor para obtener el SVG
+    // (Ahora debería funcionar porque quitamos las props conflictivas)
+    const svgElement = await editor.getSvg([...shapeIds], {
       scale: 1,
       background: true,
     });
-    if (!svgElement) throw new Error("No se pudo generar el SVG");
 
-    const svgString = new XMLSerializer().serializeToString(svgElement);
-    const svg64 = btoa(unescape(encodeURIComponent(svgString)));
-    const image64 = `data:image/svg+xml;base64,${svg64}`;
+    if (!svgElement) return null;
 
-    return new Promise((resolve, reject) => {
+    // 3. Convertir SVG a Blob (Imagen PNG) manualmente
+    return new Promise((resolve) => {
+      const svgString = new XMLSerializer().serializeToString(svgElement);
+      const svg64 = btoa(unescape(encodeURIComponent(svgString)));
+      const image64 = `data:image/svg+xml;base64,${svg64}`;
+
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement("canvas");
         canvas.width = img.width;
         canvas.height = img.height;
         const ctx = canvas.getContext("2d");
-        ctx.fillStyle = "white";
+
+        // Fondo blanco (opcional, si quieres transparencia quita estas 2 líneas)
+        ctx.fillStyle = "#ffffff";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
+
         ctx.drawImage(img, 0, 0);
+
         canvas.toBlob((blob) => {
-          if (blob) resolve(blob);
-          else reject(new Error("Fallo conversión"));
+          resolve(blob);
         }, "image/png");
       };
-      img.onerror = (e) => reject(e);
       img.src = image64;
     });
   };
 
   const descargarImagen = async () => {
-    if (!editor) return;
     try {
-      const shapeIds = Array.from(editor.getCurrentPageShapeIds());
-      if (shapeIds.length === 0) return alert("El lienzo está vacío.");
-      const blob = await convertirSvgAPng(editor, shapeIds);
+      const blob = await generarImagen();
+      if (!blob) return alert("El lienzo está vacío.");
+
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `Dibujo_${Date.now()}.png`;
+      link.download = `Pizarra_${Date.now()}.png`;
       link.click();
       window.URL.revokeObjectURL(url);
-    } catch (e) {
-      console.error(e);
-      alert("Error al generar la imagen.");
+    } catch (error) {
+      console.error("Error al descargar:", error);
+      alert("Hubo un error al generar la imagen.");
     }
   };
 
   const guardarEnNube = async () => {
-    if (!editor) return;
     setGuardando(true);
     try {
-      const shapeIds = Array.from(editor.getCurrentPageShapeIds());
-      if (shapeIds.length === 0) {
+      const blob = await generarImagen();
+
+      if (!blob) {
         setGuardando(false);
         return alert("Dibuja algo antes de guardar.");
       }
-      const blob = await convertirSvgAPng(editor, shapeIds);
-      const file = new File([blob], `Taller_Creativo_${Date.now()}.png`, {
+
+      const file = new File([blob], `Pizarra_${Date.now()}.png`, {
         type: "image/png",
       });
+
       const formData = new FormData();
       formData.append("rutaActual", "");
       formData.append("archivo", file);
+
       const token = localStorage.getItem("token");
+
+      // Ajusta tu URL según corresponda
       await axios.post(
         "https://api-universidad-c5o8.onrender.com/api/drive/upload",
         formData,
@@ -91,134 +120,89 @@ const PizarraPage = () => {
           },
         },
       );
-      alert("¡Guardado en 'Mi Nube' con éxito!");
+
+      alert("¡Guardado en 'Mi Nube' correctamente!");
     } catch (error) {
       console.error(error);
-      alert("Error al guardar.");
+      alert("Error al guardar en la nube. Revisa la consola.");
     } finally {
       setGuardando(false);
     }
   };
 
-  return (
+  const contenidoPizarra = (
     <div
       style={{
         position: "fixed",
-        inset: 0,
+        top: 0,
+        left: 0,
         width: "100vw",
         height: "100vh",
-        overflow: "hidden",
-        backgroundColor: "#f9fafb",
+        backgroundColor: "#f8f9fa",
+        zIndex: 999999,
+        display: "flex",
+        flexDirection: "column",
       }}
     >
-      {/* CAPA 1: La Pizarra al fondo ocupando todo */}
+      {/* HEADER */}
       <div
         style={{
-          width: "100%",
-          height: "100%",
-          position: "absolute",
-          top: 0,
-          left: 0,
-          zIndex: 0,
-        }}
-      >
-        <Tldraw
-          onMount={handleMount}
-          options={{
-            // 🔥 Configuración para producción - usa el CDN por defecto de tldraw
-            baseUrl: getDefaultCdnBaseUrl(),
-          }}
-        />
-      </div>
-
-      {/* CAPA 2: El Header flotando encima */}
-      <div
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          right: 0,
-          height: "64px",
-          backgroundColor: "rgba(255, 255, 255, 0.9)",
-          backdropFilter: "blur(8px)",
+          height: "60px",
+          backgroundColor: "white",
           borderBottom: "1px solid #e5e7eb",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          padding: "0 1rem",
-          boxShadow: "0 1px 3px 0 rgba(0, 0, 0, 0.1)",
-          zIndex: 50,
+          padding: "0 20px",
+          boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
+          zIndex: 1000000,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "15px" }}>
           <button
             onClick={() => navigate(-1)}
             style={{
-              padding: "0.5rem",
-              borderRadius: "9999px",
+              padding: "8px",
               cursor: "pointer",
               border: "none",
-              backgroundColor: "transparent",
-              color: "#374151",
-              fontWeight: "bold",
+              background: "#f3f4f6",
+              borderRadius: "50%",
             }}
-            onMouseEnter={(e) => (e.target.style.backgroundColor = "#e5e7eb")}
-            onMouseLeave={(e) =>
-              (e.target.style.backgroundColor = "transparent")
-            }
+            title="Salir"
           >
-            <ArrowLeft />
+            <ArrowLeft color="#374151" />
           </button>
-          <h1
-            style={{
-              fontWeight: "bold",
-              color: "#1f2937",
-              fontSize: "1.125rem",
-              display: "flex",
-              flexDirection: "column",
-              lineHeight: "1.25",
-              userSelect: "none",
-            }}
-          >
-            <span>Taller Creativo</span>
-            <span
+          <div>
+            <h1
               style={{
-                fontSize: "0.75rem",
-                color: "#a72a34",
-                fontWeight: "normal",
+                margin: 0,
+                fontSize: "18px",
+                color: "#111827",
+                fontWeight: "bold",
               }}
             >
-              Pedagogía y Psicología
-            </span>
-          </h1>
+              Taller Creativo
+            </h1>
+          </div>
         </div>
 
-        <div style={{ display: "flex", gap: "0.5rem" }}>
+        <div style={{ display: "flex", gap: "10px" }}>
           <button
             onClick={descargarImagen}
             style={{
               display: "flex",
               alignItems: "center",
-              gap: "0.5rem",
-              padding: "0.5rem 1rem",
-              fontSize: "0.875rem",
-              fontWeight: "bold",
-              color: "#374151",
-              backgroundColor: "white",
+              gap: "6px",
+              padding: "8px 16px",
+              background: "white",
               border: "1px solid #d1d5db",
-              borderRadius: "0.5rem",
+              borderRadius: "8px",
               cursor: "pointer",
-              boxShadow: "0 1px 2px 0 rgba(0, 0, 0, 0.05)",
+              fontWeight: "600",
+              color: "#374151",
             }}
-            onMouseEnter={(e) => (e.target.style.backgroundColor = "#f3f4f6")}
-            onMouseLeave={(e) => (e.target.style.backgroundColor = "white")}
           >
-            <Download size={18} />
-            <span
-              style={{ display: window.innerWidth < 640 ? "none" : "inline" }}
-            >
-              Descargar
-            </span>
+            <Download size={18} /> Descargar
           </button>
           <button
             onClick={guardarEnNube}
@@ -226,22 +210,15 @@ const PizarraPage = () => {
             style={{
               display: "flex",
               alignItems: "center",
-              gap: "0.5rem",
-              padding: "0.5rem 1rem",
-              fontSize: "0.875rem",
-              fontWeight: "bold",
+              gap: "6px",
+              padding: "8px 16px",
+              background: "#a72a34",
               color: "white",
-              backgroundColor: guardando ? "rgba(167, 42, 52, 0.7)" : "#a72a34",
               border: "none",
-              borderRadius: "0.5rem",
-              boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
-              cursor: guardando ? "not-allowed" : "pointer",
-            }}
-            onMouseEnter={(e) => {
-              if (!guardando) e.target.style.backgroundColor = "#8f242d";
-            }}
-            onMouseLeave={(e) => {
-              if (!guardando) e.target.style.backgroundColor = "#a72a34";
+              borderRadius: "8px",
+              cursor: "pointer",
+              fontWeight: "600",
+              opacity: guardando ? 0.7 : 1,
             }}
           >
             {guardando ? (
@@ -253,8 +230,20 @@ const PizarraPage = () => {
           </button>
         </div>
       </div>
+
+      {/* TLDRAW SIN PROPS RARAS */}
+      <div style={{ position: "relative", width: "100%", flex: 1 }}>
+        <Tldraw
+          onMount={handleMount}
+          persistenceKey={null} // Sin persistencia para evitar bugs
+          hideUi={false}
+        />
+      </div>
     </div>
   );
+
+  if (!mounted) return null;
+  return ReactDOM.createPortal(contenidoPizarra, document.body);
 };
 
 export default PizarraPage;
