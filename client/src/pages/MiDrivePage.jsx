@@ -665,11 +665,14 @@ const MiDrivePage = () => {
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
-          <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+          <h1
+            id="drive-header"
+            className="text-2xl font-bold text-gray-800 flex items-center gap-2"
+          >
             ☁️ Mi Unidad
           </h1>
 
-          <div className="flex gap-2">
+          <div id="drive-botones" className="flex gap-2">
             <button
               onClick={crearCarpeta}
               className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700 shadow-sm"
@@ -720,7 +723,7 @@ const MiDrivePage = () => {
 
         {/* Grid de Archivos */}
         {cargando ? (
-          <div className="text-center py-20 text-gray-400">
+          <div id="drive-lista" className="text-center py-20 text-gray-400">
             Cargando tu nube...
           </div>
         ) : (

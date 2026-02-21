@@ -5158,29 +5158,50 @@ docenteRouter.get(
   },
 );
 
-// Función helper para asegurar que existe una config (se usará en GET)
 async function getOrCreateAulaConfig(grupoId, asignaturaId) {
-  // Primero, intenta insertarlo. Si ya existe, 'IGNORE' no hará nada.
   await db.query(
     "INSERT IGNORE INTO aula_virtual_config (grupo_id, asignatura_id) VALUES (?, ?)",
     [grupoId, asignaturaId],
   );
 
-  // LUEGO SELECCIONAMOS CON LOS NOMBRES
+  // 1. Obtener Config General
   const [[config]] = await db.query(
-    `SELECT 
-        avc.*, 
-        g.modalidad, 
-        g.estatus, 
-        g.nombre_grupo,
-        a.nombre_asignatura,     
-        a.clave_asignatura       
+    `SELECT avc.*, g.modalidad, g.estatus, g.nombre_grupo, a.nombre_asignatura 
      FROM aula_virtual_config avc
      JOIN grupos g ON avc.grupo_id = g.id 
-     JOIN asignaturas a ON avc.asignatura_id = a.id  -- <--- ESTA ES LA LÍNEA QUE TE FALTABA
+     JOIN asignaturas a ON avc.asignatura_id = a.id
      WHERE avc.grupo_id = ? AND avc.asignatura_id = ?`,
     [grupoId, asignaturaId],
   );
+
+  // 2. Obtener Criterios de Evaluación
+  const [criterios] = await db.query(
+    "SELECT * FROM criterios_evaluacion WHERE grupo_id = ? AND asignatura_id = ?",
+    [grupoId, asignaturaId],
+  );
+
+  // Si no hay criterios, devolvemos un default visual (pero no guardado)
+  config.criterios =
+    criterios.length > 0
+      ? criterios
+      : [
+          {
+            nombre_criterio: "Tareas",
+            porcentaje: 40,
+            tipo_origen: "sistema_tareas",
+          },
+          {
+            nombre_criterio: "Examen",
+            porcentaje: 40,
+            tipo_origen: "sistema_examenes",
+          },
+          {
+            nombre_criterio: "Asistencia",
+            porcentaje: 20,
+            tipo_origen: "sistema_asistencia",
+          },
+        ];
+
   return config;
 }
 
@@ -5209,71 +5230,53 @@ docenteRouter.get(
   },
 );
 
-// PUT (Docente): Actualizar config del aula (DETECTA SI HABILITÓ CLASE ONLINE)
+// PUT (Docente): Actualizar Configuración y CRITERIOS DE EVALUACIÓN
 docenteRouter.put(
   "/aula-virtual/:grupoId/:asignaturaId/config",
   async (req, res) => {
+    const connection = await db.getConnection();
     try {
+      await connection.beginTransaction();
+
       const { grupoId, asignaturaId } = req.params;
       const {
         enlace_videollamada,
         descripcion_curso,
         objetivos,
-        evaluacion,
+        evaluacion, // Texto descriptivo
         horario,
         contacto_docente,
-        notificar_inicio, // <--- 1. RECIBIMOS ESTA NUEVA VARIABLE
-        porcentaje_tareas, // <--- NUEVOS CAMPOS
-        porcentaje_examenes,
-        porcentaje_asistencia,
+        notificar_inicio,
+        criterios, // <--- ARRAY DE CRITERIOS [{nombre: 'Tareas', porcentaje: 40, tipo: 'sistema_tareas'}]
       } = req.body;
       const docente_id = req.user.id;
 
-      // Validar Permiso
-      const [[curso]] = await db.query(
+      // 1. Validar Permiso
+      const [[curso]] = await connection.query(
         "SELECT * FROM grupo_asignaturas_docentes WHERE grupo_id = ? AND asignatura_id = ? AND docente_id = ?",
         [grupoId, asignaturaId, docente_id],
       );
       if (!curso) {
+        await connection.rollback();
         return res.status(403).send({ message: "No tienes permiso." });
       }
 
-      // OBTENER CONFIG ACTUAL
-      const [[configPrevia]] = await db.query(
-        "SELECT enlace_videollamada FROM aula_virtual_config WHERE grupo_id = ? AND asignatura_id = ?",
-        [grupoId, asignaturaId],
-      );
-
-      const linkAnterior = configPrevia ? configPrevia.enlace_videollamada : "";
-      const linkNuevo = enlace_videollamada || "";
-
-      // --- CAMBIO EN LA LÓGICA DE NOTIFICACIÓN ---
-      // Notificamos si el link cambió O SI EL DOCENTE MARCÓ EL CHECKBOX 'notificar_inicio'
-      const seHabilitoClase =
-        (linkNuevo !== "" && linkNuevo !== linkAnterior) ||
-        (linkNuevo !== "" && notificar_inicio === true);
-
-      // ACTUALIZAR EN BD
-      const sql = `
-      INSERT INTO aula_virtual_config (
-        grupo_id, asignatura_id, enlace_videollamada, descripcion_curso, 
-        objetivos, evaluacion, horario, contacto_docente,
-        porcentaje_tareas, porcentaje_examenes, porcentaje_asistencia  -- <--- AGREGAR AQUÍ
-      ) 
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) 
-      ON DUPLICATE KEY UPDATE 
-        enlace_videollamada = VALUES(enlace_videollamada), 
-        descripcion_curso = VALUES(descripcion_curso),
-        objetivos = VALUES(objetivos),
-        evaluacion = VALUES(evaluacion),
-        horario = VALUES(horario),
-        contacto_docente = VALUES(contacto_docente),
-        porcentaje_tareas = VALUES(porcentaje_tareas),         -- <--- Y AQUÍ
-        porcentaje_examenes = VALUES(porcentaje_examenes),
-        porcentaje_asistencia = VALUES(porcentaje_asistencia)
-    `;
-
-      await db.query(sql, [
+      // 2. Guardar Configuración General (Tabla aula_virtual_config)
+      const sqlConfig = `
+        INSERT INTO aula_virtual_config (
+          grupo_id, asignatura_id, enlace_videollamada, descripcion_curso, 
+          objetivos, evaluacion, horario, contacto_docente 
+        ) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?) 
+        ON DUPLICATE KEY UPDATE 
+          enlace_videollamada = VALUES(enlace_videollamada), 
+          descripcion_curso = VALUES(descripcion_curso),
+          objetivos = VALUES(objetivos),
+          evaluacion = VALUES(evaluacion),
+          horario = VALUES(horario),
+          contacto_docente = VALUES(contacto_docente)
+      `;
+      await connection.query(sqlConfig, [
         grupoId,
         asignaturaId,
         enlace_videollamada || null,
@@ -5282,11 +5285,26 @@ docenteRouter.put(
         evaluacion || null,
         horario || null,
         contacto_docente || null,
-        porcentaje_tareas || 0, // <--- AGREGAR VALORES AL ARRAY
-        porcentaje_examenes || 0,
-        porcentaje_asistencia || 0,
       ]);
 
+      // 3. GUARDAR CRITERIOS DE EVALUACIÓN (Lógica de Reemplazo)
+      if (criterios && Array.isArray(criterios)) {
+        // A) Borrar criterios anteriores de este curso
+        await connection.query(
+          "DELETE FROM criterios_evaluacion WHERE grupo_id = ? AND asignatura_id = ?",
+          [grupoId, asignaturaId],
+        );
+
+        // B) Insertar nuevos
+        for (const crit of criterios) {
+          await connection.query(
+            "INSERT INTO criterios_evaluacion (grupo_id, asignatura_id, nombre_criterio, porcentaje, tipo_origen) VALUES (?, ?, ?, ?, ?)",
+            [grupoId, asignaturaId, crit.nombre, crit.porcentaje, crit.tipo],
+          );
+        }
+      }
+
+      // 4. Notificaciones (Lógica existente de clase en vivo...)
       // --- NOTIFICACIONES ---
       if (seHabilitoClase) {
         // Solo entramos aquí si hay link nuevo O se forzó
@@ -5353,13 +5371,14 @@ docenteRouter.put(
         }
       }
 
-      res.send({
-        message:
-          "Configuración guardada y notificaciones enviadas (si aplica).",
-      });
+      await connection.commit();
+      res.send({ message: "Configuración y criterios guardados." });
     } catch (error) {
-      console.error("Error al actualizar config:", error);
-      res.status(500).send({ message: "Error en el servidor." });
+      await connection.rollback();
+      console.error("Error config:", error);
+      res.status(500).send({ message: "Error al guardar." });
+    } finally {
+      connection.release();
     }
   },
 );
@@ -5934,6 +5953,35 @@ docenteRouter.post(
     }
   },
 );
+
+// POST: Guardar calificaciones de criterios manuales (ej: Exposición, Maqueta)
+docenteRouter.post("/calificar-criterio-manual", async (req, res) => {
+  const { criterio_id, calificaciones } = req.body; // calificaciones = [{alumno_id, nota}, ...]
+
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    for (const item of calificaciones) {
+      // Upsert: Si ya existe la nota la actualiza, si no, la crea
+      await connection.query(
+        `INSERT INTO calificaciones_criterios (criterio_id, alumno_id, calificacion) 
+         VALUES (?, ?, ?) 
+         ON DUPLICATE KEY UPDATE calificacion = VALUES(calificacion)`,
+        [criterio_id, item.alumno_id, item.nota],
+      );
+    }
+
+    await connection.commit();
+    res.send({ message: "Notas guardadas correctamente." });
+  } catch (error) {
+    await connection.rollback();
+    console.error(error);
+    res.status(500).send({ message: "Error al guardar notas." });
+  } finally {
+    connection.release();
+  }
+});
 
 // GET (Docente): Obtener la lista de alumnos y su asistencia para UNA sesión
 docenteRouter.get(
@@ -7564,7 +7612,7 @@ apiRouter.get(
   },
 );
 
-// --- NUEVO ENDPOINT: ANALÍTICAS GLOBALES (CON PROMEDIO PONDERADO POR DOCENTE) ---
+// --- ANALÍTICAS DINÁMICAS (Soporte Criterios Personalizados) ---
 apiRouter.get(
   "/analiticas/:grupoId/:asignaturaId",
   verifyToken,
@@ -7572,158 +7620,139 @@ apiRouter.get(
     const { grupoId, asignaturaId } = req.params;
 
     try {
-      // 0. OBTENER PORCENTAJES CONFIGURADOS POR EL DOCENTE
-      const [[config]] = await db.query(
-        "SELECT porcentaje_tareas, porcentaje_examenes, porcentaje_asistencia FROM aula_virtual_config WHERE grupo_id = ? AND asignatura_id = ?",
+      // 1. Obtener Criterios Configurados
+      const [criterios] = await db.query(
+        "SELECT id, nombre_criterio, porcentaje, tipo_origen FROM criterios_evaluacion WHERE grupo_id = ? AND asignatura_id = ?",
         [grupoId, asignaturaId],
       );
 
-      // Si no ha configurado nada, usamos los valores por defecto (40/40/20)
-      const pctTareas = config ? config.porcentaje_tareas || 40 : 40;
-      const pctExamen = config ? config.porcentaje_examenes || 40 : 40;
-      const pctAsistencia = config ? config.porcentaje_asistencia || 20 : 20;
+      // Si no hay, usar default (Esto evita división por cero si el profe no configuró)
+      const listaCriterios =
+        criterios.length > 0
+          ? criterios
+          : [
+              {
+                nombre_criterio: "Tareas",
+                porcentaje: 40,
+                tipo_origen: "sistema_tareas",
+              },
+              {
+                nombre_criterio: "Examen",
+                porcentaje: 40,
+                tipo_origen: "sistema_examenes",
+              },
+              {
+                nombre_criterio: "Asistencia",
+                porcentaje: 20,
+                tipo_origen: "sistema_asistencia",
+              },
+            ];
 
-      // 1. OBTENER LISTA DE ALUMNOS INSCRITOS
+      // 2. Obtener Alumnos
       const [alumnos] = await db.query(
         `SELECT u.id, u.nombre, u.apellido_paterno, u.matricula, u.foto_perfil
-         FROM usuarios u
-         JOIN grupo_alumnos ga ON u.id = ga.alumno_id
-         WHERE ga.grupo_id = ? AND u.rol = 'alumno'
-         ORDER BY u.apellido_paterno ASC`,
+         FROM usuarios u JOIN grupo_alumnos ga ON u.id = ga.alumno_id
+         WHERE ga.grupo_id = ? AND u.rol = 'alumno' ORDER BY u.apellido_paterno ASC`,
         [grupoId],
       );
 
-      // 2. OBTENER COLUMNAS (Tareas y Exámenes)
-      // Tareas: Asumimos base 100
-      const [colsTareas] = await db.query(
-        "SELECT id, titulo, fecha_limite FROM tareas WHERE grupo_id = ? AND asignatura_id = ? ORDER BY fecha_creacion ASC",
-        [grupoId, asignaturaId],
-      );
-
-      // Exámenes: Obtenemos el valor total de puntos para normalizar a 100
-      const [colsExamenes] = await db.query(
-        `SELECT e.id, e.titulo, 
-         (SELECT IFNULL(SUM(puntos), 1) FROM preguntas WHERE examen_id = e.id) as puntos_maximos 
-         FROM examenes e 
-         WHERE e.grupo_id = ? AND e.asignatura_id = ?`,
-        [grupoId, asignaturaId],
-      );
-
-      // 3. OBTENER CALIFICACIONES (Datos crudos)
+      // 3. Obtener Datos del Sistema (Tareas, Examenes, Asistencia)
       const [notasTareas] = await db.query(
-        `SELECT te.alumno_id, te.tarea_id, te.calificacion 
-         FROM tareas_entregas te 
-         JOIN tareas t ON te.tarea_id = t.id 
-         WHERE t.grupo_id = ? AND t.asignatura_id = ?`,
+        `SELECT te.alumno_id, te.calificacion FROM tareas_entregas te 
+         JOIN tareas t ON te.tarea_id = t.id WHERE t.grupo_id = ? AND t.asignatura_id = ?`,
         [grupoId, asignaturaId],
       );
 
       const [notasExamenes] = await db.query(
-        `SELECT ie.alumno_id, ie.examen_id, ie.calificacion 
-         FROM intentos_examen ie 
-         JOIN examenes e ON ie.examen_id = e.id 
+        `SELECT ie.alumno_id, ie.calificacion, e.id as examen_id, 
+         (SELECT IFNULL(SUM(puntos), 1) FROM preguntas WHERE examen_id = e.id) as max_puntos
+         FROM intentos_examen ie JOIN examenes e ON ie.examen_id = e.id 
          WHERE e.grupo_id = ? AND e.asignatura_id = ?`,
         [grupoId, asignaturaId],
       );
 
-      // 4. CALCULAR ASISTENCIA
-      const [totalSesiones] = await db.query(
-        "SELECT COUNT(*) as total FROM clases_sesiones WHERE grupo_id = ? AND asignatura_id = ?",
-        [grupoId, asignaturaId],
-      );
-      const numSesiones = totalSesiones[0].total || 1; // Evitar división por cero
-
       const [asistencias] = await db.query(
-        `SELECT a.alumno_id, COUNT(*) as presentes 
-         FROM asistencia a
+        `SELECT a.alumno_id, COUNT(*) as presentes FROM asistencia a
          JOIN clases_sesiones s ON a.sesion_id = s.id
          WHERE s.grupo_id = ? AND s.asignatura_id = ? AND a.estatus = 'presente'
          GROUP BY a.alumno_id`,
         [grupoId, asignaturaId],
       );
 
-      // --- 5. PROCESAMIENTO MATEMÁTICO (PONDERADO) ---
+      const [[totalSesionesObj]] = await db.query(
+        "SELECT COUNT(*) as total FROM clases_sesiones WHERE grupo_id = ? AND asignatura_id = ?",
+        [grupoId, asignaturaId],
+      );
+      const numSesiones = totalSesionesObj.total || 1;
+
+      // 4. Obtener Calificaciones Manuales (Para criterios "manual")
+      const [notasManuales] = await db.query(
+        "SELECT criterio_id, alumno_id, calificacion FROM calificaciones_criterios",
+      );
+
+      // --- CÁLCULO ---
       const reporte = alumnos.map((alumno) => {
-        // A) Promedio de Tareas (Escala 0-100)
-        let sumaTareas = 0;
-        const misTareas = colsTareas.map((col) => {
-          const entrega = notasTareas.find(
-            (n) => n.alumno_id === alumno.id && n.tarea_id === col.id,
-          );
-          const nota = entrega ? parseFloat(entrega.calificacion) : 0;
-          sumaTareas += nota;
-          return { id: col.id, nota };
+        let promedioFinal = 0;
+
+        // Recorremos cada criterio configurado por el docente
+        listaCriterios.forEach((crit) => {
+          let promedioRubro = 0;
+
+          if (crit.tipo_origen === "sistema_tareas") {
+            // Filtramos tareas de este alumno
+            const misTareas = notasTareas.filter(
+              (n) => n.alumno_id === alumno.id,
+            );
+            // (Opcional: aquí deberías saber cuántas tareas hubo en total, por ahora promedia las entregadas o todas)
+            // Para simplificar, promediaremos sobre lo entregado o 0
+            if (misTareas.length > 0) {
+              const suma = misTareas.reduce(
+                (a, b) => a + parseFloat(b.calificacion),
+                0,
+              );
+              promedioRubro = suma / misTareas.length;
+            }
+          } else if (crit.tipo_origen === "sistema_examenes") {
+            const misExamenes = notasExamenes.filter(
+              (n) => n.alumno_id === alumno.id,
+            );
+            if (misExamenes.length > 0) {
+              // Normalizar cada examen a 100 y promediar
+              const suma = misExamenes.reduce((acc, ex) => {
+                return (
+                  acc +
+                  (parseFloat(ex.calificacion) / parseFloat(ex.max_puntos)) *
+                    100
+                );
+              }, 0);
+              promedioRubro = suma / misExamenes.length;
+            }
+          } else if (crit.tipo_origen === "sistema_asistencia") {
+            const asis = asistencias.find((a) => a.alumno_id === alumno.id);
+            const presentes = asis ? asis.presentes : 0;
+            promedioRubro = (presentes / numSesiones) * 100;
+          } else if (crit.tipo_origen === "manual") {
+            // Buscamos la nota manual guardada para este criterio y alumno
+            const nota = notasManuales.find(
+              (n) => n.criterio_id === crit.id && n.alumno_id === alumno.id,
+            );
+            promedioRubro = nota ? parseFloat(nota.calificacion) : 0;
+          }
+
+          // Sumar al promedio final ponderado
+          promedioFinal += promedioRubro * (crit.porcentaje / 100);
         });
-        const promedioTareas =
-          colsTareas.length > 0 ? sumaTareas / colsTareas.length : 0;
-
-        // B) Promedio de Exámenes (Normalizado a Escala 0-100)
-        let sumaExamenes = 0;
-        const misExamenes = colsExamenes.map((col) => {
-          const intento = notasExamenes.find(
-            (n) => n.alumno_id === alumno.id && n.examen_id === col.id,
-          );
-          const notaCruda = intento ? parseFloat(intento.calificacion) : 0;
-          const maxPuntos = parseFloat(col.puntos_maximos) || 1;
-
-          // Regla de 3 para convertir a base 100
-          // Ejemplo: Sacó 8 de 10 puntos -> (8/10)*100 = 80
-          const notaBase100 = (notaCruda / maxPuntos) * 100;
-
-          sumaExamenes += notaBase100;
-          return { id: col.id, nota: Math.round(notaBase100) }; // Enviamos redondeado al front
-        });
-        const promedioExamenes =
-          colsExamenes.length > 0 ? sumaExamenes / colsExamenes.length : 0;
-
-        // C) Porcentaje de Asistencia (Escala 0-100)
-        const dataAsistencia = asistencias.find(
-          (a) => a.alumno_id === alumno.id,
-        );
-        const diasPresente = dataAsistencia ? dataAsistencia.presentes : 0;
-        const promedioAsistencia =
-          numSesiones > 0 ? (diasPresente / numSesiones) * 100 : 0;
-
-        // D) CÁLCULO FINAL PONDERADO
-        // Fórmula: (PromedioTareas * %Tareas) + (PromedioExamen * %Examen) + (PromedioAsistencia * %Asistencia)
-        const valorTareas = (promedioTareas * pctTareas) / 100;
-        const valorExamen = (promedioExamenes * pctExamen) / 100;
-        const valorAsistencia = (promedioAsistencia * pctAsistencia) / 100;
-
-        const calificacionFinal = Math.round(
-          valorTareas + valorExamen + valorAsistencia,
-        );
 
         return {
           id: alumno.id,
           nombre: `${alumno.nombre} ${alumno.apellido_paterno}`,
           matricula: alumno.matricula,
           foto_perfil: alumno.foto_perfil,
-          tareas: misTareas,
-          examenes: misExamenes,
-          asistencia: Math.round(promedioAsistencia), // Enviamos el % de asistencia para mostrar
-          promedio: calificacionFinal, // <--- Este es el valor que se guardará en el acta
-
-          // Datos extra por si quieres debuggear en el frontend
-          _debug: {
-            p_tareas: promedioTareas.toFixed(1),
-            p_examen: promedioExamenes.toFixed(1),
-            p_asist: promedioAsistencia.toFixed(1),
-          },
+          promedio: Math.round(promedioFinal),
         };
       });
 
-      res.json({
-        columnasTareas: colsTareas,
-        columnasExamenes: colsExamenes,
-        filas: reporte,
-        ponderacion: {
-          // Enviamos la configuración actual para mostrarla si quieres
-          tareas: pctTareas,
-          examenes: pctExamen,
-          asistencia: pctAsistencia,
-        },
-      });
+      res.json({ filas: reporte, criterios: listaCriterios }); // Enviamos también los criterios para las columnas del front
     } catch (error) {
       console.error(error);
       res.status(500).send("Error al generar analíticas");

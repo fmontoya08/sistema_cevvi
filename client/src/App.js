@@ -13,6 +13,8 @@ import ExamenesPage from "./pages/ExamenesPage"; // <--- IMPORTANTE
 import ResultadosExamenPage from "./pages/ResultadosExamenPage";
 import RevisarExamenPage from "./pages/RevisarExamenPage";
 import PizarraPage from "./pages/PizarraPage";
+import ClaseEnVivoPage from "./pages/ClaseEnVivoPage";
+import TutorialGuide from "./components/TutorialGuide"; // Asegúrate de crear la carpeta components
 
 import React, {
   useState,
@@ -1235,6 +1237,7 @@ const AlumnoLayout = () => {
                 )}
               </div>
             </Link>
+            <TutorialGuide user={user} />
           </div>
         </header>
 
@@ -8961,7 +8964,7 @@ const MisPagosPage = () => {
       </div>
 
       {/* TARJETAS DE RESUMEN */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div id="pagos-resumen" className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Tarjeta Pendiente */}
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between relative overflow-hidden">
           <div className="absolute top-0 right-0 w-24 h-24 bg-red-50 rounded-bl-full -mr-4 -mt-4 z-0"></div>
@@ -9009,7 +9012,10 @@ const MisPagosPage = () => {
       </div>
 
       {/* LISTA DE MOVIMIENTOS */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      <div
+        id="pagos-lista"
+        className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden"
+      >
         <div className="p-6 border-b border-gray-100 bg-gray-50/50">
           <h3 className="font-bold text-gray-700 text-lg flex items-center gap-2">
             <FileText size={20} className="text-gray-400" /> Movimientos
@@ -9221,6 +9227,7 @@ const MisSolicitudesPage = () => {
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-3xl font-bold text-gray-800">Mis Solicitudes</h2>
         <button
+          id="solicitudes-btn"
           onClick={handleOpenModal}
           className="flex items-center px-4 py-2 font-semibold text-white bg-principal rounded-md hover:opacity-90"
         >
@@ -9229,7 +9236,7 @@ const MisSolicitudesPage = () => {
         </button>
       </div>
 
-      <div className="bg-white p-6 rounded-lg shadow">
+      <div id="solicitudes-lista" className="bg-white p-6 rounded-lg shadow">
         <h3 className="text-xl font-bold mb-4">Historial</h3>
         {loading ? (
           <p>Cargando historial...</p>
@@ -10608,7 +10615,10 @@ const AlumnoDashboardPage = () => {
     <div className="space-y-8">
       {misGrupos.map((infoGrupo, index) => (
         <div key={index}>
-          <h2 className="text-3xl font-bold text-gray-800 mb-2">
+          <h2
+            id="tour-inicio"
+            className="text-3xl font-bold text-gray-800 mb-2"
+          >
             Grupo: {infoGrupo.grupo.nombre_grupo} ({infoGrupo.grupo.modalidad})
           </h2>
           <p className="text-lg text-secundario mb-6">
@@ -11031,6 +11041,7 @@ const AulaVirtualPage = () => {
   const { grupoId, asignaturaId } = useParams();
   const { user } = useAuth();
   const [config, setConfig] = useState(null);
+  const [criterios, setCriterios] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false); // Para editar la config del curso
   const [formData, setFormData] = useState({
@@ -11062,18 +11073,60 @@ const AulaVirtualPage = () => {
   const [isCreatingSession, setIsCreatingSession] = useState(false);
   // --- FIN NUEVO ESTADO ---
 
-  // --- Funciones de Carga (fetchAulaConfig, fetchTareas, fetchRecursos, fetchHistorialAsistencia se mantienen igual) ---
+  const addCriterio = () => {
+    setCriterios([...criterios, { nombre: "", porcentaje: 0, tipo: "manual" }]);
+  };
+
+  const removeCriterio = (index) => {
+    const nuevos = [...criterios];
+    nuevos.splice(index, 1);
+    setCriterios(nuevos);
+  };
+
+  const updateCriterio = (index, field, value) => {
+    const nuevos = [...criterios];
+    nuevos[index][field] = value;
+
+    // Auto-nombrar si elige sistema
+    if (field === "tipo") {
+      if (value === "sistema_tareas")
+        nuevos[index].nombre = "Tareas y Actividades";
+      if (value === "sistema_examenes") nuevos[index].nombre = "Exámenes";
+      if (value === "sistema_asistencia") nuevos[index].nombre = "Asistencia";
+      if (value === "manual") nuevos[index].nombre = "";
+    }
+    setCriterios(nuevos);
+  };
+
   const fetchAulaConfig = useCallback(async () => {
     try {
       const { data } = await api.get(
         `/${user.rol}/aula-virtual/${grupoId}/${asignaturaId}/config`,
       );
       setConfig(data);
+
+      // --- CARGAR CRITERIOS ---
+      if (data.criterios && data.criterios.length > 0) {
+        const mapeados = data.criterios.map((c) => ({
+          nombre: c.nombre_criterio,
+          porcentaje: c.porcentaje,
+          tipo: c.tipo_origen,
+        }));
+        setCriterios(mapeados);
+      } else {
+        // Default si es nuevo
+        setCriterios([
+          { nombre: "Tareas", porcentaje: 40, tipo: "sistema_tareas" },
+          { nombre: "Examen", porcentaje: 40, tipo: "sistema_examenes" },
+          { nombre: "Asistencia", porcentaje: 20, tipo: "sistema_asistencia" },
+        ]);
+      }
+
       setFormData({
         enlace_videollamada: data.enlace_videollamada || "",
         descripcion_curso: data.descripcion_curso || "",
         objetivos: data.objetivos || "",
-        evaluacion: data.evaluacion || "",
+        evaluacion: data.evaluacion || "", // Esto queda como texto extra
         horario: data.horario || "",
         contacto_docente: data.contacto_docente || "",
       });
@@ -11163,21 +11216,44 @@ const AulaVirtualPage = () => {
     fetchHilos,
   ]); // <-- Agregamos fetchHilos
 
-  // --- Funciones de Acción (handleSave, handleChange, etc. se mantienen igual) ---
   const handleSave = async (e) => {
     e.preventDefault();
+
+    // Validación: Que sume 100%
+    const total = criterios.reduce(
+      (sum, c) => sum + (parseInt(c.porcentaje) || 0),
+      0,
+    );
+    if (total !== 100) {
+      return alert(
+        `Los porcentajes deben sumar 100%. Actualmente suman: ${total}%`,
+      );
+    }
+
     setIsSaving(true);
     setSaveSuccess(false);
     try {
       await api.put(
         `/docente/aula-virtual/${grupoId}/${asignaturaId}/config`,
-        formData,
+        { ...formData, criterios }, // <--- ENVIAMOS LOS CRITERIOS
       );
+      // ... resto de tu código de éxito ...
       setIsSaving(false);
       setSaveSuccess(true);
       setIsEditing(false);
-      // Actualizar config localmente para no recargar todo
-      setConfig((prev) => ({ ...prev, ...formData }));
+
+      // Actualizamos la config local para que se vea reflejado sin recargar
+      setConfig((prev) => ({
+        ...prev,
+        ...formData,
+        criterios: criterios.map((c) => ({
+          // Mapeamos al formato de BD para visualización inmediata
+          nombre_criterio: c.nombre,
+          porcentaje: c.porcentaje,
+          tipo_origen: c.tipo,
+        })),
+      }));
+
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (error) {
       console.error("Error al guardar", error);
@@ -11330,89 +11406,108 @@ const AulaVirtualPage = () => {
           className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-principal focus:border-principal"
         ></textarea>
       </div>
-      {/* SECCIÓN DE PORCENTAJES DE EVALUACIÓN */}
-      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-        <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
-          <Award size={18} className="text-[#a72a34]" /> Criterios de Evaluación
-          (%)
-        </h4>
-        <div className="grid grid-cols-3 gap-4">
-          <div>
-            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
-              Tareas
-            </label>
-            <input
-              type="number"
-              min="0"
-              max="100"
-              className="w-full p-2 border rounded-lg font-bold text-center"
-              value={formData.porcentaje_tareas || 0}
-              onChange={(e) =>
-                setFormData({
-                  ...formData,
-                  porcentaje_tareas: parseInt(e.target.value),
-                })
-              }
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
-              Exámenes
-            </label>
-            <input
-              type="number"
-              min="0"
-              max="100"
-              className="w-full p-2 border rounded-lg font-bold text-center"
-              value={formData.porcentaje_examenes || 0}
-              onChange={(e) =>
-                setFormData({
-                  ...formData,
-                  porcentaje_examenes: parseInt(e.target.value),
-                })
-              }
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
-              Asistencia
-            </label>
-            <input
-              type="number"
-              min="0"
-              max="100"
-              className="w-full p-2 border rounded-lg font-bold text-center"
-              value={formData.porcentaje_asistencia || 0}
-              onChange={(e) =>
-                setFormData({
-                  ...formData,
-                  porcentaje_asistencia: parseInt(e.target.value),
-                })
-              }
-            />
-          </div>
+      {/* CONSTRUCTOR DE EVALUACIÓN */}
+      <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm space-y-4">
+        <div className="flex justify-between items-center border-b pb-2">
+          <h4 className="font-bold text-gray-800 flex items-center gap-2">
+            <Award size={18} className="text-[#a72a34]" /> Esquema de Evaluación
+          </h4>
+          <button
+            type="button"
+            onClick={addCriterio}
+            className="text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg font-bold hover:bg-blue-100 transition-colors"
+          >
+            + Agregar Criterio
+          </button>
         </div>
 
-        {/* Validación visual */}
-        <div className="mt-3 text-right">
-          <span
-            className={`text-sm font-bold ${formData.porcentaje_tareas + formData.porcentaje_examenes + formData.porcentaje_asistencia === 100 ? "text-green-600" : "text-red-500"}`}
-          >
-            Total:{" "}
-            {(formData.porcentaje_tareas || 0) +
-              (formData.porcentaje_examenes || 0) +
-              (formData.porcentaje_asistencia || 0)}
-            %
-          </span>
-          {formData.porcentaje_tareas +
-            formData.porcentaje_examenes +
-            formData.porcentaje_asistencia !==
-            100 && (
-            <p className="text-xs text-red-500">
-              La suma debe ser exactamente 100%.
-            </p>
-          )}
+        <div className="space-y-3">
+          {criterios.map((c, i) => (
+            <div
+              key={i}
+              className="flex flex-col sm:flex-row gap-2 items-start sm:items-center bg-gray-50 p-2 rounded-lg"
+            >
+              {/* 1. Selector de Tipo */}
+              <select
+                className="p-2 border rounded-lg text-sm w-full sm:w-1/3 bg-white focus:ring-2 focus:ring-[#a72a34] outline-none"
+                value={c.tipo}
+                onChange={(e) => updateCriterio(i, "tipo", e.target.value)}
+              >
+                <option value="sistema_tareas">Tareas (Automático)</option>
+                <option value="sistema_examenes">Exámenes (Automático)</option>
+                <option value="sistema_asistencia">
+                  Asistencia (Automático)
+                </option>
+                <option value="manual">Manual / Otro</option>
+              </select>
+
+              {/* 2. Nombre (Editable solo si es Manual) */}
+              <input
+                type="text"
+                className={`p-2 border rounded-lg text-sm flex-1 w-full sm:w-auto outline-none ${c.tipo !== "manual" ? "bg-gray-200 text-gray-500" : "bg-white font-bold"}`}
+                placeholder="Nombre (Ej: Proyecto Final)"
+                value={c.nombre}
+                onChange={(e) => updateCriterio(i, "nombre", e.target.value)}
+                disabled={c.tipo !== "manual"}
+              />
+
+              {/* 3. Porcentaje */}
+              <div className="relative w-full sm:w-24 flex items-center">
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  className="w-full p-2 border rounded-lg text-sm text-center font-bold outline-none focus:ring-2 focus:ring-[#a72a34]"
+                  value={c.porcentaje}
+                  onChange={(e) =>
+                    updateCriterio(
+                      i,
+                      "porcentaje",
+                      parseInt(e.target.value) || 0,
+                    )
+                  }
+                />
+                <span className="absolute right-8 sm:right-3 top-2 text-gray-400 text-xs">
+                  %
+                </span>
+
+                {/* Botón Borrar */}
+                <button
+                  type="button"
+                  onClick={() => removeCriterio(i)}
+                  className="ml-2 text-red-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded-full transition-colors"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
+
+        {/* Totalizador */}
+        <div className="mt-2 flex justify-end items-center gap-2">
+          <span className="text-sm text-gray-500">Total:</span>
+          <span
+            className={`text-lg font-bold ${criterios.reduce((a, b) => a + (b.porcentaje || 0), 0) === 100 ? "text-green-600" : "text-red-600"}`}
+          >
+            {criterios.reduce((a, b) => a + (b.porcentaje || 0), 0)}%
+          </span>
+        </div>
+      </div>
+
+      {/* Campo opcional de texto extra */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700">
+          Notas adicionales de evaluación (Opcional)
+        </label>
+        <textarea
+          name="evaluacion"
+          rows="2"
+          value={formData.evaluacion}
+          onChange={handleChange}
+          placeholder="Ej: Se requiere 80% de asistencia para derecho a examen."
+          className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm outline-none focus:border-[#a72a34]"
+        ></textarea>
       </div>
       <div>
         <label
@@ -11880,6 +11975,7 @@ const AulaVirtualPage = () => {
         {activeTab === "info" && (
           <div className="space-y-8 animate-in fade-in duration-300">
             {/* Sección Videollamada Destacada */}
+            {/* Sección Videollamada Destacada */}
             <div className="bg-gradient-to-r from-gray-900 to-gray-800 p-6 rounded-2xl text-white flex justify-between items-center shadow-lg">
               <div>
                 <h4 className="font-bold text-lg mb-1 flex items-center gap-2">
@@ -11891,7 +11987,9 @@ const AulaVirtualPage = () => {
                     : "El docente aún no ha configurado el enlace."}
                 </p>
               </div>
+
               {config.enlace_videollamada && (
+                // VOLVEMOS AL ENLACE DIRECTO (Abre nueva pestaña)
                 <a
                   href={config.enlace_videollamada}
                   target="_blank"
@@ -11925,13 +12023,71 @@ const AulaVirtualPage = () => {
                     {config.objetivos || "Sin información definida."}
                   </p>
                 </div>
-                <div>
-                  <h4 className="font-bold text-gray-800 border-b border-gray-100 pb-2 mb-2 flex items-center gap-2">
-                    <Award size={16} className="text-[#a72a34]" /> Evaluación
+                {/* BLOQUE DE EVALUACIÓN DINÁMICO */}
+                <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm">
+                  <h4 className="font-bold text-gray-800 border-b border-gray-100 pb-2 mb-4 flex items-center gap-2">
+                    <Award size={18} className="text-[#a72a34]" /> Criterios de
+                    Evaluación
                   </h4>
-                  <p className="text-gray-600 text-sm leading-relaxed whitespace-pre-wrap">
-                    {config.evaluacion || "Sin criterios definidos."}
-                  </p>
+
+                  {/* Texto adicional */}
+                  {config.evaluacion && (
+                    <p className="text-gray-600 text-sm mb-4 italic">
+                      "{config.evaluacion}"
+                    </p>
+                  )}
+
+                  {/* Barras Dinámicas */}
+                  <div className="space-y-4">
+                    {config.criterios &&
+                      config.criterios.map((c, i) => {
+                        // Asignamos colores según el tipo
+                        let colorBar = "bg-gray-500";
+                        let colorText = "text-gray-600";
+
+                        if (c.tipo_origen === "sistema_tareas") {
+                          colorBar = "bg-blue-500";
+                          colorText = "text-blue-600";
+                        }
+                        if (c.tipo_origen === "sistema_examenes") {
+                          colorBar = "bg-purple-500";
+                          colorText = "text-purple-600";
+                        }
+                        if (c.tipo_origen === "sistema_asistencia") {
+                          colorBar = "bg-green-500";
+                          colorText = "text-green-600";
+                        }
+                        if (c.tipo_origen === "manual") {
+                          colorBar = "bg-orange-500";
+                          colorText = "text-orange-600";
+                        }
+
+                        return (
+                          <div key={i}>
+                            <div className="flex justify-between text-xs font-bold mb-1">
+                              <span className={`${colorText} uppercase`}>
+                                {c.nombre_criterio}
+                              </span>
+                              <span className="text-gray-700">
+                                {c.porcentaje}%
+                              </span>
+                            </div>
+                            <div className="w-full bg-gray-100 rounded-full h-2.5">
+                              <div
+                                className={`h-2.5 rounded-full transition-all duration-1000 ${colorBar}`}
+                                style={{ width: `${c.porcentaje}%` }}
+                              ></div>
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                    {(!config.criterios || config.criterios.length === 0) && (
+                      <p className="text-xs text-gray-400 text-center">
+                        El docente aún no define los criterios.
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -13922,7 +14078,10 @@ function App() {
                 path="/docente/calendario"
                 element={<CalendarioAlumno />}
               />
-
+              {/* <Route
+                path="/docente/clase-en-vivo/:salaName"
+                element={<ClaseEnVivoPage />}
+              /> */}
               {/* Gestión del Curso */}
               <Route
                 path="/docente/grupo/:grupoId/asignatura/:asignaturaId"
@@ -13975,6 +14134,10 @@ function App() {
                 element={<RevisarExamenPage />}
               />
             </Route>
+            <Route
+              path="/docente/clase-en-vivo/:salaName"
+              element={<ClaseEnVivoPage />}
+            />
           </Route>
 
           {/* --- AÑADE ESTE BLOQUE COMPLETO --- */}
@@ -14023,7 +14186,10 @@ function App() {
                 path="/docente/grupo/:grupoId/asignatura/:asignaturaId/muro"
                 element={<MuroDocentePage />}
               />
-
+              <Route
+                path="/alumno/clase-en-vivo/:salaName"
+                element={<ClaseEnVivoPage />}
+              />
               {/* 2. Creación de Exámenes */}
               <Route
                 path="/docente/grupo/:grupoId/asignatura/:asignaturaId/examen/crear"
@@ -14040,6 +14206,10 @@ function App() {
                 element={<AnaliticasGrupoPage />}
               />
             </Route>
+            <Route
+              path="/alumno/clase-en-vivo/:salaName"
+              element={<ClaseEnVivoPage />}
+            />
           </Route>
           {/* --- FIN DEL BLOQUE AÑADIDO --- */}
 
