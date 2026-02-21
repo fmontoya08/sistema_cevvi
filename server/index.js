@@ -7612,7 +7612,7 @@ apiRouter.get(
   },
 );
 
-// --- ANALÍTICAS DINÁMICAS (Soporte Criterios Personalizados) ---
+// --- ANALÍTICAS DETALLADAS (SÁBANA COMPLETA + PONDERACIÓN) ---
 apiRouter.get(
   "/analiticas/:grupoId/:asignaturaId",
   verifyToken,
@@ -7620,16 +7620,16 @@ apiRouter.get(
     const { grupoId, asignaturaId } = req.params;
 
     try {
-      // 1. Obtener Criterios Configurados
-      const [criterios] = await db.query(
+      // 1. Obtener Configuración de Porcentajes
+      const [criteriosDb] = await db.query(
         "SELECT id, nombre_criterio, porcentaje, tipo_origen FROM criterios_evaluacion WHERE grupo_id = ? AND asignatura_id = ?",
         [grupoId, asignaturaId],
       );
 
-      // Si no hay, usar default (Esto evita división por cero si el profe no configuró)
-      const listaCriterios =
-        criterios.length > 0
-          ? criterios
+      // Defaults si no hay config
+      const criterios =
+        criteriosDb.length > 0
+          ? criteriosDb
           : [
               {
                 nombre_criterio: "Tareas",
@@ -7650,112 +7650,129 @@ apiRouter.get(
 
       // 2. Obtener Alumnos
       const [alumnos] = await db.query(
-        `SELECT u.id, u.nombre, u.apellido_paterno, u.matricula, u.foto_perfil
+        `SELECT u.id, u.nombre, u.apellido_paterno, u.matricula 
          FROM usuarios u JOIN grupo_alumnos ga ON u.id = ga.alumno_id
          WHERE ga.grupo_id = ? AND u.rol = 'alumno' ORDER BY u.apellido_paterno ASC`,
         [grupoId],
       );
 
-      // 3. Obtener Datos del Sistema (Tareas, Examenes, Asistencia)
+      // 3. Obtener Tareas (Columnas y Notas)
+      const [colsTareas] = await db.query(
+        "SELECT id, titulo FROM tareas WHERE grupo_id = ? AND asignatura_id = ? ORDER BY fecha_creacion ASC",
+        [grupoId, asignaturaId],
+      );
       const [notasTareas] = await db.query(
-        `SELECT te.alumno_id, te.calificacion FROM tareas_entregas te 
-         JOIN tareas t ON te.tarea_id = t.id WHERE t.grupo_id = ? AND t.asignatura_id = ?`,
+        "SELECT te.alumno_id, te.tarea_id, te.calificacion FROM tareas_entregas te JOIN tareas t ON te.tarea_id = t.id WHERE t.grupo_id = ? AND t.asignatura_id = ?",
         [grupoId, asignaturaId],
       );
 
+      // 4. Obtener Exámenes (Columnas y Notas)
+      const [colsExamenes] = await db.query(
+        `SELECT e.id, e.titulo, (SELECT IFNULL(SUM(puntos), 1) FROM preguntas WHERE examen_id = e.id) as max_puntos 
+         FROM examenes e WHERE e.grupo_id = ? AND e.asignatura_id = ?`,
+        [grupoId, asignaturaId],
+      );
       const [notasExamenes] = await db.query(
-        `SELECT ie.alumno_id, ie.calificacion, e.id as examen_id, 
-         (SELECT IFNULL(SUM(puntos), 1) FROM preguntas WHERE examen_id = e.id) as max_puntos
-         FROM intentos_examen ie JOIN examenes e ON ie.examen_id = e.id 
-         WHERE e.grupo_id = ? AND e.asignatura_id = ?`,
+        `SELECT ie.alumno_id, ie.calificacion, ie.examen_id FROM intentos_examen ie JOIN examenes e ON ie.examen_id = e.id WHERE e.grupo_id = ? AND e.asignatura_id = ?`,
         [grupoId, asignaturaId],
       );
 
-      const [asistencias] = await db.query(
-        `SELECT a.alumno_id, COUNT(*) as presentes FROM asistencia a
-         JOIN clases_sesiones s ON a.sesion_id = s.id
-         WHERE s.grupo_id = ? AND s.asignatura_id = ? AND a.estatus = 'presente'
-         GROUP BY a.alumno_id`,
-        [grupoId, asignaturaId],
-      );
-
-      const [[totalSesionesObj]] = await db.query(
-        "SELECT COUNT(*) as total FROM clases_sesiones WHERE grupo_id = ? AND asignatura_id = ?",
-        [grupoId, asignaturaId],
-      );
-      const numSesiones = totalSesionesObj.total || 1;
-
-      // 4. Obtener Calificaciones Manuales (Para criterios "manual")
+      // 5. Obtener Notas Manuales (De la tabla nueva)
       const [notasManuales] = await db.query(
         "SELECT criterio_id, alumno_id, calificacion FROM calificaciones_criterios",
       );
 
-      // --- CÁLCULO ---
-      const reporte = alumnos.map((alumno) => {
-        let promedioFinal = 0;
+      // 6. Obtener Asistencia
+      const [[sesiones]] = await db.query(
+        "SELECT COUNT(*) as total FROM clases_sesiones WHERE grupo_id = ? AND asignatura_id = ?",
+        [grupoId, asignaturaId],
+      );
+      const totalSesiones = sesiones.total || 1;
+      const [asistencias] = await db.query(
+        `SELECT a.alumno_id, COUNT(*) as presentes FROM asistencia a JOIN clases_sesiones s ON a.sesion_id = s.id 
+         WHERE s.grupo_id = ? AND s.asignatura_id = ? AND a.estatus = 'presente' GROUP BY a.alumno_id`,
+        [grupoId, asignaturaId],
+      );
 
-        // Recorremos cada criterio configurado por el docente
-        listaCriterios.forEach((crit) => {
-          let promedioRubro = 0;
+      // --- CONSTRUIR FILAS ---
+      const filas = alumnos.map((alum) => {
+        let fila = {
+          id: alum.id,
+          nombre: `${alum.apellido_paterno} ${alum.nombre}`,
+          matricula: alum.matricula,
+          notas: {}, // Aquí guardaremos: { 'tarea_15': 100, 'manual_5': 90 }
+        };
+
+        let sumaPonderada = 0;
+        let porcentajeTotalConfigurado = 0;
+
+        // CALCULAR PROMEDIOS POR CATEGORÍA
+        criterios.forEach((crit) => {
+          let promedioCategoria = 0;
+          porcentajeTotalConfigurado += crit.porcentaje;
 
           if (crit.tipo_origen === "sistema_tareas") {
-            // Filtramos tareas de este alumno
-            const misTareas = notasTareas.filter(
-              (n) => n.alumno_id === alumno.id,
-            );
-            // (Opcional: aquí deberías saber cuántas tareas hubo en total, por ahora promedia las entregadas o todas)
-            // Para simplificar, promediaremos sobre lo entregado o 0
-            if (misTareas.length > 0) {
-              const suma = misTareas.reduce(
-                (a, b) => a + parseFloat(b.calificacion),
-                0,
-              );
-              promedioRubro = suma / misTareas.length;
+            if (colsTareas.length > 0) {
+              let sum = 0;
+              colsTareas.forEach((t) => {
+                const entrega = notasTareas.find(
+                  (n) => n.alumno_id === alum.id && n.tarea_id === t.id,
+                );
+                const val = entrega ? parseFloat(entrega.calificacion) : 0;
+                fila.notas[`tarea_${t.id}`] = val; // Guardar para mostrar en tabla
+                sum += val;
+              });
+              promedioCategoria = sum / colsTareas.length;
             }
           } else if (crit.tipo_origen === "sistema_examenes") {
-            const misExamenes = notasExamenes.filter(
-              (n) => n.alumno_id === alumno.id,
-            );
-            if (misExamenes.length > 0) {
-              // Normalizar cada examen a 100 y promediar
-              const suma = misExamenes.reduce((acc, ex) => {
-                return (
-                  acc +
-                  (parseFloat(ex.calificacion) / parseFloat(ex.max_puntos)) *
-                    100
+            if (colsExamenes.length > 0) {
+              let sum = 0;
+              colsExamenes.forEach((ex) => {
+                const intento = notasExamenes.find(
+                  (n) => n.alumno_id === alum.id && n.examen_id === ex.id,
                 );
-              }, 0);
-              promedioRubro = suma / misExamenes.length;
+                const raw = intento ? parseFloat(intento.calificacion) : 0;
+                const max = parseFloat(ex.max_puntos);
+                const base100 = (raw / max) * 100; // Normalizar a 100
+                fila.notas[`examen_${ex.id}`] = Math.round(base100); // Guardar para tabla
+                sum += base100;
+              });
+              promedioCategoria = sum / colsExamenes.length;
             }
           } else if (crit.tipo_origen === "sistema_asistencia") {
-            const asis = asistencias.find((a) => a.alumno_id === alumno.id);
+            const asis = asistencias.find((a) => a.alumno_id === alum.id);
             const presentes = asis ? asis.presentes : 0;
-            promedioRubro = (presentes / numSesiones) * 100;
+            promedioCategoria = (presentes / totalSesiones) * 100;
+            fila.notas[`asistencia_sys`] = Math.round(promedioCategoria);
           } else if (crit.tipo_origen === "manual") {
-            // Buscamos la nota manual guardada para este criterio y alumno
+            // Para criterios manuales, buscamos su nota específica
             const nota = notasManuales.find(
-              (n) => n.criterio_id === crit.id && n.alumno_id === alumno.id,
+              (n) => n.criterio_id === crit.id && n.alumno_id === alum.id,
             );
-            promedioRubro = nota ? parseFloat(nota.calificacion) : 0;
+            const val = nota ? parseFloat(nota.calificacion) : 0;
+            promedioCategoria = val;
+            fila.notas[`manual_${crit.id}`] = val; // Guardar para tabla
           }
 
-          // Sumar al promedio final ponderado
-          promedioFinal += promedioRubro * (crit.porcentaje / 100);
+          // Sumar al promedio final según el peso del criterio
+          sumaPonderada += promedioCategoria * (crit.porcentaje / 100);
         });
 
-        return {
-          id: alumno.id,
-          nombre: `${alumno.nombre} ${alumno.apellido_paterno}`,
-          matricula: alumno.matricula,
-          foto_perfil: alumno.foto_perfil,
-          promedio: Math.round(promedioFinal),
-        };
+        fila.promedioFinal = Math.round(sumaPonderada);
+        return fila;
       });
 
-      res.json({ filas: reporte, criterios: listaCriterios }); // Enviamos también los criterios para las columnas del front
+      res.json({
+        columnas: {
+          tareas: colsTareas,
+          examenes: colsExamenes,
+          criterios: criterios, // Aquí van los manuales y la configuración
+        },
+        filas,
+      });
     } catch (error) {
       console.error(error);
-      res.status(500).send("Error al generar analíticas");
+      res.status(500).send("Error al generar sábana");
     }
   },
 );
