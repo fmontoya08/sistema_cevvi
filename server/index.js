@@ -5289,7 +5289,7 @@ docenteRouter.put(
 
       // 3. GUARDAR CRITERIOS DE EVALUACIÓN (Lógica de Reemplazo)
       if (criterios && Array.isArray(criterios)) {
-        // A) Borrar criterios anteriores de este curso
+        // A) Borrar criterios anteriores
         await connection.query(
           "DELETE FROM criterios_evaluacion WHERE grupo_id = ? AND asignatura_id = ?",
           [grupoId, asignaturaId],
@@ -5297,9 +5297,14 @@ docenteRouter.put(
 
         // B) Insertar nuevos
         for (const crit of criterios) {
+          // VALIDACIÓN DE SEGURIDAD PARA EVITAR NULLS
+          const nombre = crit.nombre || "Sin Nombre";
+          const pct = parseInt(crit.porcentaje) || 0;
+          const tipo = crit.tipo || "manual";
+
           await connection.query(
             "INSERT INTO criterios_evaluacion (grupo_id, asignatura_id, nombre_criterio, porcentaje, tipo_origen) VALUES (?, ?, ?, ?, ?)",
-            [grupoId, asignaturaId, crit.nombre, crit.porcentaje, crit.tipo],
+            [grupoId, asignaturaId, nombre, pct, tipo],
           );
         }
       }
