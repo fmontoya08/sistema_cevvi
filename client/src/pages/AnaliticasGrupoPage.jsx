@@ -8,10 +8,8 @@ import {
   Award,
   Download,
   ArrowLeft,
-  X,
-  Edit,
-  Save,
   Loader,
+  Save,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 
@@ -21,18 +19,21 @@ const AnaliticasGrupoPage = () => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Estados para el Modal de Captura (Criterios Manuales)
-  const [showModal, setShowModal] = useState(false);
-  const [criterioAEditar, setCriterioAEditar] = useState(null);
-  const [notasTemp, setNotasTemp] = useState({});
-  const [isSaving, setIsSaving] = useState(false);
+  // --- ESTADOS PARA EDICIÓN EN LÍNEA ---
+  const [editingCell, setEditingCell] = useState({
+    alumnoId: null,
+    criterioId: null,
+  });
+  const [editValue, setEditValue] = useState("");
+  const [isSavingCell, setIsSavingCell] = useState(false);
 
   const token = localStorage.getItem("token");
   const authHeaders = { headers: { Authorization: `Bearer ${token}` } };
 
   // 1. Cargar Datos
   const fetchData = useCallback(async () => {
-    setLoading(true);
+    // No mostramos loading full si ya hay datos (para que no parpadee al guardar)
+    if (!data) setLoading(true);
     try {
       const res = await axios.get(
         `https://api-universidad-c5o8.onrender.com/api/analiticas/${grupoId}/${asignaturaId}`,
@@ -44,13 +45,52 @@ const AnaliticasGrupoPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [grupoId, asignaturaId]);
+  }, [grupoId, asignaturaId]); // Quitamos 'data' de dependencias
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  // 2. Exportar a Excel
+  // --- LÓGICA DE EDICIÓN ---
+  const handleCellClick = (alumnoId, criterioId, valorActual) => {
+    setEditingCell({ alumnoId, criterioId });
+    setEditValue(valorActual === "-" ? "" : valorActual);
+  };
+
+  const saveCell = async () => {
+    const { alumnoId, criterioId } = editingCell;
+    if (!alumnoId || !criterioId) return;
+
+    let val = parseFloat(editValue);
+    if (isNaN(val) || val < 0) val = 0;
+    if (val > 100) val = 100;
+
+    setIsSavingCell(true);
+    try {
+      await axios.post(
+        "https://api-universidad-c5o8.onrender.com/api/docente/calificar-criterio-manual",
+        {
+          criterio_id: criterioId,
+          calificaciones: [{ alumno_id: alumnoId, nota: val }],
+        },
+        authHeaders,
+      );
+      setEditingCell({ alumnoId: null, criterioId: null });
+      await fetchData(); // Recargar para actualizar promedio
+    } catch (error) {
+      alert("Error al guardar.");
+    } finally {
+      setIsSavingCell(false);
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter") saveCell();
+    if (e.key === "Escape")
+      setEditingCell({ alumnoId: null, criterioId: null });
+  };
+
+  // --- EXPORTAR EXCEL ---
   const handleExportarExcel = () => {
     if (!data) return;
     const datosParaExcel = data.filas.map((alumno) => {
@@ -84,49 +124,17 @@ const AnaliticasGrupoPage = () => {
     XLSX.writeFile(libro, `Reporte_Grupo_${grupoId}.xlsx`);
   };
 
-  // 3. Modal de Captura Manual
-  const abrirModalManual = (criterio) => {
-    setCriterioAEditar(criterio);
-    const notasActuales = {};
-    data.filas.forEach((f) => {
-      notasActuales[f.id] = f.notas[`manual_${criterio.id}`] || "";
-    });
-    setNotasTemp(notasActuales);
-    setShowModal(true);
-  };
-
-  const guardarManuales = async () => {
-    setIsSaving(true);
-    try {
-      const payload = Object.keys(notasTemp).map((uid) => ({
-        alumno_id: uid,
-        nota: notasTemp[uid] || 0,
-      }));
-      await axios.post(
-        "https://api-universidad-c5o8.onrender.com/api/docente/calificar-criterio-manual",
-        { criterio_id: criterioAEditar.id, calificaciones: payload },
-        authHeaders,
-      );
-      alert("Calificaciones guardadas.");
-      setShowModal(false);
-      fetchData();
-    } catch (e) {
-      alert("Error al guardar.");
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  // Función de color
+  // Colores de notas
   const getColor = (nota) => {
-    if (nota === undefined || nota === null) return "text-gray-400";
-    if (nota >= 90) return "text-green-600 font-bold bg-green-50 rounded px-2";
+    if (nota === undefined || nota === null || nota === "-")
+      return "text-gray-400";
+    if (nota >= 90) return "text-green-600 font-bold";
     if (nota >= 70) return "text-blue-600 font-medium";
     if (nota >= 60) return "text-yellow-600";
-    return "text-red-500 font-bold bg-red-50 rounded px-2";
+    return "text-red-500 font-bold";
   };
 
-  if (loading)
+  if (loading && !data)
     return (
       <div className="p-10 text-center text-gray-500">
         Calculando estadísticas...
@@ -134,7 +142,7 @@ const AnaliticasGrupoPage = () => {
     );
   if (!data)
     return (
-      <div className="p-10 text-center text-red-500">
+      <div className="p-10 text-center text-gray-500">
         No hay datos disponibles.
       </div>
     );
@@ -146,21 +154,19 @@ const AnaliticasGrupoPage = () => {
   const usaAsistencia = data.columnas.criterios.some(
     (c) => c.tipo_origen === "sistema_asistencia",
   );
-
-  // Cálculo Promedio Grupal
   const promedioGrupal = (
     data.filas.reduce((acc, curr) => acc + parseFloat(curr.promedioFinal), 0) /
     (data.filas.length || 1)
   ).toFixed(1);
 
   return (
-    <div className="p-6 bg-gray-50 min-h-screen font-sans">
+    <div className="p-6 bg-gray-50 min-h-screen font-sans text-sm">
       {/* HEADER */}
       <div className="flex justify-between items-center mb-6">
         <div className="flex items-center gap-3">
           <button
             onClick={() => navigate(-1)}
-            className="p-2 bg-white border rounded-full hover:bg-gray-100 text-gray-600"
+            className="p-2 bg-white border border-gray-300 rounded-full hover:bg-gray-100 text-gray-600"
           >
             <ArrowLeft size={20} />
           </button>
@@ -168,28 +174,27 @@ const AnaliticasGrupoPage = () => {
             <h1 className="text-2xl font-bold text-gray-800">
               Sábana de Calificaciones
             </h1>
-            <p className="text-gray-500 text-sm">
+            <p className="text-gray-500 text-xs">
               Visión global del rendimiento
             </p>
           </div>
         </div>
-
         <button
           onClick={handleExportarExcel}
-          className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-gray-100 shadow-sm transition-colors text-sm font-medium"
+          className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-gray-100 shadow-sm transition-colors font-medium text-xs"
         >
-          <Download size={18} /> Exportar Excel
+          <Download size={16} /> Exportar Excel
         </button>
       </div>
 
-      {/* TARJETAS RESUMEN (DISEÑO LIMPIO) */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+      {/* TARJETAS RESUMEN (ESTILO DASHBOARD) */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
           <div className="p-3 bg-blue-100 text-blue-600 rounded-full">
             <Users size={24} />
           </div>
           <div>
-            <p className="text-sm text-gray-500">Alumnos</p>
+            <p className="text-xs text-gray-500 uppercase font-bold">Alumnos</p>
             <p className="text-2xl font-bold text-gray-800">
               {data.filas.length}
             </p>
@@ -200,7 +205,9 @@ const AnaliticasGrupoPage = () => {
             <FileText size={24} />
           </div>
           <div>
-            <p className="text-sm text-gray-500">Actividades</p>
+            <p className="text-xs text-gray-500 uppercase font-bold">
+              Actividades
+            </p>
             <p className="text-2xl font-bold text-gray-800">
               {data.columnas.tareas.length +
                 data.columnas.examenes.length +
@@ -213,20 +220,22 @@ const AnaliticasGrupoPage = () => {
             <Award size={24} />
           </div>
           <div>
-            <p className="text-sm text-gray-500">Promedio Grupal</p>
+            <p className="text-xs text-gray-500 uppercase font-bold">
+              Promedio Grupal
+            </p>
             <p className="text-2xl font-bold text-gray-800">{promedioGrupal}</p>
           </div>
         </div>
       </div>
 
-      {/* TABLA PRINCIPAL - CON SCROLL Y DISEÑO LIMPIO */}
-      <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden flex flex-col">
-        <div className="overflow-x-auto custom-scrollbar">
+      {/* TABLA PRINCIPAL - DISEÑO LIMPIO */}
+      <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden flex flex-col max-h-[75vh]">
+        <div className="overflow-auto custom-scrollbar">
           <table className="w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+            <thead className="bg-gray-50 sticky top-0 z-20 shadow-sm">
               <tr>
                 {/* COLUMNA FIJA: ALUMNO */}
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider sticky left-0 bg-gray-50 z-20 border-r border-gray-200 min-w-[250px] shadow-sm">
+                <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider sticky left-0 bg-gray-50 z-30 border-r border-gray-200 min-w-[250px]">
                   Estudiante
                 </th>
 
@@ -237,12 +246,12 @@ const AnaliticasGrupoPage = () => {
                     className="px-4 py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wider min-w-[100px] border-r border-gray-100"
                   >
                     <div className="flex flex-col items-center gap-1">
-                      <span className="text-blue-400">T{i + 1}</span>
+                      <FileText size={12} className="text-blue-400" />
                       <span
-                        className="truncate max-w-[80px] font-normal"
+                        className="truncate max-w-[80px]"
                         title={col.titulo}
                       >
-                        {col.titulo}
+                        T{i + 1}: {col.titulo}
                       </span>
                     </div>
                   </th>
@@ -252,15 +261,15 @@ const AnaliticasGrupoPage = () => {
                 {data.columnas.examenes.map((col, i) => (
                   <th
                     key={col.id}
-                    className="px-4 py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wider min-w-[100px] border-r border-gray-100 bg-gray-50/50"
+                    className="px-4 py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wider min-w-[100px] border-r border-gray-100 bg-gray-50"
                   >
                     <div className="flex flex-col items-center gap-1">
-                      <span className="text-purple-400">Ex{i + 1}</span>
+                      <CheckCircle size={12} className="text-purple-400" />
                       <span
-                        className="truncate max-w-[80px] font-normal"
+                        className="truncate max-w-[80px]"
                         title={col.titulo}
                       >
-                        {col.titulo}
+                        Ex{i + 1}: {col.titulo}
                       </span>
                     </div>
                   </th>
@@ -268,50 +277,44 @@ const AnaliticasGrupoPage = () => {
 
                 {/* ASISTENCIA */}
                 {usaAsistencia && (
-                  <th className="px-4 py-3 text-center text-xs font-bold text-green-600 uppercase tracking-wider bg-green-50/30 min-w-[80px] border-r border-gray-100">
-                    Asist %
+                  <th className="px-4 py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wider min-w-[80px] border-r border-gray-100 bg-gray-50">
+                    % Asist
                   </th>
                 )}
 
-                {/* MANUALES (PROYECTOS) - CON BOTÓN DE EDICIÓN */}
+                {/* MANUALES (AZULES CLAROS) */}
                 {manuales.map((m) => (
                   <th
                     key={m.id}
-                    className="px-4 py-3 text-center text-xs font-bold text-blue-600 uppercase tracking-wider bg-blue-50/30 min-w-[120px] border-r border-gray-100 group"
+                    className="px-4 py-3 text-center text-xs font-bold text-blue-700 uppercase tracking-wider min-w-[120px] border-r border-gray-100 bg-blue-50/50"
                   >
-                    <div className="flex flex-col items-center gap-1">
+                    <div className="flex flex-col items-center">
                       <span>{m.nombre_criterio}</span>
-                      <span className="text-[10px] font-normal text-gray-400">
-                        {m.porcentaje}%
+                      <span className="text-[9px] text-gray-400 font-normal">
+                        ({m.porcentaje}%)
                       </span>
-                      <button
-                        onClick={() => abrirModalManual(m)}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity bg-white border border-blue-200 text-blue-600 text-[10px] px-2 py-0.5 rounded shadow-sm flex items-center gap-1 hover:bg-blue-50"
-                      >
-                        <Edit size={10} /> Editar
-                      </button>
                     </div>
                   </th>
                 ))}
 
-                {/* PROMEDIO FINAL */}
-                <th className="px-4 py-3 text-center text-xs font-bold text-gray-800 uppercase tracking-wider bg-gray-100 min-w-[100px] sticky right-0 z-20 shadow-sm border-l border-gray-200">
+                {/* PROMEDIO */}
+                <th className="px-4 py-3 text-center text-xs font-bold text-gray-800 uppercase tracking-wider bg-gray-100 min-w-[100px] sticky right-0 z-30 border-l border-gray-200">
                   Promedio
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200 text-sm">
+            <tbody className="bg-white divide-y divide-gray-200">
               {data.filas.map((alumno) => (
                 <tr
                   key={alumno.id}
                   className="hover:bg-gray-50 transition-colors"
                 >
-                  {/* ALUMNO (FOTO + NOMBRE) */}
-                  <td className="px-6 py-4 whitespace-nowrap sticky left-0 bg-white z-10 border-r border-gray-200">
+                  {/* ALUMNO + FOTO */}
+                  <td className="px-6 py-4 whitespace-nowrap sticky left-0 bg-white z-20 border-r border-gray-100">
                     <div className="flex items-center">
-                      <div className="flex-shrink-0 h-9 w-9">
+                      <div className="flex-shrink-0 h-10 w-10">
                         <img
-                          className="h-9 w-9 rounded-full object-cover border border-gray-200"
+                          className="h-10 w-10 rounded-full object-cover border border-gray-200"
                           src={
                             alumno.foto_perfil
                               ? `https://api-universidad-c5o8.onrender.com/uploads/perfiles/${alumno.foto_perfil}`
@@ -320,11 +323,11 @@ const AnaliticasGrupoPage = () => {
                           alt=""
                         />
                       </div>
-                      <div className="ml-3">
-                        <div className="font-medium text-gray-900">
+                      <div className="ml-4">
+                        <div className="text-sm font-medium text-gray-900">
                           {alumno.nombre}
                         </div>
-                        <div className="text-xs text-gray-500 font-mono">
+                        <div className="text-xs text-gray-500">
                           {alumno.matricula}
                         </div>
                       </div>
@@ -335,7 +338,7 @@ const AnaliticasGrupoPage = () => {
                   {data.columnas.tareas.map((t) => (
                     <td
                       key={t.id}
-                      className="px-4 py-4 text-center border-r border-gray-100 border-dashed"
+                      className="px-4 py-4 text-center border-r border-gray-100 border-dashed text-sm"
                     >
                       <span className={getColor(alumno.notas[`tarea_${t.id}`])}>
                         {alumno.notas[`tarea_${t.id}`] ?? "-"}
@@ -344,40 +347,70 @@ const AnaliticasGrupoPage = () => {
                   ))}
 
                   {/* NOTAS EXÁMENES */}
-                  {data.columnas.examenes.map((ex) => (
+                  {data.columnas.examenes.map((e) => (
                     <td
-                      key={ex.id}
-                      className="px-4 py-4 text-center border-r border-gray-100 border-dashed bg-gray-50/30"
+                      key={e.id}
+                      className="px-4 py-4 text-center border-r border-gray-100 border-dashed text-sm bg-gray-50/30"
                     >
                       <span
-                        className={getColor(alumno.notas[`examen_${ex.id}`])}
+                        className={getColor(alumno.notas[`examen_${e.id}`])}
                       >
-                        {alumno.notas[`examen_${ex.id}`] ?? "-"}
+                        {alumno.notas[`examen_${e.id}`] ?? "-"}
                       </span>
                     </td>
                   ))}
 
                   {/* ASISTENCIA */}
                   {usaAsistencia && (
-                    <td className="px-4 py-4 text-center border-r border-gray-100 border-dashed bg-green-50/10 font-medium text-green-700">
+                    <td className="px-4 py-4 text-center border-r border-gray-100 border-dashed bg-gray-50/30 text-green-700 font-bold text-sm">
                       {alumno.notas[`asistencia_sys`] ?? 0}%
                     </td>
                   )}
 
-                  {/* MANUALES */}
-                  {manuales.map((m) => (
-                    <td
-                      key={m.id}
-                      className="px-4 py-4 text-center border-r border-gray-100 border-dashed bg-blue-50/10 font-bold text-blue-800"
-                    >
-                      {alumno.notas[`manual_${m.id}`] ?? "-"}
-                    </td>
-                  ))}
+                  {/* EDITABLES MANUALES */}
+                  {manuales.map((m) => {
+                    const isEditing =
+                      editingCell.alumnoId === alumno.id &&
+                      editingCell.criterioId === m.id;
+                    const valor = alumno.notas[`manual_${m.id}`] ?? "-";
+
+                    return (
+                      <td
+                        key={m.id}
+                        onClick={() =>
+                          !isEditing && handleCellClick(alumno.id, m.id, valor)
+                        }
+                        className={`px-4 py-4 text-center border-r border-gray-100 cursor-pointer relative text-sm
+                                ${isEditing ? "bg-white ring-2 ring-blue-500 z-10 p-0" : "bg-blue-50/10 hover:bg-blue-50 font-bold text-blue-900"}
+                            `}
+                      >
+                        {isEditing ? (
+                          <input
+                            autoFocus
+                            type="number"
+                            min="0"
+                            max="100"
+                            className="w-full h-full text-center font-bold text-blue-900 bg-white outline-none"
+                            value={editValue}
+                            onChange={(e) => setEditValue(e.target.value)}
+                            onBlur={saveCell}
+                            onKeyDown={handleKeyDown}
+                          />
+                        ) : (
+                          <span>{valor}</span>
+                        )}
+                      </td>
+                    );
+                  })}
 
                   {/* PROMEDIO FINAL */}
-                  <td className="px-4 py-4 text-center font-bold text-gray-900 bg-gray-50 sticky right-0 z-10 border-l border-gray-200">
+                  <td className="px-4 py-4 whitespace-nowrap text-center font-bold text-gray-900 bg-gray-100 sticky right-0 z-20 border-l border-gray-200 text-lg">
                     <span
-                      className={`text-lg ${alumno.promedioFinal >= 70 ? "text-green-600" : "text-red-500"}`}
+                      className={
+                        alumno.promedioFinal >= 70
+                          ? "text-green-600"
+                          : "text-red-500"
+                      }
                     >
                       {alumno.promedioFinal}
                     </span>
@@ -389,65 +422,10 @@ const AnaliticasGrupoPage = () => {
         </div>
       </div>
 
-      {/* MODAL CAPTURA */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[80vh] animate-in zoom-in-95">
-            <div className="p-4 bg-gray-50 border-b flex justify-between items-center">
-              <div>
-                <h3 className="font-bold text-gray-800">
-                  Calificar: {criterioAEditar?.nombre_criterio}
-                </h3>
-                <p className="text-xs text-gray-500">
-                  Ingresa valores de 0 a 100
-                </p>
-              </div>
-              <button onClick={() => setShowModal(false)}>
-                <X size={20} className="text-gray-400" />
-              </button>
-            </div>
-            <div className="p-4 overflow-y-auto flex-1">
-              <div className="space-y-2">
-                {data.filas.map((f) => (
-                  <div
-                    key={f.id}
-                    className="flex justify-between items-center bg-white border border-gray-200 p-3 rounded-lg shadow-sm"
-                  >
-                    <span className="text-gray-700 text-sm font-medium">
-                      {f.nombre}
-                    </span>
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      className="w-16 p-1 border rounded text-center font-bold focus:ring-2 focus:ring-blue-500 outline-none text-lg"
-                      placeholder="-"
-                      value={notasTemp[f.id]}
-                      onChange={(e) =>
-                        setNotasTemp({ ...notasTemp, [f.id]: e.target.value })
-                      }
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="p-4 border-t bg-gray-50 flex justify-end gap-2">
-              <button
-                onClick={() => setShowModal(false)}
-                className="px-4 py-2 text-gray-600 hover:bg-gray-200 rounded-lg text-sm font-bold"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={guardarManuales}
-                disabled={isSaving}
-                className="bg-[#a72a34] text-white px-6 py-2 rounded-lg text-sm font-bold hover:bg-[#8f242d] shadow-sm disabled:opacity-70 flex items-center gap-2"
-              >
-                {isSaving && <Loader size={14} className="animate-spin" />}{" "}
-                Guardar
-              </button>
-            </div>
-          </div>
+      {/* FEEDBACK DE GUARDADO */}
+      {isSavingCell && (
+        <div className="fixed bottom-6 right-6 bg-black text-white px-4 py-2 rounded-full shadow-xl flex items-center gap-2 text-xs z-50 animate-bounce">
+          <Save size={14} /> Guardando nota...
         </div>
       )}
     </div>

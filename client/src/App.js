@@ -10350,33 +10350,32 @@ const DetalleCursoDocentePage = () => {
           <tbody className="divide-y divide-gray-100">
             {alumnos.map((alumno) => (
               <tr key={alumno.id} className="hover:bg-gray-50">
-                {/* COLUMNA ALUMNO: FOTO + DATOS (CORREGIDO) */}
+                {/* COLUMNA ALUMNO: FOTO + DATOS (Con la lógica de MuroDocentePage) */}
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center">
-                    {/* FOTO DE PERFIL (Igual que en MiPerfil) */}
-                    <div className="flex-shrink-0 h-10 w-10">
-                      <img
-                        className="h-10 w-10 rounded-full object-cover border border-gray-200"
-                        src={
-                          alumno.foto_perfil
-                            ? `https://api-universidad-c5o8.onrender.com/uploads/perfiles/${alumno.foto_perfil}`
-                            : `https://ui-avatars.com/api/?name=${alumno.nombre}+${alumno.apellido_paterno}&background=random`
-                        }
-                        alt=""
-                        onError={(e) => {
-                          e.target.src = `https://ui-avatars.com/api/?name=${alumno.nombre}+${alumno.apellido_paterno}&background=random`;
-                        }}
-                      />
+                    {/* Contenedor de la foto idéntico al Muro */}
+                    <div className="shrink-0 mr-4">
+                      {alumno?.foto_perfil ? (
+                        <img
+                          src={`https://api-universidad-c5o8.onrender.com/uploads/perfiles/${alumno.foto_perfil}`}
+                          alt="Avatar Alumno"
+                          className="w-10 h-10 rounded-full object-cover border border-gray-200"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-lg">
+                          {alumno?.nombre ? alumno.nombre.charAt(0) : "?"}
+                        </div>
+                      )}
                     </div>
 
-                    {/* DATOS DEL ALUMNO */}
-                    <div className="ml-4">
+                    {/* Datos del alumno */}
+                    <div>
                       <div className="text-sm font-medium text-gray-900">
-                        {alumno.nombre} {alumno.apellido_paterno}{" "}
-                        {alumno.apellido_materno}
+                        {alumno?.nombre} {alumno?.apellido_paterno}{" "}
+                        {alumno?.apellido_materno}
                       </div>
                       <div className="text-sm text-gray-500">
-                        {alumno.matricula}
+                        {alumno?.matricula}
                       </div>
                     </div>
                   </div>

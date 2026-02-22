@@ -7579,9 +7579,9 @@ apiRouter.get(
               },
             ];
 
-      // 2. Obtener Alumnos
+      // 2. Obtener Alumnos (CORREGIDO)
       const [alumnos] = await db.query(
-        `SELECT u.id, u.nombre, u.apellido_paterno, u.matricula 
+        `SELECT u.id, u.nombre, u.apellido_paterno, u.apellido_materno, u.matricula, u.foto_perfil 
          FROM usuarios u JOIN grupo_alumnos ga ON u.id = ga.alumno_id
          WHERE ga.grupo_id = ? AND u.rol = 'alumno' ORDER BY u.apellido_paterno ASC`,
         [grupoId],
@@ -7629,9 +7629,15 @@ apiRouter.get(
       const filas = alumnos.map((alum) => {
         let fila = {
           id: alum.id,
+          // Mantenemos este para no romper nada que ya tengas:
           nombre: `${alum.apellido_paterno} ${alum.nombre}`,
+          // Agregamos las propiedades individuales que pide tu diseño de frontend:
+          nombre_pila: alum.nombre,
+          apellido_paterno: alum.apellido_paterno,
+          apellido_materno: alum.apellido_materno,
           matricula: alum.matricula,
-          notas: {}, // Aquí guardaremos: { 'tarea_15': 100, 'manual_5': 90 }
+          foto_perfil: alum.foto_perfil, // <--- AQUÍ ESTABA EL PROBLEMA
+          notas: {},
         };
 
         let sumaPonderada = 0;
