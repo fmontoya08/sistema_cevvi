@@ -7252,23 +7252,37 @@ apiRouter.get("/examenes", verifyToken, async (req, res) => {
   }
 });
 
-// 2. CREAR EXAMEN (VERSIÓN COMPLETA: GUARDA PREGUNTAS Y OPCIONES)
 apiRouter.post("/examenes", verifyToken, async (req, res) => {
-  // Recibimos los datos del frontend
-  const { titulo, descripcion, grupo_id, asignatura_id, preguntas } = req.body;
+  // 1. EXTRAEMOS limite_tiempo DEL BODY
+  const {
+    titulo,
+    descripcion,
+    grupo_id,
+    asignatura_id,
+    preguntas,
+    limite_tiempo,
+  } = req.body;
   const docente_id = req.user.id;
 
-  const connection = await db.getConnection(); // Usamos transacción para que se guarde TODO o NADA
+  const connection = await db.getConnection();
   try {
     await connection.beginTransaction();
 
-    // PASO A: Insertar la cabecera del Examen
+    // 2. INSERTAMOS LA CABECERA DEL EXAMEN CON EL LÍMITE DE TIEMPO
     const [result] = await connection.query(
-      "INSERT INTO examenes (titulo, descripcion, docente_id, grupo_id, asignatura_id, fecha_creacion) VALUES (?, ?, ?, ?, ?, NOW())",
-      [titulo, descripcion, docente_id, grupo_id, asignatura_id],
+      "INSERT INTO examenes (titulo, descripcion, docente_id, grupo_id, asignatura_id, limite_tiempo, fecha_creacion) VALUES (?, ?, ?, ?, ?, ?, NOW())",
+      [
+        titulo,
+        descripcion,
+        docente_id,
+        grupo_id,
+        asignatura_id,
+        limite_tiempo || 60,
+      ], // <-- Por defecto 60 si lo deja en blanco
     );
     const examenId = result.insertId;
 
+    // ... EL RESTO DEL CÓDIGO SE QUEDA EXACTAMENTE IGUAL (donde guarda las preguntas) ...
     // PASO B: Recorrer y guardar las Preguntas
     if (preguntas && preguntas.length > 0) {
       for (const p of preguntas) {
@@ -7455,11 +7469,9 @@ apiRouter.post(
     } catch (error) {
       await connection.rollback();
       console.error("🔥 Error al entregar el examen:", error); // <-- Te dará más pistas si falla
-      res
-        .status(500)
-        .json({
-          message: "Error interno al guardar las respuestas: " + error.message,
-        });
+      res.status(500).json({
+        message: "Error interno al guardar las respuestas: " + error.message,
+      });
     } finally {
       connection.release();
     }

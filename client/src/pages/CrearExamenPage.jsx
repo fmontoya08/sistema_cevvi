@@ -16,6 +16,7 @@ const CrearExamenPage = () => {
 
   const [titulo, setTitulo] = useState("");
   const [descripcion, setDescripcion] = useState("");
+  const [limiteTiempo, setLimiteTiempo] = useState(60); // 60 minutos por defecto
 
   // Estado inicial con una pregunta por defecto
   const [preguntas, setPreguntas] = useState([
@@ -139,13 +140,14 @@ const CrearExamenPage = () => {
       const token = localStorage.getItem("token");
       // CORRECCIÓN PRINCIPAL: URL sin "/crear"
       await axios.post(
-        "https://api-universidad-c5o8.onrender.com/api/examenes",
+        `https://api-universidad-c5o8.onrender.com/api/examenes`,
         {
           titulo,
           descripcion,
           grupo_id: grupoId,
           asignatura_id: asignaturaId,
-          preguntas,
+          limite_tiempo: parseInt(limiteTiempo), // <--- ¡AÑADE ESTA LÍNEA!
+          preguntas: preguntasFormateadas,
         },
         { headers: { Authorization: `Bearer ${token}` } },
       );
@@ -182,6 +184,20 @@ const CrearExamenPage = () => {
           value={descripcion}
           onChange={(e) => setDescripcion(e.target.value)}
         />
+        <div className="mb-4">
+          <label className="block text-sm font-bold text-gray-700 mb-2">
+            Tiempo límite (en minutos)
+          </label>
+          <input
+            type="number"
+            min="1"
+            className="w-full p-3 border border-gray-300 rounded-xl outline-none focus:border-[#a72a34] focus:ring-1 focus:ring-[#a72a34]"
+            value={limiteTiempo}
+            onChange={(e) => setLimiteTiempo(e.target.value)}
+            placeholder="Ej. 60"
+            required
+          />
+        </div>
       </div>
 
       {/* LISTA DE PREGUNTAS */}
