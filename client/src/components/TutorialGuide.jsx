@@ -16,7 +16,7 @@ const TutorialGuide = ({ user }) => {
     // ==========================================
     if (user.rol === "alumno") {
       // 1. DASHBOARD (Inicio)
-      if (path.includes("/dashboard")) {
+      if (path === "/alumno/dashboard" || path === "/dashboard") {
         return [
           {
             element: "#tour-inicio",
@@ -39,7 +39,7 @@ const TutorialGuide = ({ user }) => {
             popover: {
               title: "Tus Materias",
               description:
-                "Estas son tus clases activas. Haz clic en una tarjeta para entrar al Aula Virtual.",
+                "Estas son tus clases activas. Haz clic en el nombre de la materia para entrar al Aula Virtual.",
             },
           },
           {
@@ -69,7 +69,7 @@ const TutorialGuide = ({ user }) => {
             popover: {
               title: "Historial",
               description:
-                "Lista detallada de todos tus movimientos financieros.",
+                "Lista detallada de todos tus movimientos financieros y fechas de vencimiento.",
             },
           },
         ];
@@ -111,7 +111,8 @@ const TutorialGuide = ({ user }) => {
             element: "#solicitudes-btn",
             popover: {
               title: "Nueva Solicitud",
-              description: "¿Necesitas una constancia o Kardex? Pídela aquí.",
+              description:
+                "¿Necesitas una constancia o Kardex? Pídela desde este botón.",
             },
           },
           {
@@ -119,61 +120,179 @@ const TutorialGuide = ({ user }) => {
             popover: {
               title: "Seguimiento",
               description:
-                "Aquí verás si tu trámite ya está listo o en proceso.",
+                "Aquí verás si tu trámite ya está listo, en revisión o rechazado.",
             },
           },
         ];
       }
 
-      // 5. AULA VIRTUAL
+      // 5. AULA VIRTUAL (¡DINÁMICO POR PESTAÑAS!)
       if (path.includes("/aula")) {
-        return [
+        const baseSteps = [
           {
             element: "#tour-aula-header",
             popover: {
-              title: "Materia y Grupo",
-              description: "Verifica que estás en la clase correcta.",
-            },
-          },
-          {
-            element: "#tour-videollamada",
-            popover: {
-              title: "Clase en Vivo",
-              description:
-                "Si el botón aparece, ¡únete a la videollamada aquí!",
+              title: "Aula Virtual",
+              description: "Estás en el salón de clases de esta materia.",
             },
           },
           {
             element: "#tour-tabs",
             popover: {
-              title: "Secciones",
+              title: "Menú del Aula",
               description:
-                "Navega entre Tareas, Recursos y el Foro de la clase.",
+                "Usa estas pestañas para navegar entre tus tareas, material de estudio, exámenes y más.",
+            },
+          },
+        ];
+
+        // Detectar dinámicamente qué pestaña está abierta buscando el ID en el DOM
+        if (document.getElementById("tour-info-videollamada")) {
+          // PESTAÑA: INFORMACIÓN
+          baseSteps.push({
+            element: "#tour-info-videollamada",
+            popover: {
+              title: "Clase en Vivo",
+              description:
+                "Cuando sea hora de clase, haz clic en el botón de este recuadro para entrar a la videollamada.",
+            },
+          });
+          baseSteps.push({
+            element: "#tour-info-evaluacion",
+            popover: {
+              title: "Criterios de Evaluación",
+              description:
+                "Aquí verás cuánto vale cada rubro (tareas, exámenes, etc.) para tu calificación final.",
+            },
+          });
+          if (document.getElementById("tour-info-asistencia")) {
+            baseSteps.push({
+              element: "#tour-info-asistencia",
+              popover: {
+                title: "Tu Asistencia",
+                description:
+                  "Revisa tu registro de faltas y asistencias tomadas por el docente.",
+              },
+            });
+          }
+        } else if (document.getElementById("tour-tareas-lista")) {
+          // PESTAÑA: TAREAS
+          baseSteps.push({
+            element: "#tour-tareas-lista",
+            popover: {
+              title: "Subir Tareas",
+              description:
+                "¡Importante! Haz clic sobre la actividad para ver las instrucciones y poder adjuntar tu archivo de entrega.",
+            },
+          });
+        } else if (document.getElementById("tour-recursos-lista")) {
+          // PESTAÑA: RECURSOS
+          baseSteps.push({
+            element: "#tour-recursos-lista",
+            popover: {
+              title: "Material de Estudio",
+              description:
+                "Aquí puedes descargar lecturas, PDF o ver enlaces de apoyo compartidos por tu maestro.",
+            },
+          });
+        } else if (document.getElementById("tour-foro-lista")) {
+          // PESTAÑA: FORO
+          baseSteps.push({
+            element: "#tour-foro-lista",
+            popover: {
+              title: "Foro de Discusión",
+              description:
+                "Entra a un tema para debatir con tus compañeros o presiona 'Nuevo' para hacerle una pregunta al profesor.",
+            },
+          });
+        } else if (document.getElementById("tour-muro-novedades")) {
+          // PESTAÑA: MURO
+          baseSteps.push({
+            element: "#tour-muro-novedades",
+            popover: {
+              title: "Novedades y Avisos",
+              description:
+                "Mantente atento. Aquí aparecerán anuncios rápidos e importantes de la materia.",
+            },
+          });
+        } else if (document.getElementById("tour-examenes-lista")) {
+          // PESTAÑA: EXÁMENES
+          baseSteps.push({
+            element: "#tour-examenes-lista",
+            popover: {
+              title: "Exámenes en Línea",
+              description:
+                "Cuando tengas una prueba programada aparecerá aquí. Solo da clic en 'Resolver' para iniciar.",
+            },
+          });
+        }
+
+        return baseSteps;
+      }
+
+      // 6. CALENDARIO
+      if (path.includes("/calendario")) {
+        return [
+          {
+            element: "#tour-calendario-header",
+            popover: {
+              title: "Calendario Institucional",
+              description:
+                "Aquí puedes ver las fechas clave del ciclo, vacaciones y días festivos.",
+            },
+          },
+          {
+            element: "#tour-calendario-leyenda",
+            popover: {
+              title: "Código de Colores",
+              description:
+                "Revisa esta leyenda para saber qué significa cada color (clases regulares, asíncronas o días libres).",
+            },
+          },
+          {
+            element: "#tour-calendario-vista",
+            popover: {
+              title: "Vista del Mes",
+              description:
+                "Navega entre los meses y haz clic sobre los eventos para ver más detalles si los tienen.",
             },
           },
         ];
       }
-    }
 
-    // ==========================================
-    // ROL: DOCENTE
-    // ==========================================
-    if (user.rol === "docente") {
-      if (path.includes("/dashboard")) {
+      // 7. MI PERFIL
+      if (path.includes("/mi-perfil")) {
         return [
           {
-            element: "#tour-docente-titulo",
+            element: "#tour-perfil-foto",
             popover: {
-              title: "Bienvenido Profe",
-              description: "Gestione sus grupos desde aquí.",
+              title: "Tu Identidad",
+              description:
+                "Puedes subir o cambiar tu foto dando clic en el botón de la cámara. ¡Mantén tu credencial actualizada!",
             },
           },
           {
-            element: "#tour-docente-grid",
+            element: "#tour-perfil-academico",
             popover: {
-              title: "Sus Grupos",
+              title: "Estatus Escolar",
               description:
-                "Seleccione un grupo para pasar lista, calificar o subir material.",
+                "Aquí verás a qué carrera y sede perteneces. Esta información es oficial y no puede editarse.",
+            },
+          },
+          {
+            element: "#tour-perfil-contacto",
+            popover: {
+              title: "Datos Personales",
+              description:
+                "Es muy importante que mantengas tu teléfono y correo al día para recibir notificaciones.",
+            },
+          },
+          {
+            element: "#tour-perfil-seguridad",
+            popover: {
+              title: "Privacidad",
+              description:
+                "Desde aquí puedes cambiar tu contraseña en cualquier momento de manera segura.",
             },
           },
         ];
@@ -185,19 +304,19 @@ const TutorialGuide = ({ user }) => {
 
   const iniciarTour = () => {
     const steps = getSteps();
+
     if (steps.length === 0) {
-      alert(
-        "Esta sección no tiene un tutorial específico aún. Intenta en el Inicio.",
-      );
+      alert("No hay un tutorial configurado para esta sección en específico.");
       return;
     }
 
     const driverObj = driver({
       showProgress: true,
       steps: steps,
-      nextBtnText: "Siguiente",
-      prevBtnText: "Atrás",
-      doneBtnText: "Finalizar",
+      nextBtnText: "Siguiente →",
+      prevBtnText: "← Atrás",
+      doneBtnText: "¡Entendido!",
+      overlayColor: "rgba(0, 0, 0, 0.6)",
     });
 
     driverObj.drive();
@@ -206,9 +325,9 @@ const TutorialGuide = ({ user }) => {
   return (
     <button
       onClick={iniciarTour}
-      className="fixed bottom-6 right-6 bg-[#a72a34] text-white p-3 rounded-full shadow-xl hover:bg-[#802028] transition-all z-50 flex items-center gap-2 font-bold hover:scale-105"
+      className="fixed bottom-6 right-6 bg-[#a72a34] text-white p-4 rounded-full shadow-2xl hover:bg-[#802028] transition-transform z-50 flex items-center justify-center hover:scale-110 border-4 border-white/20"
       style={{ zIndex: 99999 }}
-      title="¿Necesitas ayuda?"
+      title="Tutorial de esta pantalla"
     >
       <HelpCircle size={28} />
     </button>

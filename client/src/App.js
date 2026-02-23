@@ -389,27 +389,32 @@ const CalendarioAlumno = () => {
   };
 
   return (
-    <div className="p-6 bg-white rounded-xl shadow-lg m-4">
+    <div
+      id="tour-calendario-header"
+      className="p-6 bg-white rounded-xl shadow-lg m-4"
+    >
       <h2 className="text-2xl font-bold mb-6 flex items-center gap-2 text-gray-800">
         <Calendar className="text-blue-600" /> Calendario Escolar
       </h2>
 
-      <FullCalendar
-        plugins={[dayGridPlugin, interactionPlugin]}
-        initialView="dayGridMonth"
-        locale={esLocale}
-        events={eventos}
-        eventClick={handleEventClick}
-        height="auto"
-        headerToolbar={{
-          left: "prev,next today",
-          center: "title",
-          right: "",
-        }}
-      />
+      <div id="tour-calendario-vista">
+        <FullCalendar
+          plugins={[dayGridPlugin, interactionPlugin]}
+          initialView="dayGridMonth"
+          locale={esLocale}
+          events={eventos}
+          eventClick={handleEventClick}
+          height="auto"
+          headerToolbar={{
+            left: "prev,next today",
+            center: "title",
+            right: "",
+          }}
+        />
+      </div>
 
       {/* --- LEYENDA (TIPO IMAGEN) --- */}
-      <div className="mt-8 flex justify-center">
+      <div id="tour-calendario-leyenda" className="mt-8 flex justify-center">
         <div className="border border-gray-300 rounded-lg overflow-hidden text-sm font-bold shadow-sm max-w-md w-full">
           {/* Fila Verde */}
           <div className="flex border-b border-gray-200">
@@ -1137,7 +1142,10 @@ const AlumnoLayout = () => {
         </div>
 
         {/* NAVEGACIÓN */}
-        <nav className="flex-1 px-3 py-6 space-y-1 overflow-y-auto">
+        <nav
+          id="tour-menu"
+          className="flex-1 px-3 py-6 space-y-1 overflow-y-auto"
+        >
           {navItems.map((item) => {
             const isActive = location.pathname.startsWith(item.path);
             return (
@@ -1206,7 +1214,10 @@ const AlumnoLayout = () => {
 
           <div className="flex items-center gap-4">
             {/* Notificaciones (Si tienes el componente NotificationBell, si no, puedes quitarlo) */}
-            <div className="text-gray-500 hover:text-[#a72a34] transition-colors cursor-pointer relative">
+            <div
+              id="tour-notificaciones"
+              className="text-gray-500 hover:text-[#a72a34] transition-colors cursor-pointer relative"
+            >
               <NotificationBell />
             </div>
 
@@ -10169,7 +10180,7 @@ const DocenteDashboardPage = () => {
   );
 };
 
-// --- COMPONENTE CORREGIDO Y DEFINITIVO ---
+// --- COMPONENTE ACTA FINAL / DETALLE CURSO (CORREGIDO) ---
 const DetalleCursoDocentePage = () => {
   const { grupoId, asignaturaId } = useParams();
   const navigate = useNavigate();
@@ -10178,61 +10189,82 @@ const DetalleCursoDocentePage = () => {
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Estados para calificación
+  // Estados
   const [calificaciones, setCalificaciones] = useState({});
-  const [promediosSistema, setPromediosSistema] = useState({});
+  const [promediosCalculados, setPromediosCalculados] = useState({});
 
-  const fetchDatos = useCallback(async () => {
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       const token = localStorage.getItem("token");
 
-      // 1. Cargar Alumnos
-      const { data: dataAlumnos } = await axios.get(
-        `https://api-universidad-c5o8.onrender.com/api/docente/v2/grupo/${grupoId}/asignatura/${asignaturaId}/alumnos`,
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
-
-      // 2. Cargar Analíticas
+      // 1. Obtener Analíticas (Promedios calculados)
       const { data: dataAnaliticas } = await axios.get(
         `https://api-universidad-c5o8.onrender.com/api/analiticas/${grupoId}/${asignaturaId}`,
         { headers: { Authorization: `Bearer ${token}` } },
       );
 
-      setAlumnos(dataAlumnos.alumnos);
-      setCursoInfo(dataAlumnos.cursoInfo);
+      // DEBUG: Ver qué está llegando del backend
+      console.log("Datos de Analíticas:", dataAnaliticas);
 
-      // Mapear promedios
+      // Crear mapa: ID -> Promedio
       const mapaPromedios = {};
       if (dataAnaliticas && dataAnaliticas.filas) {
         dataAnaliticas.filas.forEach((fila) => {
-          mapaPromedios[fila.id] = fila.promedio;
+          // Buscamos 'promedio' O 'promedioFinal' para asegurar que lo encuentre
+          const valor =
+            fila.promedio !== undefined ? fila.promedio : fila.promedioFinal;
+          mapaPromedios[fila.id] = valor;
         });
       }
-      setPromediosSistema(mapaPromedios);
+      setPromediosCalculados(mapaPromedios);
 
-      // Inicializar inputs
+      // 2. Obtener Lista de Alumnos (para ver si ya hay calificación guardada)
+      const { data: dataCurso } = await axios.get(
+        `https://api-universidad-c5o8.onrender.com/api/docente/v2/grupo/${grupoId}/asignatura/${asignaturaId}/alumnos`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+
+      setAlumnos(dataCurso.alumnos);
+      setCursoInfo(dataCurso.cursoInfo);
+
+      // 3. AUTOCOMPLETAR INPUTS
       const initialCalificaciones = {};
-      dataAlumnos.alumnos.forEach((alumno) => {
-        if (alumno.calificacion !== null && alumno.calificacion !== "") {
+
+      dataCurso.alumnos.forEach((alumno) => {
+        // ¿Ya guardó una calificación FINAL en la BD (tabla calificaciones)?
+        if (
+          alumno.calificacion !== null &&
+          alumno.calificacion !== undefined &&
+          alumno.calificacion !== ""
+        ) {
+          // Si ya existe, respetamos la que está guardada
           initialCalificaciones[alumno.id] = String(alumno.calificacion);
         } else {
-          initialCalificaciones[alumno.id] = String(
-            mapaPromedios[alumno.id] || "",
-          );
+          // Si NO existe, pre-llenamos con el promedio calculado de la sábana
+          const promedioSistema = mapaPromedios[alumno.id];
+
+          // Validamos que no sea undefined antes de asignarlo
+          if (promedioSistema !== undefined && promedioSistema !== null) {
+            initialCalificaciones[alumno.id] = String(promedioSistema);
+          } else {
+            initialCalificaciones[alumno.id] = "";
+          }
         }
       });
+
       setCalificaciones(initialCalificaciones);
     } catch (error) {
-      console.error("Error al cargar datos", error);
+      console.error("Error cargando datos", error);
+      alert("Error al cargar la información.");
     } finally {
       setLoading(false);
     }
   }, [grupoId, asignaturaId]);
 
   useEffect(() => {
-    fetchDatos();
-  }, [fetchDatos]);
+    fetchData();
+  }, [fetchData]);
 
   const handleCalificacionChange = (alumnoId, valor) => {
     setCalificaciones((prev) => ({ ...prev, [alumnoId]: valor }));
@@ -10248,160 +10280,182 @@ const DetalleCursoDocentePage = () => {
     try {
       const token = localStorage.getItem("token");
       await axios.post(
-        "https://api-universidad-c5o8.onrender.com/api/calificaciones/guardar-acta",
-        { grupoId, asignaturaId, calificaciones: calificacionesArray },
+        "https://api-universidad-c5o8.onrender.com/api/calificaciones/guardar-lote",
+        {
+          grupo_id: grupoId,
+          asignatura_id: asignaturaId,
+          calificaciones: calificacionesArray,
+        },
         { headers: { Authorization: `Bearer ${token}` } },
       );
-      alert("Acta guardada correctamente.");
-      fetchDatos();
+      alert("¡Acta Final guardada correctamente!");
+      fetchData();
     } catch (error) {
-      alert("Error al guardar.");
+      console.error(error);
+      alert("Error al guardar el acta.");
     } finally {
       setIsSaving(false);
     }
   };
 
-  if (loading) return <div className="p-10 text-center">Cargando...</div>;
+  if (loading) return <div className="p-10 text-center">Cargando acta...</div>;
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
       <div className="flex items-center gap-4 mb-6">
         <button
           onClick={() => navigate("/docente/dashboard")}
-          className="flex items-center text-gray-500 hover:text-blue-600"
+          className="flex items-center text-gray-500 hover:text-blue-600 p-2 rounded-full hover:bg-gray-200 transition"
         >
-          <ArrowLeft size={20} className="mr-1" /> Volver
+          <ArrowLeft size={24} />
         </button>
         <div>
           <h2 className="text-2xl font-bold text-gray-800">
             {cursoInfo?.nombre_asignatura}
           </h2>
-          <p className="text-gray-500">Grupo: {cursoInfo?.nombre_grupo}</p>
+          <p className="text-gray-500">Acta de Calificaciones Finales</p>
         </div>
       </div>
 
-      {/* --- BOTONES DE ACCIÓN RÁPIDA --- */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+      {/* --- BOTONES DE NAVEGACIÓN RÁPIDA --- */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
         <Link
           to={`/docente/grupo/${grupoId}/asignatura/${asignaturaId}/aula`}
-          className="bg-white p-4 rounded-xl shadow-sm hover:shadow-md border border-gray-200 flex flex-col items-center gap-2 group"
+          className="bg-white p-4 rounded-xl shadow-sm hover:shadow-md border border-gray-200 flex flex-col items-center gap-2 group transition-all"
         >
-          <div className="p-3 bg-blue-50 text-blue-600 rounded-full group-hover:bg-blue-100">
+          <div className="p-3 bg-blue-50 text-blue-600 rounded-full group-hover:scale-110 transition-transform">
             <Book size={24} />
           </div>
-          <span className="font-bold text-gray-700">Aula Virtual</span>
+          <span className="font-bold text-gray-700 text-sm">Aula Virtual</span>
         </Link>
         <Link
           to={`/docente/grupo/${grupoId}/asignatura/${asignaturaId}/analiticas`}
-          className="bg-white p-4 rounded-xl shadow-sm hover:shadow-md border border-gray-200 flex flex-col items-center gap-2 group"
+          className="bg-white p-4 rounded-xl shadow-sm hover:shadow-md border border-gray-200 flex flex-col items-center gap-2 group transition-all"
         >
-          <div className="p-3 bg-purple-50 text-purple-600 rounded-full group-hover:bg-purple-100">
+          <div className="p-3 bg-purple-50 text-purple-600 rounded-full group-hover:scale-110 transition-transform">
             <Award size={24} />
           </div>
-          <span className="font-bold text-gray-700">Analíticas</span>
+          <span className="font-bold text-gray-700 text-sm">
+            Sábana (Detalle)
+          </span>
         </Link>
         <Link
           to={`/docente/grupo/${grupoId}/asignatura/${asignaturaId}/examen/crear`}
-          className="bg-white p-4 rounded-xl shadow-sm hover:shadow-md border border-gray-200 flex flex-col items-center gap-2 group"
+          className="bg-white p-4 rounded-xl shadow-sm hover:shadow-md border border-gray-200 flex flex-col items-center gap-2 group transition-all"
         >
-          <div className="p-3 bg-green-50 text-green-600 rounded-full group-hover:bg-green-100">
+          <div className="p-3 bg-green-50 text-green-600 rounded-full group-hover:scale-110 transition-transform">
             <PlusCircle size={24} />
           </div>
-          <span className="font-bold text-gray-700">Crear Examen</span>
+          <span className="font-bold text-gray-700 text-sm">Nuevo Examen</span>
         </Link>
         <Link
           to={`/docente/grupo/${grupoId}/asignatura/${asignaturaId}/muro`}
-          className="bg-white p-4 rounded-xl shadow-sm hover:shadow-md border border-gray-200 flex flex-col items-center gap-2 group"
+          className="bg-white p-4 rounded-xl shadow-sm hover:shadow-md border border-gray-200 flex flex-col items-center gap-2 group transition-all"
         >
-          <div className="p-3 bg-yellow-50 text-yellow-600 rounded-full group-hover:bg-yellow-100">
+          <div className="p-3 bg-yellow-50 text-yellow-600 rounded-full group-hover:scale-110 transition-transform">
             <Users size={24} />
           </div>
-          <span className="font-bold text-gray-700">Muro</span>
+          <span className="font-bold text-gray-700 text-sm">Muro / Avisos</span>
         </Link>
       </div>
 
-      {/* --- ACTA DE CALIFICACIONES (ESTILO USUARIOS) --- */}
+      {/* --- ACTA DE CALIFICACIONES --- */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="p-6 border-b border-gray-100">
+        <div className="p-6 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
           <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-            <GraduationCap size={20} className="text-blue-600" /> Acta de
-            Calificaciones
+            <GraduationCap size={20} className="text-[#a72a34]" />{" "}
+            Calificaciones Finales
           </h3>
+          <div className="text-xs text-gray-500 italic">
+            * El promedio calculado se llena automáticamente si no hay nota
+            final guardada.
+          </div>
         </div>
 
         <table className="w-full">
-          <thead className="bg-gray-50 text-left">
+          <thead className="bg-gray-100 text-left text-gray-600 text-xs uppercase font-bold">
             <tr>
-              <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">
-                Alumno
-              </th>
-              <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase text-center">
+              <th className="px-6 py-4">Alumno</th>
+              <th className="px-6 py-4 text-center">
                 Promedio
                 <br />
                 Calculado
               </th>
-              <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase text-center w-40">
-                Calificación
+              <th className="px-6 py-4 text-center w-40">
+                Nota
                 <br />
                 Final
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
-            {alumnos.map((alumno) => (
-              <tr key={alumno.id} className="hover:bg-gray-50">
-                {/* COLUMNA ALUMNO: FOTO + DATOS (Con la lógica de MuroDocentePage) */}
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex items-center">
-                    {/* Contenedor de la foto idéntico al Muro */}
-                    <div className="shrink-0 mr-4">
-                      {alumno?.foto_perfil ? (
+          <tbody className="divide-y divide-gray-100 text-sm">
+            {alumnos.map((alumno) => {
+              const promedio = promediosCalculados[alumno.id];
+              return (
+                <tr
+                  key={alumno.id}
+                  className="hover:bg-gray-50 transition-colors"
+                >
+                  {/* Alumno Info */}
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center">
+                      <div className="flex-shrink-0 h-10 w-10">
                         <img
-                          src={`https://api-universidad-c5o8.onrender.com/uploads/perfiles/${alumno.foto_perfil}`}
-                          alt="Avatar Alumno"
-                          className="w-10 h-10 rounded-full object-cover border border-gray-200"
+                          className="h-10 w-10 rounded-full object-cover border border-gray-200"
+                          src={
+                            alumno.foto_perfil
+                              ? `https://api-universidad-c5o8.onrender.com/uploads/perfiles/${alumno.foto_perfil}`
+                              : `https://ui-avatars.com/api/?name=${alumno.nombre}&background=random&color=fff`
+                          }
+                          alt=""
+                          onError={(e) => {
+                            e.target.onerror = null;
+                            e.target.src = `https://ui-avatars.com/api/?name=${alumno.nombre}&background=random&color=fff`;
+                          }}
                         />
-                      ) : (
-                        <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-lg">
-                          {alumno?.nombre ? alumno.nombre.charAt(0) : "?"}
+                      </div>
+                      <div className="ml-4">
+                        <div className="font-bold text-gray-900">
+                          {alumno.nombre} {alumno.apellido_paterno}{" "}
+                          {alumno.apellido_materno}
                         </div>
-                      )}
-                    </div>
-
-                    {/* Datos del alumno */}
-                    <div>
-                      <div className="text-sm font-medium text-gray-900">
-                        {alumno?.nombre} {alumno?.apellido_paterno}{" "}
-                        {alumno?.apellido_materno}
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        {alumno?.matricula}
+                        <div className="text-xs text-gray-500">
+                          {alumno.matricula}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </td>
+                  </td>
 
-                <td className="px-6 py-4 text-center">
-                  <span className="text-gray-400 font-medium text-sm">
-                    {promediosSistema[alumno.id] || "-"}
-                  </span>
-                </td>
+                  {/* Promedio Calculado (VISUAL) */}
+                  <td className="px-6 py-4 text-center">
+                    <span
+                      className={`px-3 py-1 rounded-full text-xs font-bold ${
+                        (promedio || 0) >= 70
+                          ? "bg-green-100 text-green-700"
+                          : "bg-red-100 text-red-700"
+                      }`}
+                    >
+                      {promedio !== undefined ? promedio : "-"}
+                    </span>
+                  </td>
 
-                <td className="px-6 py-4">
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={calificaciones[alumno.id] || ""}
-                    onChange={(e) =>
-                      handleCalificacionChange(alumno.id, e.target.value)
-                    }
-                    className="w-full text-center font-bold border border-gray-300 rounded-lg py-2 px-3 focus:ring-2 focus:ring-blue-500 outline-none"
-                    placeholder="0"
-                  />
-                </td>
-              </tr>
-            ))}
+                  {/* Input Editable (AUTOCOMPLETADO) */}
+                  <td className="px-6 py-4">
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={calificaciones[alumno.id] || ""}
+                      onChange={(e) =>
+                        handleCalificacionChange(alumno.id, e.target.value)
+                      }
+                      className="w-full text-center font-bold text-lg border border-gray-300 rounded-lg py-2 px-3 focus:ring-2 focus:ring-[#a72a34] outline-none transition-all"
+                      placeholder="-"
+                    />
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
 
@@ -10409,10 +10463,14 @@ const DetalleCursoDocentePage = () => {
           <button
             onClick={handleGuardarTodo}
             disabled={isSaving}
-            className="flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-blue-700 disabled:bg-gray-400 shadow-md transition-all active:scale-95"
+            className="flex items-center gap-2 bg-[#a72a34] text-white px-8 py-3 rounded-xl font-bold hover:bg-[#8f242d] disabled:bg-gray-400 disabled:cursor-not-allowed shadow-lg transition-all active:scale-95"
           >
-            <Save size={20} />
-            {isSaving ? "Guardando..." : "Guardar Acta Final"}
+            {isSaving ? (
+              <Loader className="animate-spin" size={20} />
+            ) : (
+              <Save size={20} />
+            )}
+            {isSaving ? "Guardando..." : "Guardar Acta Oficial"}
           </button>
         </div>
       </div>
@@ -10611,13 +10669,10 @@ const AlumnoDashboardPage = () => {
 
   // 4. Hacemos un map sobre el array misGrupos
   return (
-    <div className="space-y-8">
+    <div id="tour-inicio" className="space-y-8">
       {misGrupos.map((infoGrupo, index) => (
-        <div key={index}>
-          <h2
-            id="tour-inicio"
-            className="text-3xl font-bold text-gray-800 mb-2"
-          >
+        <div key={index} id={index === 0 ? "tour-mis-clases" : undefined}>
+          <h2 className="text-3xl font-bold text-gray-800 mb-2">
             Grupo: {infoGrupo.grupo.nombre_grupo} ({infoGrupo.grupo.modalidad})
           </h2>
           <p className="text-lg text-secundario mb-6">
@@ -11815,7 +11870,10 @@ const AulaVirtualPage = () => {
   const renderView = () => (
     <div className="space-y-6">
       {/* 1. ENCABEZADO TIPO DASHBOARD (Fondo Blanco, Sombra Suave) */}
-      <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
+      <div
+        id="tour-aula-header"
+        className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4"
+      >
         <div>
           {/* AQUI MOSTRAMOS EL NOMBRE DE LA ASIGNATURA */}
           <h2 className="text-3xl font-bold text-gray-800 tracking-tight flex flex-col">
@@ -11888,7 +11946,7 @@ const AulaVirtualPage = () => {
       </div>
 
       {/* 2. NAVEGACIÓN DE PESTAÑAS (Estilo "Underline" limpio) */}
-      <div className="border-b border-gray-200">
+      <div id="tour-tabs" className="border-b border-gray-200">
         <nav className="-mb-px flex space-x-8" aria-label="Tabs">
           <button
             onClick={() => setActiveTab("info")}
@@ -11975,7 +12033,10 @@ const AulaVirtualPage = () => {
           <div className="space-y-8 animate-in fade-in duration-300">
             {/* Sección Videollamada Destacada */}
             {/* Sección Videollamada Destacada */}
-            <div className="bg-gradient-to-r from-gray-900 to-gray-800 p-6 rounded-2xl text-white flex justify-between items-center shadow-lg">
+            <div
+              id="tour-info-videollamada"
+              className="bg-gradient-to-r from-gray-900 to-gray-800 p-6 rounded-2xl text-white flex justify-between items-center shadow-lg"
+            >
               <div>
                 <h4 className="font-bold text-lg mb-1 flex items-center gap-2">
                   <Video className="text-red-500" /> Sala de Videoconferencia
@@ -12023,7 +12084,10 @@ const AulaVirtualPage = () => {
                   </p>
                 </div>
                 {/* BLOQUE DE EVALUACIÓN DINÁMICO */}
-                <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm">
+                <div
+                  id="tour-info-evaluacion"
+                  className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm"
+                >
                   <h4 className="font-bold text-gray-800 border-b border-gray-100 pb-2 mb-4 flex items-center gap-2">
                     <Award size={18} className="text-[#a72a34]" /> Criterios de
                     Evaluación
@@ -12113,7 +12177,10 @@ const AulaVirtualPage = () => {
 
             {/* Historial Asistencia (Solo Alumno) */}
             {user.rol === "alumno" && (
-              <div className="mt-8 pt-8 border-t border-gray-100">
+              <div
+                id="tour-info-asistencia"
+                className="mt-8 pt-8 border-t border-gray-100"
+              >
                 <h4 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
                   <History size={20} className="text-gray-400" /> Mi Asistencia
                 </h4>
@@ -12170,7 +12237,10 @@ const AulaVirtualPage = () => {
 
         {/* Pestaña: Tareas */}
         {activeTab === "tareas" && (
-          <div className="animate-in fade-in duration-300">
+          <div
+            id="tour-tareas-lista"
+            className="animate-in fade-in duration-300"
+          >
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-xl font-bold text-gray-800">
                 Actividades de Aprendizaje
@@ -12190,13 +12260,13 @@ const AulaVirtualPage = () => {
         {/* CONTENIDO DE LAS PESTAÑAS NUEVAS */}
 
         {activeTab === "muro" && (
-          <div className="mt-6">
+          <div id="tour-muro-novedades" className="mt-6">
             <MuroDocentePage />
           </div>
         )}
 
         {activeTab === "examenes" && (
-          <div className="mt-6">
+          <div id="tour-examenes-lista" className="mt-6">
             {/* Cargamos la LISTA, no el creador directo */}
             <ExamenesPage />
           </div>
@@ -12210,7 +12280,10 @@ const AulaVirtualPage = () => {
 
         {/* Pestaña: Recursos */}
         {activeTab === "recursos" && (
-          <div className="animate-in fade-in duration-300">
+          <div
+            id="tour-recursos-lista"
+            className="animate-in fade-in duration-300"
+          >
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-xl font-bold text-gray-800">
                 Material de Consulta
@@ -12230,7 +12303,7 @@ const AulaVirtualPage = () => {
 
         {/* Pestaña: Foro */}
         {activeTab === "foro" && (
-          <div className="animate-in fade-in duration-300">
+          <div id="tour-foro-lista" className="animate-in fade-in duration-300">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-xl font-bold text-gray-800">
                 Foro de Discusión
@@ -13701,7 +13774,10 @@ const MiPerfilPage = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* COLUMNA 1: FOTO Y RESUMEN */}
-        <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center text-center h-fit">
+        <div
+          id="tour-perfil-foto"
+          className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center text-center h-fit"
+        >
           <div className="relative group mb-6">
             <div className="w-48 h-48 rounded-full p-1 border-4 border-[#bb9a5a] overflow-hidden bg-gray-100 shadow-xl">
               {user?.foto_perfil ? (
@@ -13759,7 +13835,10 @@ const MiPerfilPage = () => {
         {/* COLUMNA 2 Y 3: INFORMACIÓN DETALLADA */}
         <div className="lg:col-span-2 space-y-8">
           {/* 1. DATOS ACADÉMICOS (SOLO LECTURA) */}
-          <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 relative overflow-hidden">
+          <div
+            id="tour-perfil-academico"
+            className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 relative overflow-hidden"
+          >
             <div className="absolute top-0 left-0 w-2 h-full bg-[#bb9a5a]"></div>
             <h3 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
               <GraduationCap className="text-[#bb9a5a]" /> Información Académica
@@ -13794,7 +13873,10 @@ const MiPerfilPage = () => {
           </div>
 
           {/* 2. DATOS DE CONTACTO (EDITABLES) */}
-          <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
+          <div
+            id="tour-perfil-contacto"
+            className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100"
+          >
             <h3 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
               <User className="text-[#a72a34]" /> Datos de Contacto
             </h3>
@@ -13887,7 +13969,10 @@ const MiPerfilPage = () => {
           </div>
 
           {/* 3. SEGURIDAD (SIN RECUPERACIÓN AUTOMÁTICA) */}
-          <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
+          <div
+            id="tour-perfil-seguridad"
+            className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100"
+          >
             <h3 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
               <Lock className="text-gray-600" /> Seguridad
             </h3>

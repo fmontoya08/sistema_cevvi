@@ -7370,6 +7370,13 @@ apiRouter.post(
     const { respuestas } = req.body;
     const alumnoId = req.user.id;
 
+    // Protección extra: Si el frontend manda mal los datos, avisamos antes de romper el servidor
+    if (!respuestas || !Array.isArray(respuestas)) {
+      return res
+        .status(400)
+        .json({ message: "No se enviaron respuestas en el formato correcto." });
+    }
+
     const connection = await db.getConnection();
     try {
       await connection.beginTransaction();
@@ -7384,6 +7391,7 @@ apiRouter.post(
       for (const item of respuestas) {
         const preguntaId = item.pregunta_id;
         const valor = item.respuesta_valor;
+
         let puntos = 0;
         let opcionId = null;
         let respuestaTexto = null;
@@ -7392,20 +7400,32 @@ apiRouter.post(
           "SELECT tipo FROM preguntas WHERE id = ?",
           [preguntaId],
         );
+
         if (preg.length === 0) continue;
 
         if (preg[0].tipo === "opcion_multiple") {
-          opcionId = valor;
-          const [correcta] = await connection.query(
-            "SELECT es_correcta, puntos_pregunta FROM opciones JOIN preguntas ON opciones.pregunta_id = preguntas.id WHERE opciones.id = ?",
-            [opcionId],
-          );
-          // Si es correcta, asignamos puntos
-          if (correcta.length > 0 && correcta[0].es_correcta) {
-            puntos = correcta[0].puntos_pregunta;
+          // CORRECCIÓN 1: Si valor está vacío, aseguramos que sea NULL, si no, lo convertimos a Número
+          opcionId = valor && valor !== "" ? parseInt(valor) : null;
+
+          if (opcionId !== null) {
+            // CORRECCIÓN 2: Se llama 'preguntas.puntos', no 'puntos_pregunta'
+            const [correcta] = await connection.query(
+              "SELECT opciones.es_correcta, preguntas.puntos FROM opciones JOIN preguntas ON opciones.pregunta_id = preguntas.id WHERE opciones.id = ?",
+              [opcionId],
+            );
+
+            // Si es correcta, asignamos puntos (verificamos que sea 1 o true)
+            if (
+              correcta.length > 0 &&
+              (correcta[0].es_correcta === 1 ||
+                correcta[0].es_correcta === true)
+            ) {
+              puntos = parseFloat(correcta[0].puntos) || 0;
+            }
           }
         } else {
-          respuestaTexto = valor;
+          // Para preguntas abiertas
+          respuestaTexto = valor && valor !== "" ? String(valor) : null;
         }
 
         // IMPORTANTE: Guardamos puntos redondeados (Math.round)
@@ -7424,6 +7444,7 @@ apiRouter.post(
       // Guardamos la calificación como entero
       const notaFinal = Math.round(total[0].nota || 0);
 
+      // Actualizamos el intento
       await connection.query(
         "UPDATE intentos_examen SET calificacion = ? WHERE id = ?",
         [notaFinal, intentoId],
@@ -7433,8 +7454,12 @@ apiRouter.post(
       res.json({ message: "Examen entregado correctamente", intentoId });
     } catch (error) {
       await connection.rollback();
-      console.error(error);
-      res.status(500).send("Error al entregar");
+      console.error("🔥 Error al entregar el examen:", error); // <-- Te dará más pistas si falla
+      res
+        .status(500)
+        .json({
+          message: "Error interno al guardar las respuestas: " + error.message,
+        });
     } finally {
       connection.release();
     }
