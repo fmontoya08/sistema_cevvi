@@ -8366,6 +8366,61 @@ app.get("/drive/publico/:token", async (req, res) => {
   }
 });
 
+// --- MÓDULO ANUNCIOS GLOBALES (ADMIN) ---
+adminRouter.get("/anuncios", async (req, res) => {
+  try {
+    const [anuncios] = await db.query(
+      "SELECT a.*, u.nombre, u.apellido_paterno FROM anuncios_globales a JOIN usuarios u ON a.creado_por = u.id ORDER BY a.fecha_creacion DESC",
+    );
+    res.json(anuncios);
+  } catch (error) {
+    res.status(500).send({ message: "Error al obtener anuncios." });
+  }
+});
+
+adminRouter.post("/anuncios", async (req, res) => {
+  const { titulo, mensaje, dirigido_a } = req.body;
+  try {
+    await db.query(
+      "INSERT INTO anuncios_globales (titulo, mensaje, dirigido_a, creado_por) VALUES (?, ?, ?, ?)",
+      [titulo, mensaje, dirigido_a || "todos", req.user.id],
+    );
+    res.status(201).send({ message: "Anuncio publicado con éxito." });
+  } catch (error) {
+    res.status(500).send({ message: "Error al publicar el anuncio." });
+  }
+});
+
+adminRouter.delete("/anuncios/:id", async (req, res) => {
+  try {
+    await db.query("DELETE FROM anuncios_globales WHERE id = ?", [
+      req.params.id,
+    ]);
+    res.send({ message: "Anuncio eliminado." });
+  } catch (error) {
+    res.status(500).send({ message: "Error al eliminar." });
+  }
+});
+
+// --- LEER ANUNCIOS (ALUMNOS Y DOCENTES) ---
+apiRouter.get("/anuncios/feed", async (req, res) => {
+  try {
+    const rol = req.user.rol; // 'alumno' o 'docente'
+    // Traemos los que son para 'todos' o específicamente para el rol del usuario
+    const [anuncios] = await db.query(
+      `SELECT a.id, a.titulo, a.mensaje, a.fecha_creacion, u.nombre, u.apellido_paterno, u.foto_perfil 
+       FROM anuncios_globales a 
+       JOIN usuarios u ON a.creado_por = u.id 
+       WHERE a.dirigido_a = 'todos' OR a.dirigido_a = ? 
+       ORDER BY a.fecha_creacion DESC LIMIT 10`,
+      [rol],
+    );
+    res.json(anuncios);
+  } catch (error) {
+    res.status(500).send({ message: "Error al cargar el feed." });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Servidor corriendo en http://localhost:${PORT}`);
 });

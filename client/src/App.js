@@ -102,6 +102,8 @@ import {
   Folder,
   PlusCircle,
   PenTool, // <-- NUEVO PARA LA PIZARRA
+  CalIcon,
+  Megaphone,
 } from "lucide-react";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
@@ -695,8 +697,9 @@ const ProtectedRoute = ({ allowedRoles }) => {
 const AdminLayout = () => {
   const location = useLocation();
   const { logout, user } = useAuth();
-  const [sidebarOpen, setSidebarOpen] = useState(false); // Estado para menú móvil
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [cicloActual, setCicloActual] = useState("Cargando...");
+
   useEffect(() => {
     api
       .get("/ciclo-actual")
@@ -705,8 +708,8 @@ const AdminLayout = () => {
   }, []);
 
   const navItems = [
-    // ANTES: path: "/admin/dashboard"  --> AHORA: path: "/dashboard"
     { icon: Home, label: "Dashboard", path: "/dashboard" },
+    { icon: Megaphone, label: "Avisos Escolares", path: "/admin/anuncios" }, // <--- NUEVO MENÚ AQUÍ
     { icon: Users, label: "Usuarios", path: "/usuarios" },
     { icon: Calendar, label: "Calendario", path: "/admin/calendario" },
     { icon: Mail, label: "Correo Institucional", path: "/admin/correo" },
@@ -722,7 +725,6 @@ const AdminLayout = () => {
     },
     { icon: Book, label: "Asignaturas", path: "/asignaturas" },
     { icon: Group, label: "Grupos", path: "/grupos" },
-    // Estas rutas sí parecen tener prefijo en tu App.js, verifícalas abajo:
     { icon: GitBranch, label: "Migración", path: "/admin/migracion" },
     { icon: DollarSign, label: "Caja y Finanzas", path: "/admin/finanzas" },
     { icon: ClipboardEdit, label: "Solicitudes", path: "/admin/solicitudes" },
@@ -732,7 +734,6 @@ const AdminLayout = () => {
 
   return (
     <div className="flex h-screen bg-gray-50 font-sans overflow-hidden">
-      {/* 1. SOMBRA DE FONDO (Solo visible en móvil al abrir menú) */}
       {sidebarOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-40 md:hidden backdrop-blur-sm transition-opacity"
@@ -740,24 +741,16 @@ const AdminLayout = () => {
         />
       )}
 
-      {/* 2. SIDEBAR RESPONSIVE */}
       <aside
-        className={`
-        fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 flex flex-col 
-        transform transition-transform duration-300 ease-in-out shadow-xl md:shadow-none
-        ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0
-      `}
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 flex flex-col transform transition-transform duration-300 ease-in-out shadow-xl md:shadow-none ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0`}
       >
-        {/* HEADER DEL SIDEBAR (Logo + Botón cerrar en móvil) */}
         <div className="p-6 flex flex-col items-center justify-center border-b border-gray-100 relative">
-          {/* Botón X para cerrar en móvil */}
           <button
             onClick={() => setSidebarOpen(false)}
             className="absolute top-2 right-2 p-2 text-gray-400 hover:text-red-500 md:hidden"
           >
             <X size={24} />
           </button>
-
           <div className="w-24 h-24 mb-3 flex items-center justify-center">
             <img
               src={process.env.PUBLIC_URL + "/logo.png"}
@@ -765,32 +758,23 @@ const AdminLayout = () => {
               className="mx-auto h-20 w-auto object-contain mb-4"
             />
           </div>
-          <h2
-            className="font-bold text-lg text-center leading-tight"
-            style={{ color: BRAND.colors.primary }}
-          >
+          <h2 className="font-bold text-lg text-center leading-tight text-[#a72a34]">
             {BRAND.name}
           </h2>
         </div>
 
-        {/* NAVEGACIÓN */}
-        <nav className="flex-1 px-3 py-6 space-y-1 overflow-y-auto">
+        <nav className="flex-1 px-3 py-6 space-y-1 overflow-y-auto custom-scrollbar">
           {navItems.map((item) => {
             const isActive = location.pathname.startsWith(item.path);
             return (
               <Link
                 key={item.label}
                 to={item.path}
-                onClick={() => setSidebarOpen(false)} // Cerrar menú al hacer click en móvil
-                className={`flex items-center px-4 py-3 rounded-xl transition-all duration-200 font-medium text-sm
-                  ${isActive ? "text-white shadow-md shadow-red-900/10" : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"}`}
-                style={
-                  isActive ? { backgroundColor: BRAND.colors.primary } : {}
-                }
+                onClick={() => setSidebarOpen(false)}
+                className={`flex items-center px-4 py-3 rounded-xl transition-all duration-200 font-medium text-sm ${isActive ? "bg-[#a72a34] text-white shadow-md shadow-red-900/10" : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"}`}
               >
                 <item.icon
-                  className="w-5 h-5 mr-3"
-                  style={{ color: isActive ? "#fff" : BRAND.colors.secondary }}
+                  className={`w-5 h-5 mr-3 ${isActive ? "text-white" : "text-[#bb9a5a]"}`}
                 />
                 {item.label}
               </Link>
@@ -798,33 +782,25 @@ const AdminLayout = () => {
           })}
         </nav>
 
-        {/* FOOTER */}
         <div className="px-4 py-4 border-t border-gray-100">
           <div className="mb-3 px-3 py-2 bg-gray-50 rounded-lg border border-gray-100">
-            <p
-              className="text-[10px] font-bold uppercase"
-              style={{ color: BRAND.colors.secondary }}
-            >
+            <p className="text-[10px] font-bold uppercase text-[#bb9a5a]">
               Rol Actual
             </p>
             <p className="text-sm font-bold text-gray-700">Administrador</p>
           </div>
           <button
             onClick={logout}
-            className="w-full flex items-center justify-center px-4 py-2 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 text-sm font-bold"
+            className="w-full flex items-center justify-center px-4 py-2 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 text-sm font-bold transition-colors"
           >
             <LogOut className="w-4 h-4 mr-2" /> Cerrar Sesión
           </button>
         </div>
       </aside>
 
-      {/* 3. CONTENIDO PRINCIPAL */}
       <main className="flex-1 flex flex-col h-full relative overflow-hidden md:ml-64 transition-all duration-300">
-        {/* HEADER SUPERIOR */}
-        {/* HEADER SUPERIOR (CORREGIDO: AHORA CON LINK AL PERFIL) */}
         <header className="bg-white sticky top-0 z-30 shadow-sm px-4 py-3 flex justify-between items-center h-16">
           <div className="flex items-center gap-3">
-            {/* Botón menú móvil */}
             <button
               onClick={() => setSidebarOpen(true)}
               className="p-2 -ml-2 text-gray-600 hover:bg-gray-100 rounded-lg md:hidden"
@@ -842,18 +818,12 @@ const AdminLayout = () => {
             </span>
           </div>
           <div className="flex items-center gap-4">
-            {/* Notificaciones */}
             <div className="text-gray-500 hover:text-[#a72a34] transition-colors cursor-pointer relative">
               <NotificationBell />
             </div>
-
             <div className="h-8 w-px bg-gray-200 mx-1 hidden sm:block"></div>
-
-            {/* PERFIL USUARIO (AHORA SÍ ES CLICKEABLE) */}
             <Link
-              to={
-                user?.rol === "admin" ? "/mi-perfil" : `/${user?.rol}/mi-perfil`
-              }
+              to="/mi-perfil"
               className="flex items-center gap-3 hover:bg-gray-50 p-1 pr-2 rounded-full transition-colors group cursor-pointer"
             >
               <div className="text-right hidden sm:block">
@@ -878,8 +848,6 @@ const AdminLayout = () => {
             </Link>
           </div>
         </header>
-
-        {/* ÁREA DE CONTENIDO (CON SCROLL INDEPENDIENTE) */}
         <div className="flex-1 overflow-y-auto p-4 md:p-8 pb-20 bg-gray-50">
           <Outlet />
         </div>
@@ -887,7 +855,6 @@ const AdminLayout = () => {
     </div>
   );
 };
-
 const DocenteLayout = () => {
   const location = useLocation();
   const { logout, user } = useAuth();
@@ -10640,87 +10607,199 @@ const AdminCalificarPage = () => {
   );
 };
 
-// --- REEMPLAZA EL COMPONENTE AlumnoDashboardPage CON ESTO ---
 const AlumnoDashboardPage = () => {
-  // 1. Cambiamos el estado para que sea un array
+  const { user } = useAuth();
   const [misGrupos, setMisGrupos] = useState([]);
+  const [anuncios, setAnuncios] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchMiGrupo = async () => {
+    const fetchDashboardData = async () => {
       try {
-        const { data } = await api.get("/alumno/mi-grupo");
-        setMisGrupos(data); // 2. Guardamos el array
+        const [resGrupos, resAnuncios] = await Promise.all([
+          api.get("/alumno/mi-grupo"),
+          api.get("/anuncios/feed"),
+        ]);
+        setMisGrupos(resGrupos.data);
+        setAnuncios(resAnuncios.data);
       } catch (error) {
-        console.error("Error al cargar la información del grupo", error);
+        console.error("Error al cargar el dashboard", error);
       } finally {
         setLoading(false);
       }
     };
-    fetchMiGrupo();
+    fetchDashboardData();
   }, []);
 
-  if (loading) return <p>Cargando tu información...</p>;
+  if (loading)
+    return (
+      <div className="p-10 text-center text-gray-500">
+        Cargando tu espacio...
+      </div>
+    );
 
-  // 3. Actualizamos la comprobación
-  if (!misGrupos || misGrupos.length === 0) {
-    return <p>Aún no estás inscrito en ningún grupo.</p>;
-  }
-
-  // 4. Hacemos un map sobre el array misGrupos
   return (
-    <div id="tour-inicio" className="space-y-8">
-      {misGrupos.map((infoGrupo, index) => (
-        <div key={index} id={index === 0 ? "tour-mis-clases" : undefined}>
-          <h2 className="text-3xl font-bold text-gray-800 mb-2">
-            Grupo: {infoGrupo.grupo.nombre_grupo} ({infoGrupo.grupo.modalidad})
-          </h2>
-          <p className="text-lg text-secundario mb-6">
-            Ciclo Escolar: {infoGrupo.grupo.nombre_ciclo}
+    <div className="space-y-8 animate-in fade-in duration-500 max-w-7xl mx-auto">
+      {/* 1. SECCIÓN HERO (BIENVENIDA) */}
+      <div
+        id="tour-resumen-perfil"
+        className="bg-gradient-to-r from-[#a72a34] to-[#802028] rounded-3xl p-8 text-white shadow-xl relative overflow-hidden flex flex-col md:flex-row items-center gap-6"
+      >
+        <div className="w-24 h-24 rounded-full border-4 border-white/20 overflow-hidden bg-white/10 shrink-0 z-10 flex items-center justify-center text-3xl font-bold">
+          {user?.foto_perfil ? (
+            <img
+              src={`https://api-universidad-c5o8.onrender.com/uploads/perfiles/${user.foto_perfil}`}
+              className="w-full h-full object-cover"
+              alt="Perfil"
+            />
+          ) : (
+            user?.nombre?.charAt(0)
+          )}
+        </div>
+        <div className="z-10 text-center md:text-left">
+          <h1 className="text-3xl font-black mb-1">¡Hola, {user.nombre}! 👋</h1>
+          <p className="text-red-100 text-lg">
+            {misGrupos.length > 0
+              ? `Inscrito en: ${misGrupos[0].grupo.nombre_grupo}`
+              : "Aún no estás asignado a un grupo."}
           </p>
-
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h3 className="text-xl font-bold mb-4">
-              Mis Asignaturas y Calificaciones
-            </h3>
-            <table className="w-full table-auto">
-              <thead className="text-left bg-gray-50">
-                <tr>
-                  <th className="px-4 py-2">Asignatura</th>
-                  <th className="px-4 py-2">Docente</th>
-                  <th className="px-4 py-2">Calificación</th>
-                </tr>
-              </thead>
-              <tbody>
-                {infoGrupo.asignaturas.map((asig) => (
-                  <tr key={asig.clave_asignatura} className="border-b">
-                    <td className="px-4 py-2">
-                      <Link
-                        to={`/alumno/grupo/${infoGrupo.grupo.id}/asignatura/${asig.asignatura_id}/aula`}
-                        className="font-semibold text-principal hover:underline"
-                      >
-                        {asig.nombre_asignatura}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-2">
-                      {asig.docente_nombre
-                        ? `${asig.docente_nombre} ${
-                            asig.docente_apellido || ""
-                          }`
-                        : "N/A"}
-                    </td>
-                    <td className="px-4 py-2 font-semibold">
-                      {asig.calificacion !== null
-                        ? asig.calificacion
-                        : "Sin calificar"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="mt-3 inline-flex gap-3 text-sm font-bold bg-black/20 px-4 py-2 rounded-full">
+            <span>Matrícula: {user.matricula || "N/A"}</span>
           </div>
         </div>
-      ))}
+        {/* Decoración CSS */}
+        <div className="absolute right-0 top-0 h-full w-1/2 bg-white/5 skew-x-12 translate-x-20"></div>
+      </div>
+
+      {/* 2. ACCESOS RÁPIDOS */}
+      <div
+        id="tour-accesos-rapidos"
+        className="grid grid-cols-2 md:grid-cols-4 gap-4"
+      >
+        <Link
+          to="/alumno/mis-pagos"
+          className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center justify-center text-center hover:shadow-md hover:border-green-200 transition-all group"
+        >
+          <div className="p-3 bg-green-50 text-green-600 rounded-full mb-2 group-hover:scale-110 transition-transform">
+            <DollarSign size={24} />
+          </div>
+          <span className="font-bold text-gray-700">Mis Pagos</span>
+        </Link>
+        <Link
+          to="/alumno/mis-solicitudes"
+          className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center justify-center text-center hover:shadow-md hover:border-blue-200 transition-all group"
+        >
+          <div className="p-3 bg-blue-50 text-blue-600 rounded-full mb-2 group-hover:scale-110 transition-transform">
+            <FileText size={24} />
+          </div>
+          <span className="font-bold text-gray-700">Trámites</span>
+        </Link>
+        <Link
+          to="/alumno/calendario"
+          className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center justify-center text-center hover:shadow-md hover:border-purple-200 transition-all group"
+        >
+          <div className="p-3 bg-purple-50 text-purple-600 rounded-full mb-2 group-hover:scale-110 transition-transform">
+            <CalIcon size={24} />
+          </div>
+          <span className="font-bold text-gray-700">Calendario</span>
+        </Link>
+        <Link
+          to="/alumno/mi-nube"
+          className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center justify-center text-center hover:shadow-md hover:border-orange-200 transition-all group"
+        >
+          <div className="p-3 bg-orange-50 text-orange-600 rounded-full mb-2 group-hover:scale-110 transition-transform">
+            <UploadCloud size={24} />
+          </div>
+          <span className="font-bold text-gray-700">Mi Nube</span>
+        </Link>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        {/* 3. COLUMNA IZQUIERDA: MIS CLASES */}
+        <div id="tour-mis-clases" className="lg:col-span-8 space-y-6">
+          <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+            <BookOpen className="text-[#a72a34]" /> Mis Asignaturas
+          </h2>
+
+          {misGrupos.length === 0 ? (
+            <p className="text-gray-500 bg-white p-6 rounded-xl border">
+              No hay clases asignadas este ciclo.
+            </p>
+          ) : (
+            misGrupos.map((infoGrupo, index) => (
+              <div
+                key={index}
+                className="grid grid-cols-1 sm:grid-cols-2 gap-4"
+              >
+                {infoGrupo.asignaturas.map((asig) => (
+                  <Link
+                    key={asig.asignatura_id}
+                    to={`/alumno/grupo/${infoGrupo.grupo.id}/asignatura/${asig.asignatura_id}/aula`}
+                    className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 hover:shadow-lg hover:border-[#a72a34]/30 transition-all group relative overflow-hidden"
+                  >
+                    <div className="absolute top-0 left-0 w-1.5 h-full bg-[#a72a34]"></div>
+                    <h3 className="font-bold text-lg text-gray-800 line-clamp-1 group-hover:text-[#a72a34] transition-colors">
+                      {asig.nombre_asignatura}
+                    </h3>
+                    <p className="text-sm text-gray-500 mt-1 flex items-center gap-1">
+                      <User size={14} />{" "}
+                      {asig.docente_nombre
+                        ? `${asig.docente_nombre} ${asig.docente_apellido || ""}`
+                        : "Sin docente"}
+                    </p>
+                    <div className="mt-4 pt-3 border-t border-gray-50 flex justify-between items-center">
+                      <span className="text-xs font-bold text-gray-400">
+                        Ir al Aula Virtual
+                      </span>
+                      <ArrowRightCircle
+                        size={18}
+                        className="text-[#a72a34] opacity-0 group-hover:opacity-100 transition-opacity transform group-hover:translate-x-1"
+                      />
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* 4. COLUMNA DERECHA: TABLERO DE ANUNCIOS */}
+        <div id="tour-anuncios" className="lg:col-span-4 space-y-6">
+          <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+            <Megaphone className="text-[#bb9a5a]" /> Tablero de Avisos
+          </h2>
+
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-1 flex flex-col h-[500px]">
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+              {anuncios.length === 0 ? (
+                <div className="text-center text-gray-400 py-10">
+                  No hay avisos institucionales.
+                </div>
+              ) : (
+                anuncios.map((anuncio) => (
+                  <div
+                    key={anuncio.id}
+                    className="bg-orange-50/50 border border-orange-100 p-4 rounded-xl"
+                  >
+                    <div className="flex justify-between items-start mb-2">
+                      <h4 className="font-bold text-gray-800 text-sm leading-tight">
+                        {anuncio.titulo}
+                      </h4>
+                    </div>
+                    <p className="text-sm text-gray-600 mb-3 whitespace-pre-wrap">
+                      {anuncio.mensaje}
+                    </p>
+                    <div className="flex items-center gap-2 text-xs text-gray-400">
+                      <Clock size={12} />
+                      {new Date(anuncio.fecha_creacion).toLocaleDateString()}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };
@@ -14056,6 +14135,192 @@ const InfoItem = ({ label, value, capitalize = false }) => (
 
 // --- TERMINA NUEVO CÓDIGO ---
 
+// --- COMPONENTE ANUNCIOS GLOBALES (ADMIN) ---
+const AnunciosAdminPage = () => {
+  const [anuncios, setAnuncios] = useState([]);
+  const [showModal, setShowModal] = useState(false);
+  const [form, setForm] = useState({
+    titulo: "",
+    mensaje: "",
+    dirigido_a: "todos",
+  });
+
+  const fetchAnuncios = async () => {
+    try {
+      const { data } = await api.get("/admin/anuncios");
+      setAnuncios(data);
+    } catch (error) {
+      console.error("Error al cargar anuncios", error);
+    }
+  };
+
+  useEffect(() => {
+    fetchAnuncios();
+  }, []);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await api.post("/admin/anuncios", form);
+      setShowModal(false);
+      setForm({ titulo: "", mensaje: "", dirigido_a: "todos" });
+      fetchAnuncios();
+    } catch (error) {
+      alert("Error al publicar el anuncio.");
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (window.confirm("¿Borrar anuncio?")) {
+      try {
+        await api.delete(`/admin/anuncios/${id}`);
+        fetchAnuncios();
+      } catch (error) {
+        alert("Error al borrar.");
+      }
+    }
+  };
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-300 max-w-5xl mx-auto">
+      <div className="flex justify-between items-center bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
+        <div>
+          <h2 className="text-3xl font-bold text-gray-800 flex items-center gap-3">
+            <div className="p-3 bg-[#a72a34] text-white rounded-xl shadow-lg shadow-red-900/20">
+              <Megaphone size={28} />
+            </div>
+            Tablero de Avisos
+          </h2>
+          <p className="text-gray-500 mt-2 text-lg ml-16">
+            Publica comunicados para alumnos, docentes o toda la escuela.
+          </p>
+        </div>
+        <button
+          onClick={() => setShowModal(true)}
+          className="bg-[#a72a34] text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-[#802028] shadow-lg transition-transform active:scale-95"
+        >
+          <Plus size={20} /> Nuevo Aviso
+        </button>
+      </div>
+
+      <div className="grid gap-4">
+        {anuncios.length === 0 ? (
+          <div className="text-center py-10 text-gray-400 bg-white rounded-2xl border border-dashed border-gray-200">
+            No hay anuncios publicados.
+          </div>
+        ) : (
+          anuncios.map((a) => (
+            <div
+              key={a.id}
+              className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex justify-between items-start hover:shadow-md transition-shadow"
+            >
+              <div>
+                <span
+                  className={`text-[10px] font-black uppercase px-3 py-1 rounded-full tracking-wider mb-3 inline-block ${a.dirigido_a === "todos" ? "bg-purple-100 text-purple-700" : a.dirigido_a === "alumnos" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"}`}
+                >
+                  Para: {a.dirigido_a}
+                </span>
+                <h3 className="font-bold text-xl text-gray-800">{a.titulo}</h3>
+                <p className="text-gray-600 mt-2 whitespace-pre-wrap">
+                  {a.mensaje}
+                </p>
+                <div className="flex items-center gap-2 text-xs text-gray-400 mt-4 font-medium">
+                  <Clock size={14} /> Publicado por {a.nombre} el{" "}
+                  {new Date(a.fecha_creacion).toLocaleString()}
+                </div>
+              </div>
+              <button
+                onClick={() => handleDelete(a.id)}
+                className="text-gray-300 hover:text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors"
+              >
+                <Trash2 size={20} />
+              </button>
+            </div>
+          ))
+        )}
+      </div>
+
+      {showModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex justify-center items-center p-4 z-50 animate-in zoom-in duration-200">
+          <form
+            onSubmit={handleSubmit}
+            className="bg-white p-6 rounded-2xl w-full max-w-md space-y-5 shadow-2xl"
+          >
+            <div className="flex justify-between items-center border-b border-gray-100 pb-4">
+              <h3 className="text-xl font-bold text-gray-800">Crear Anuncio</h3>
+              <button type="button" onClick={() => setShowModal(false)}>
+                <X className="text-gray-400 hover:text-gray-700" />
+              </button>
+            </div>
+
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-1">
+                Título del Aviso
+              </label>
+              <input
+                required
+                placeholder="Ej. Suspensión de labores"
+                className="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#a72a34] outline-none"
+                value={form.titulo}
+                onChange={(e) => setForm({ ...form, titulo: e.target.value })}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-1">
+                Mensaje
+              </label>
+              <textarea
+                required
+                rows="4"
+                placeholder="Escribe los detalles aquí..."
+                className="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#a72a34] outline-none"
+                value={form.mensaje}
+                onChange={(e) => setForm({ ...form, mensaje: e.target.value })}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-1">
+                Público Objetivo
+              </label>
+              <select
+                className="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#a72a34] outline-none bg-white"
+                value={form.dirigido_a}
+                onChange={(e) =>
+                  setForm({ ...form, dirigido_a: e.target.value })
+                }
+              >
+                <option value="todos">
+                  Toda la Escuela (Alumnos y Docentes)
+                </option>
+                <option value="alumnos">Solo Alumnos</option>
+                <option value="docentes">Solo Docentes</option>
+              </select>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => setShowModal(false)}
+                className="px-5 py-3 bg-gray-100 text-gray-600 rounded-xl font-bold hover:bg-gray-200 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                className="px-5 py-3 bg-[#a72a34] text-white rounded-xl font-bold shadow-lg hover:bg-[#802028] transition-colors flex items-center gap-2"
+              >
+                <Send size={18} /> Publicar
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // --- COMPONENTE PRINCIPAL DE LA APP ---
 function App() {
   return (
@@ -14079,6 +14344,11 @@ function App() {
             <Route element={<AdminLayout />}>
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="/dashboard" element={<DashboardPage />} />
+              <Route
+                path="/admin/anuncios"
+                element={<AnunciosAdminPage />}
+              />{" "}
+              {/* <--- NUEVA RUTA AQUÍ */}
               <Route path="/asignaturas" element={<AsignaturasPage />} />
               <Route path="/usuarios" element={<UsuariosPage />} />
               <Route path="/admin/drive" element={<MiDrivePage />} />
@@ -14090,7 +14360,6 @@ function App() {
               <Route path="/grupos/:id" element={<DetalleGrupoPage />} />
               <Route path="/admin/migracion" element={<MigracionPage />} />
               <Route path="/admin/archivos" element={<ExploradorArchivos />} />
-              <Route path="/admin/drive" element={<MiDrivePage />} />
               <Route path="/migrar-grupos" element={<MigracionGruposPage />} />
               <Route
                 path="/admin/grupos/:grupoId/asignatura/:asignaturaId/calificaciones"
@@ -14100,49 +14369,22 @@ function App() {
                 path="/admin/grupo/:grupoId/asignatura/:asignaturaId"
                 element={<AdminCalificarPage />}
               />
-              {/* --- INICIO DE NUEVAS RUTAS DE CATÁLOGO --- */}
               <Route path="/ciclos" element={<CiclosPage />} />
               <Route path="/planes-estudio" element={<PlanesEstudioPage />} />
-              {/* <Route
-                path="/grados"
-                element={
-                  <CatalogoPage
-                    title="Grados/Semestres"
-                    apiEndpoint="grados"
-                    fields={[
-                      {
-                        name: "nombre_grado",
-                        placeholder: "Nombre del Grado (ej. 1er Cuatrimestre)",
-                      },
-                    ]}
-                    columns={[{ key: "nombre_grado", header: "Nombre" }]}
-                  />
-                }
-              /> */}
               <Route path="/grados" element={<GradosPage />} />
-              {/* --- FIN DE NUEVAS RUTAS --- */}
               <Route path="/carreras" element={<CarrerasPage />} />
               <Route path="/sedes" element={<SedesPage />} />
-              {/* --- INICIO NUEVAS RUTAS FINANZAS (ADMIN) --- */}
               <Route path="/conceptos-pago" element={<ConceptosPagoPage />} />
               <Route path="/admin/finanzas" element={<CajaPage />} />
               <Route path="/admin/correo" element={<CorreoPage />} />
-              {/* <Route
-                path="/admin/finanzas/alumno/:id"
-                element={<DetalleFinancieroAlumnoPage />}
-              /> */}
               <Route
                 path="/admin/finanzas/alumno/:id"
                 element={<DetalleFinanzasAlumnoPage />}
               />
-
-              {/* --- FIN NUEVAS RUTAS FINANZAS (ADMIN) --- */}
-              {/* --- INICIO NUEVA RUTA SOLICITUDES (ADMIN) --- */}
               <Route
                 path="/admin/solicitudes"
                 element={<GestionSolicitudesPage />}
               />
-              {/* --- FIN NUEVA RUTA SOLICITUDES (ADMIN) --- */}
               <Route path="/mi-perfil" element={<MiPerfilPage />} />
               <Route path="/admin/calendario" element={<CalendarioAdmin />} />
             </Route>
@@ -14162,11 +14404,7 @@ function App() {
                 path="/docente/calendario"
                 element={<CalendarioAlumno />}
               />
-              {/* <Route
-                path="/docente/clase-en-vivo/:salaName"
-                element={<ClaseEnVivoPage />}
-              /> */}
-              {/* Gestión del Curso */}
+
               <Route
                 path="/docente/grupo/:grupoId/asignatura/:asignaturaId"
                 element={<DetalleCursoDocentePage />}
@@ -14184,7 +14422,6 @@ function App() {
                 element={<AnaliticasGrupoPage />}
               />
 
-              {/* Tareas y Asistencia */}
               <Route
                 path="/docente/grupo/:grupoId/asignatura/:asignaturaId/tarea/:tareaId"
                 element={<DetalleTareaDocentePage />}
@@ -14198,7 +14435,6 @@ function App() {
                 element={<HiloPage />}
               />
 
-              {/* EXÁMENES - Todo el flujo */}
               <Route
                 path="/docente/grupo/:grupoId/asignatura/:asignaturaId/examen/crear"
                 element={<CrearExamenPage />}
@@ -14207,12 +14443,10 @@ function App() {
                 path="/docente/grupo/:grupoId/asignatura/:asignaturaId/examen/editar/:examenId"
                 element={<EditarExamenPage />}
               />
-              {/* Lista de resultados de un examen */}
               <Route
                 path="/docente/grupo/:grupoId/asignatura/:asignaturaId/examen/:examenId/resultados"
                 element={<ResultadosExamenPage />}
               />
-              {/* Revisión individual (LA CORRECCIÓN ESTÁ AQUÍ) */}
               <Route
                 path="/docente/examen/revisar/:intentoId"
                 element={<RevisarExamenPage />}
@@ -14224,7 +14458,6 @@ function App() {
             />
           </Route>
 
-          {/* --- AÑADE ESTE BLOQUE COMPLETO --- */}
           {/* Rutas de Alumno */}
           <Route element={<ProtectedRoute allowedRoles={["alumno"]} />}>
             <Route element={<AlumnoLayout />}>
@@ -14234,18 +14467,10 @@ function App() {
               />
               <Route path="/alumno/mi-nube" element={<MiDrivePage />} />
               <Route
-                path="/alumno/dashboard"
-                element={<AlumnoDashboardPage />}
-              />
-              {/* --- AGREGA ESTA LÍNEA (ALUMNO) --- */}
-              <Route
                 path="/alumno/grupo/:grupoId/asignatura/:asignaturaId/aula"
                 element={<AulaVirtualPage />}
               />
-              {/* --- INICIO NUEVA RUTA FINANZAS (ALUMNO) --- */}
               <Route path="/alumno/mis-pagos" element={<MisPagosPage />} />
-              {/* --- FIN NUEVA RUTA FINANZAS (ALUMNO) --- */}
-              {/* --- INICIO NUEVA RUTA SOLICITUDES (ALUMNO) --- */}
               <Route
                 path="/alumno/mis-solicitudes"
                 element={<MisSolicitudesPage />}
@@ -14255,7 +14480,6 @@ function App() {
                 path="/alumno/examen/:examenId/resolver"
                 element={<TomarExamenPage />}
               />
-              {/* --- FIN NUEVA RUTA SOLICITUDES (ALUMNO) --- */}
               <Route path="/alumno/mi-perfil" element={<MiPerfilPage />} />
               <Route path="/alumno/correo" element={<CorreoPage />} />
               <Route
@@ -14263,9 +14487,7 @@ function App() {
                 element={<HiloPage />}
               />
               <Route path="/alumno/calendario" element={<CalendarioAlumno />} />
-              {/* --- RUTAS AGREGADAS PARA CLASSROOM 2.0 (DOCENTE) --- */}
 
-              {/* 1. Muro de Novedades (Stream) */}
               <Route
                 path="/docente/grupo/:grupoId/asignatura/:asignaturaId/muro"
                 element={<MuroDocentePage />}
@@ -14274,7 +14496,6 @@ function App() {
                 path="/alumno/clase-en-vivo/:salaName"
                 element={<ClaseEnVivoPage />}
               />
-              {/* 2. Creación de Exámenes */}
               <Route
                 path="/docente/grupo/:grupoId/asignatura/:asignaturaId/examen/crear"
                 element={<CrearExamenPage />}
@@ -14283,8 +14504,6 @@ function App() {
                 path="/docente/grupo/:grupoId/asignatura/:asignaturaId/examen/editar/:examenId"
                 element={<EditarExamenPage />}
               />
-
-              {/* 3. Analíticas de la Clase */}
               <Route
                 path="/docente/grupo/:grupoId/asignatura/:asignaturaId/analiticas"
                 element={<AnaliticasGrupoPage />}
@@ -14295,9 +14514,7 @@ function App() {
               element={<ClaseEnVivoPage />}
             />
           </Route>
-          {/* --- FIN DEL BLOQUE AÑADIDO --- */}
 
-          {/* --- AÑADE ESTE BLOQUE COMPLETO --- */}
           {/* Rutas de Aspirante */}
           <Route element={<ProtectedRoute allowedRoles={["aspirante"]} />}>
             <Route element={<AspiranteLayout />}>
@@ -14308,7 +14525,6 @@ function App() {
               <Route path="/aspirante/mi-perfil" element={<MiPerfilPage />} />
             </Route>
           </Route>
-          {/* --- FIN DEL BLOQUE AÑADIDO --- */}
 
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>

@@ -230,6 +230,52 @@ const TutorialGuide = ({ user }) => {
         return baseSteps;
       }
 
+      // 1. DASHBOARD (Inicio)
+      if (path === "/alumno/dashboard" || path === "/dashboard") {
+        return [
+          {
+            element: "#tour-resumen-perfil",
+            popover: {
+              title: "¡Bienvenido a tu Portal!",
+              description:
+                "Aquí verás un resumen de tu perfil y grupo asignado.",
+            },
+          },
+          {
+            element: "#tour-accesos-rapidos",
+            popover: {
+              title: "Accesos Rápidos",
+              description:
+                "Atajos directos para ver tus pagos, solicitar constancias o abrir tu nube personal.",
+            },
+          },
+          {
+            element: "#tour-mis-clases",
+            popover: {
+              title: "Tus Materias",
+              description:
+                "Estas son tus clases del semestre. Haz clic en cualquiera para entrar al Aula Virtual y ver tus tareas.",
+            },
+          },
+          {
+            element: "#tour-anuncios",
+            popover: {
+              title: "Tablero de Avisos",
+              description:
+                "Mantente informado. Aquí la dirección publicará anuncios importantes para toda la escuela.",
+            },
+          },
+          {
+            element: "#tour-notificaciones",
+            popover: {
+              title: "Notificaciones",
+              description:
+                "Revisa aquí la campanita para alertas de tareas calificadas o mensajes de tus profesores.",
+            },
+          },
+        ];
+      }
+
       // 6. CALENDARIO
       if (path.includes("/calendario")) {
         return [

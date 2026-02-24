@@ -147,7 +147,7 @@ const CrearExamenPage = () => {
           grupo_id: grupoId,
           asignatura_id: asignaturaId,
           limite_tiempo: parseInt(limiteTiempo), // <--- ¡AÑADE ESTA LÍNEA!
-          preguntas: preguntasFormateadas,
+          preguntas: preguntas,
         },
         { headers: { Authorization: `Bearer ${token}` } },
       );
