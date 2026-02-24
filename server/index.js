@@ -8380,14 +8380,89 @@ adminRouter.get("/anuncios", async (req, res) => {
 
 adminRouter.post("/anuncios", async (req, res) => {
   const { titulo, mensaje, dirigido_a } = req.body;
+  const target = dirigido_a || "todos";
+
+  const connection = await db.getConnection();
   try {
-    await db.query(
-      "INSERT INTO anuncios_globales (titulo, mensaje, dirigido_a, creado_por) VALUES (?, ?, ?, ?)",
-      [titulo, mensaje, dirigido_a || "todos", req.user.id],
+    await connection.beginTransaction();
+
+    // 1. Guardar el anuncio en la base de datos
+    const [result] = await connection.query(
+      "INSERT INTO anuncios_globales (titulo, mensaje, dirigido_a, creado_por, fecha_creacion) VALUES (?, ?, ?, ?, NOW())",
+      [titulo, mensaje, target, req.user.id],
     );
-    res.status(201).send({ message: "Anuncio publicado con éxito." });
+
+    // ==========================================
+    // 2. SISTEMA DE NOTIFICACIONES (CAMPANITA + PUSH)
+    // ==========================================
+
+    // A) Determinar a quién le vamos a avisar
+    let userQuery = "";
+
+    if (target === "todos") {
+      userQuery =
+        "SELECT id, rol FROM usuarios WHERE (rol = 'alumno' OR rol = 'docente') AND activo = 1";
+    } else if (target === "alumnos") {
+      userQuery =
+        "SELECT id, rol FROM usuarios WHERE rol = 'alumno' AND activo = 1";
+    } else if (target === "docentes") {
+      userQuery =
+        "SELECT id, rol FROM usuarios WHERE rol = 'docente' AND activo = 1";
+    }
+
+    if (userQuery !== "") {
+      const [usuariosDestino] = await connection.query(userQuery);
+
+      if (usuariosDestino.length > 0) {
+        const idsDestino = usuariosDestino.map((u) => u.id);
+        const mensajeNotif = `Aviso Institucional: ${titulo}`;
+
+        // B) Guardar en la Campanita (Bucle para todos los afectados)
+        for (const usuario of usuariosDestino) {
+          // Si es alumno va al dashboard de alumno, si es docente al de docente
+          const destinoUrl = `/${usuario.rol}/dashboard`;
+
+          await connection.query(
+            "INSERT INTO notificaciones (usuario_id, mensaje, url_destino, leido, fecha, tipo) VALUES (?, ?, ?, 0, NOW(), 'aviso')",
+            [usuario.id, mensajeNotif, destinoUrl],
+          );
+        }
+
+        // C) Enviar Push Notification (Móviles)
+        const [tokens] = await connection.query(
+          "SELECT token FROM push_tokens WHERE user_id IN (?)",
+          [idsDestino],
+        );
+
+        if (tokens.length > 0) {
+          const expoMessages = tokens.map((t) => ({
+            to: t.token,
+            sound: "default",
+            title: "📢 Aviso de Dirección",
+            body: titulo,
+          }));
+
+          fetch("https://exp.host/--/api/v2/push/send", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(expoMessages),
+          }).catch((e) => console.error("Error push anuncio:", e));
+        }
+      }
+    }
+
+    await connection.commit();
+    res
+      .status(201)
+      .send({
+        message: "Anuncio publicado y notificaciones enviadas con éxito.",
+      });
   } catch (error) {
+    await connection.rollback();
+    console.error("Error al publicar el anuncio:", error);
     res.status(500).send({ message: "Error al publicar el anuncio." });
+  } finally {
+    connection.release();
   }
 });
 
@@ -8406,17 +8481,21 @@ adminRouter.delete("/anuncios/:id", async (req, res) => {
 apiRouter.get("/anuncios/feed", async (req, res) => {
   try {
     const rol = req.user.rol; // 'alumno' o 'docente'
-    // Traemos los que son para 'todos' o específicamente para el rol del usuario
+
+    // CORRECCIÓN: Relacionamos el singular del rol con el plural del anuncio
     const [anuncios] = await db.query(
       `SELECT a.id, a.titulo, a.mensaje, a.fecha_creacion, u.nombre, u.apellido_paterno, u.foto_perfil 
        FROM anuncios_globales a 
        JOIN usuarios u ON a.creado_por = u.id 
-       WHERE a.dirigido_a = 'todos' OR a.dirigido_a = ? 
+       WHERE a.dirigido_a = 'todos' 
+          OR (? = 'alumno' AND a.dirigido_a = 'alumnos') 
+          OR (? = 'docente' AND a.dirigido_a = 'docentes')
        ORDER BY a.fecha_creacion DESC LIMIT 10`,
-      [rol],
+      [rol, rol],
     );
     res.json(anuncios);
   } catch (error) {
+    console.error("Error al cargar el feed de anuncios:", error);
     res.status(500).send({ message: "Error al cargar el feed." });
   }
 });

@@ -102,7 +102,6 @@ import {
   Folder,
   PlusCircle,
   PenTool, // <-- NUEVO PARA LA PIZARRA
-  CalIcon,
   Megaphone,
 } from "lucide-react";
 import FullCalendar from "@fullcalendar/react";
@@ -10699,7 +10698,7 @@ const AlumnoDashboardPage = () => {
           className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center justify-center text-center hover:shadow-md hover:border-purple-200 transition-all group"
         >
           <div className="p-3 bg-purple-50 text-purple-600 rounded-full mb-2 group-hover:scale-110 transition-transform">
-            <CalIcon size={24} />
+            <Calendar size={24} />
           </div>
           <span className="font-bold text-gray-700">Calendario</span>
         </Link>
