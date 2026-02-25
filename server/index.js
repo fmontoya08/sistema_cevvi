@@ -10,7 +10,7 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 const MailComposer = require("nodemailer/lib/mail-composer");
-
+const https = require("https");
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -170,7 +170,9 @@ const CPANEL_CONFIG = {
 };
 
 async function crearCorreoCpanel(usuario, passwordCorreo) {
-  console.log(`[CPANEL] Creando correo: ${usuario}@${CPANEL_CONFIG.domain}`);
+  console.log(
+    `[CPANEL] Intentando crear correo: ${usuario}@${CPANEL_CONFIG.domain}`,
+  );
   try {
     const url = `https://${CPANEL_CONFIG.host}:2083/execute/Email/add_pop`;
     const params = new URLSearchParams({
@@ -185,24 +187,40 @@ async function crearCorreoCpanel(usuario, passwordCorreo) {
       `${CPANEL_CONFIG.user}:${CPANEL_CONFIG.password}`,
     ).toString("base64");
 
+    // --- SOLUCIÓN: Agente HTTPS para ignorar bloqueos de SSL de Neubox ---
+    const agent = new https.Agent({
+      rejectUnauthorized: false,
+    });
+
     const response = await axios.get(`${url}?${params.toString()}`, {
       headers: { Authorization: `Basic ${authString}` },
+      httpsAgent: agent, // <--- Se lo pasamos a axios
     });
 
     if (response.data.status === 1) {
-      console.log("✅ Correo creado en cPanel.");
+      console.log("✅ Correo creado exitosamente en cPanel.");
       return true;
     } else {
       const errorMsg = response.data.errors
         ? response.data.errors[0]
-        : "Error desconocido";
-      if (errorMsg.includes("already exists")) return true; // Si ya existe, todo bien
-      console.error("❌ Error cPanel:", errorMsg);
-      // No lanzamos error fatal para no detener el registro del alumno
+        : "Error desconocido en el servidor";
+
+      if (errorMsg.includes("already exists")) {
+        console.log("⚠️ El correo ya existía en cPanel, omitiendo...");
+        return true;
+      }
+
+      console.error("❌ cPanel rechazó la petición. Motivo:", errorMsg);
       return false;
     }
   } catch (error) {
-    console.error("Error conexión cPanel:", error.message);
+    // Si falla la conexión de red o credenciales incorrectas
+    console.error("❌ Falló la conexión hacia cPanel:", error.message);
+    if (error.response && error.response.status === 401) {
+      console.error(
+        "⚠️ ERROR 401: El usuario o contraseña de cPanel (CPANEL_CONFIG) son incorrectos o el proveedor bloqueó la API.",
+      );
+    }
     return false;
   }
 }
