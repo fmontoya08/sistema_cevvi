@@ -189,16 +189,21 @@ async function crearCorreoCpanel(usuario, passwordCorreo) {
       headers: { Authorization: `Basic ${authString}` },
     });
 
-    if (response.data.status === 1) {
+    // CORRECCIÓN AQUÍ: cPanel devuelve la data real dentro de "result"
+    const cpanelResult = response.data.result || response.data;
+
+    if (cpanelResult.status === 1) {
       console.log("✅ Correo creado en cPanel.");
       return true;
     } else {
-      const errorMsg = response.data.errors
-        ? response.data.errors[0]
-        : "Error desconocido";
+      // Tomamos el error real devuelto por cPanel
+      const errorMsg =
+        cpanelResult.errors && cpanelResult.errors.length > 0
+          ? cpanelResult.errors[0]
+          : "Error desconocido (Revisa credenciales o dominio)";
+
       if (errorMsg.includes("already exists")) return true; // Si ya existe, todo bien
       console.error("❌ Error cPanel:", errorMsg);
-      // No lanzamos error fatal para no detener el registro del alumno
       return false;
     }
   } catch (error) {
