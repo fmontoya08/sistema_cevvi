@@ -10,6 +10,9 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 const MailComposer = require("nodemailer/lib/mail-composer");
+const nodemailer = require("nodemailer");
+
+const https = require("https");
 
 const app = express();
 app.use(cors());
