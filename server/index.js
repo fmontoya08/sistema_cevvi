@@ -169,40 +169,65 @@ const CPANEL_CONFIG = {
   domain: "universidadsigloxxi.com",
 };
 
-async function crearCorreoCpanel(usuario, passwordCorreo) {
-  console.log(`[CPANEL] Creando correo: ${usuario}@${CPANEL_CONFIG.domain}`);
+async function crearCorreoCpanel(correoCompleto, passwordCorreo) {
+  console.log(`[CPANEL] Intentando crear correo: ${correoCompleto}`);
   try {
+    // SEPARAMOS EL CORREO: fmontoya@midominio.com -> fmontoya
+    const usuarioPrefix = correoCompleto.split("@")[0];
+
     const url = `https://${CPANEL_CONFIG.host}:2083/execute/Email/add_pop`;
     const params = new URLSearchParams({
-      email: usuario,
+      email: usuarioPrefix, // cPanel solo quiere el prefijo aquí
       password: passwordCorreo,
       domain: CPANEL_CONFIG.domain,
       quota: 250, // 250MB de espacio
     });
 
-    // Autenticación Básica (Usuario:Password en base64)
     const authString = Buffer.from(
       `${CPANEL_CONFIG.user}:${CPANEL_CONFIG.password}`,
     ).toString("base64");
 
-    const response = await axios.get(`${url}?${params.toString()}`, {
-      headers: { Authorization: `Basic ${authString}` },
+    const agent = new https.Agent({
+      rejectUnauthorized: false,
     });
 
-    if (response.data.status === 1) {
-      console.log("✅ Correo creado en cPanel.");
+    const response = await axios.get(`${url}?${params.toString()}`, {
+      headers: { Authorization: `Basic ${authString}` },
+      httpsAgent: agent,
+    });
+
+    // 👇 AGREGAMOS ESTO PARA VER QUÉ DEVUELVE REALMENTE NEUBOX
+    console.log("\n====== RESPUESTA DE CPANEL ======");
+    if (typeof response.data === "string") {
+      console.log(response.data.substring(0, 500) + "\n... [HTML TRUNCADO]");
+    } else {
+      console.log(JSON.stringify(response.data, null, 2));
+    }
+    console.log("=================================\n");
+
+    if (response.data && response.data.status === 1) {
+      console.log("✅ Correo creado exitosamente en cPanel.");
       return true;
     } else {
-      const errorMsg = response.data.errors
-        ? response.data.errors[0]
-        : "Error desconocido";
-      if (errorMsg.includes("already exists")) return true; // Si ya existe, todo bien
-      console.error("❌ Error cPanel:", errorMsg);
-      // No lanzamos error fatal para no detener el registro del alumno
+      const errorMsg = response.data?.errors
+        ? response.data.errors.join(", ")
+        : "Revisa la consola para ver el error completo arriba 👆";
+
+      if (errorMsg.includes("already exists")) {
+        console.log("⚠️ El correo ya existía en cPanel, omitiendo...");
+        return true;
+      }
+
+      console.error("❌ cPanel rechazó la petición. Motivo:", errorMsg);
       return false;
     }
   } catch (error) {
-    console.error("Error conexión cPanel:", error.message);
+    console.error("❌ Falló la conexión hacia cPanel:", error.message);
+    if (error.response && error.response.status === 401) {
+      console.error(
+        "⚠️ ERROR 401: El usuario o contraseña de cPanel son incorrectos.",
+      );
+    }
     return false;
   }
 }
@@ -296,7 +321,7 @@ app.post("/api/public/registro-aspirante", async (req, res) => {
     const passwordHash = await bcrypt.hash(finalMatricula, 10);
 
     // 5. Crear en cPanel (¡ACTIVADO!)
-    await crearCorreoCpanel(finalMatricula, passwordCorreoStrong);
+    await crearCorreoCpanel(emailInstitucional, passwordCorreoStrong);
 
     const fechaFinal = fecha_nacimiento === "" ? null : fecha_nacimiento;
 
@@ -462,7 +487,7 @@ app.post("/api/public/registro-docente", async (req, res) => {
     const passwordHash = await bcrypt.hash(claveDocente, 10);
 
     // 5. Crear correo en cPanel usando el prefijo
-    await crearCorreoCpanel(datosEmail.usuarioCpanel, passwordCorreoStrong);
+    await crearCorreoCpanel(datosEmail.correoCompleto, passwordCorreoStrong);
 
     const fechaFinal = fecha_nacimiento === "" ? null : fecha_nacimiento;
 
