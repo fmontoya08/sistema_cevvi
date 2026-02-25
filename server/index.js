@@ -139,7 +139,7 @@ async function enviarCredenciales(
           </div>
           
           <p style="text-align: center; margin-top: 30px;">
-            <a href="https://www.universidadsigloxxi.com/plataforma/login" style="background-color: #a72a34; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold;">Iniciar Sesión</a>
+            <a href="https://www.universidadsigloxxi.com/login" style="background-color: #a72a34; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold;">Iniciar Sesión</a>
           </p>
         </div>
       </div>
@@ -147,7 +147,7 @@ async function enviarCredenciales(
 
     // 3. ENVÍO (AQUÍ ESTABA EL ERROR ANTES)
     await transporter.sendMail({
-      from: '"Centro Universitario Siglo XXI" <controlescolar@universidadsigloxxi.com>', // Gmail forzará que salga de tu correo real, así que mejor ponlo aquí para evitar confusiones.
+      from: '"Universidad Siglo XXI" <franksnake08@gmail.com>', // Gmail forzará que salga de tu correo real, así que mejor ponlo aquí para evitar confusiones.
       to: destinatario,
       subject: "🎓 ¡Bienvenido! Tus Accesos Oficiales",
       html: htmlContent,
@@ -169,103 +169,40 @@ const CPANEL_CONFIG = {
   domain: "universidadsigloxxi.com",
 };
 
-async function crearCorreoCpanel(correoCompleto, passwordCorreo) {
-  console.log(`[CPANEL] Intentando crear correo: ${correoCompleto}`);
+async function crearCorreoCpanel(usuario, passwordCorreo) {
+  console.log(`[CPANEL] Creando correo: ${usuario}@${CPANEL_CONFIG.domain}`);
   try {
-    // 1. Validar que tengamos un correo válido
-    if (!correoCompleto || !correoCompleto.includes("@")) {
-      console.log("❌ Correo inválido provisto a cPanel.");
-      return false;
-    }
-
-    // 2. Extraer solo el prefijo (lo que va antes del @)
-    const usuarioPrefix = correoCompleto.split("@")[0];
-
-    // 3. Preparar la URL y parámetros
-    // Usamos el puerto 2083 que es el de cPanel seguro
     const url = `https://${CPANEL_CONFIG.host}:2083/execute/Email/add_pop`;
     const params = new URLSearchParams({
-      email: usuarioPrefix,
+      email: usuario,
       password: passwordCorreo,
       domain: CPANEL_CONFIG.domain,
       quota: 250, // 250MB de espacio
     });
 
-    // 4. Preparar la autenticación básica
+    // Autenticación Básica (Usuario:Password en base64)
     const authString = Buffer.from(
       `${CPANEL_CONFIG.user}:${CPANEL_CONFIG.password}`,
     ).toString("base64");
 
-    // Ignorar errores de certificado SSL (Neubox suele dar lata con esto)
-    const agent = new https.Agent({
-      rejectUnauthorized: false,
-    });
-
-    // 5. HACER LA PETICIÓN
     const response = await axios.get(`${url}?${params.toString()}`, {
-      headers: {
-        Authorization: `Basic ${authString}`,
-        // Algunos servidores de Neubox bloquean peticiones que no parezcan venir de un navegador
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-      },
-      httpsAgent: agent,
-      timeout: 10000, // Si Neubox no responde en 10 seg, abortamos para no trabar el servidor
+      headers: { Authorization: `Basic ${authString}` },
     });
 
-    // 6. ANALIZAR LA RESPUESTA
-    // A) Si nos devuelve un HTML (Probablemente un bloqueo de ModSecurity o Firewall de Neubox)
-    if (
-      typeof response.data === "string" &&
-      response.data.trim().startsWith("<")
-    ) {
-      console.log(
-        "❌ cPanel devolvió una página web en lugar de JSON. Es muy probable que el Firewall de Neubox esté bloqueando la IP de Render.",
-      );
-      // No imprimimos todo el HTML para no ensuciar la consola
-      return false;
-    }
-
-    // B) Si nos devuelve un JSON válido
-    if (response.data && response.data.status === 1) {
-      console.log("✅ Correo creado exitosamente en cPanel.");
+    if (response.data.status === 1) {
+      console.log("✅ Correo creado en cPanel.");
       return true;
     } else {
-      // C) Si cPanel procesó la petición pero dio error (ej. ya existe)
-      const errorMsg = response.data?.errors
-        ? response.data.errors.join(", ")
-        : "Respuesta inesperada de cPanel";
-
-      if (errorMsg.toLowerCase().includes("already exists")) {
-        console.log(
-          `⚠️ El correo ${correoCompleto} ya existía en cPanel. Continuando...`,
-        );
-        return true;
-      }
-
-      console.log(`❌ cPanel rechazó la petición. Motivo: ${errorMsg}`);
+      const errorMsg = response.data.errors
+        ? response.data.errors[0]
+        : "Error desconocido";
+      if (errorMsg.includes("already exists")) return true; // Si ya existe, todo bien
+      console.error("❌ Error cPanel:", errorMsg);
+      // No lanzamos error fatal para no detener el registro del alumno
       return false;
     }
   } catch (error) {
-    // 7. MANEJO DE ERRORES DE RED O HTTP
-    if (error.response) {
-      // El servidor de Neubox respondió, pero con un código de error (401, 403, 404...)
-      console.log(`❌ Error HTTP cPanel: ${error.response.status}`);
-      if (error.response.status === 401) {
-        console.log(
-          "⚠️ ERROR 401: El usuario o contraseña de cPanel son incorrectos.",
-        );
-      } else if (error.response.status === 403) {
-        console.log(
-          "⚠️ ERROR 403: Neubox está bloqueando la IP de Render (Firewall/ModSecurity).",
-        );
-      }
-    } else if (error.code === "ECONNABORTED") {
-      console.log("❌ cPanel tardó demasiado en responder (Timeout).");
-    } else {
-      console.log("❌ Falló la conexión hacia cPanel:", error.message);
-    }
-
-    // Devolvemos false para que el resto del código siga (que el docente se guarde en BD aunque el email falle)
+    console.error("Error conexión cPanel:", error.message);
     return false;
   }
 }
@@ -1763,15 +1700,19 @@ adminRouter.post(
 
 // --- RUTAS DE GESTIÓN FINANCIERA (ADMIN --> ALUMNO) ---
 
-// 1. OBTENER FINANZAS DE UN ALUMNO ESPECÍFICO (ADMIN)
+// 1. OBTENER FINANZAS DE UN ALUMNO ESPECÍFICO
 adminRouter.get("/alumnos/:id/finanzas", async (req, res) => {
   try {
-    // Consulta limpia
     const [rows] = await db.query(
       `
       SELECT 
-        a.id, c.nombre_concepto, a.monto_a_pagar, a.estatus_pago, a.fecha_vencimiento, a.fecha_pago,
-        u.nombre, u.apellido_paterno, u.matricula
+        a.id,
+        c.nombre_concepto,
+        a.monto_a_pagar,
+        a.estatus_pago,
+        a.fecha_vencimiento,
+        a.fecha_pago,
+        u.nombre, u.apellido_paterno, u.matricula -- Datos del alumno
       FROM adeudos_alumnos a
       INNER JOIN conceptos_pago c ON a.concepto_id = c.id
       INNER JOIN usuarios u ON a.alumno_id = u.id
@@ -1780,23 +1721,7 @@ adminRouter.get("/alumnos/:id/finanzas", async (req, res) => {
     `,
       [req.params.id],
     );
-
-    // Matemáticas de JavaScript
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
-
-    const pagosProcesados = rows.map((pago) => {
-      let estatusFinal = pago.estatus_pago;
-
-      if (pago.estatus_pago === "pendiente" && pago.fecha_vencimiento) {
-        const limite = new Date(pago.fecha_vencimiento);
-        if (hoy > limite) estatusFinal = "vencido";
-      }
-
-      return { ...pago, estatus_pago: estatusFinal };
-    });
-
-    res.json(pagosProcesados);
+    res.json(rows);
   } catch (error) {
     res.status(500).send({ message: "Error al cargar finanzas" });
   }
@@ -2789,16 +2714,25 @@ adminRouter.delete("/conceptos_pago/:id", async (req, res) => {
 });
 
 // --- RUTA FINANZAS ALUMNO (ESTADO DE CUENTA) ---
-// --- RUTA FINANZAS ALUMNO (ESTADO DE CUENTA) ---
 app.get("/alumno/finanzas/resumen", authenticateToken, async (req, res) => {
+  // Solo permitimos alumnos
   if (req.user.rol !== "alumno") return res.sendStatus(403);
 
   try {
     const alumnoId = req.user.id;
-    // Traemos los datos limpios sin el CASE de SQL
+
     const sql = `
       SELECT 
-        a.id, c.nombre_concepto, a.monto_a_pagar, a.estatus_pago, a.fecha_vencimiento, a.fecha_pago
+        a.id,
+        c.nombre_concepto,
+        a.monto_a_pagar,
+        -- CAMBIO: Evalúa la fecha en tiempo real para mostrar 'vencido'
+        CASE 
+          WHEN a.estatus_pago = 'pendiente' AND DATE(a.fecha_vencimiento) < CURDATE() THEN 'vencido'
+          ELSE a.estatus_pago 
+        END as estatus_pago, 
+        a.fecha_vencimiento,
+        a.fecha_pago
       FROM adeudos_alumnos a
       INNER JOIN conceptos_pago c ON a.concepto_id = c.id
       WHERE a.alumno_id = ?
@@ -2806,24 +2740,9 @@ app.get("/alumno/finanzas/resumen", authenticateToken, async (req, res) => {
     `;
 
     const [rows] = await db.query(sql, [alumnoId]);
-
-    // Usamos JavaScript para decidir si dice "vencido"
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
-
-    const pagosProcesados = rows.map((pago) => {
-      let estatusFinal = pago.estatus_pago;
-
-      if (pago.estatus_pago === "pendiente" && pago.fecha_vencimiento) {
-        const limite = new Date(pago.fecha_vencimiento);
-        if (hoy > limite) estatusFinal = "vencido";
-      }
-
-      return { ...pago, estatus_pago: estatusFinal };
-    });
-
-    res.json(pagosProcesados);
+    res.json(rows);
   } catch (error) {
+    console.error("Error al obtener finanzas:", error);
     res.status(500).send({ message: "Error al cargar estado de cuenta" });
   }
 });
@@ -7007,38 +6926,14 @@ alumnoRouter.get(
       // ==========================================
       // 2. SISTEMA DE BLOQUEO POR ADEUDO VENCIDO (INTELIGENTE)
       // ==========================================
-      // ==========================================
-      // 2. SISTEMA DE BLOQUEO (REVISADO POR JAVASCRIPT)
-      // ==========================================
       const [adeudos] = await db.query(
-        "SELECT estatus_pago, fecha_vencimiento FROM adeudos_alumnos WHERE alumno_id = ?",
+        `SELECT COUNT(*) as vencidos 
+         FROM adeudos_alumnos 
+         WHERE alumno_id = ? 
+         AND (estatus_pago = 'vencido' OR (estatus_pago = 'pendiente' AND DATE(fecha_vencimiento) < CURDATE()))`,
         [alumnoId],
       );
-
-      // Usamos JS para saber si hoy ya pasó la fecha de vencimiento
-      const hoy = new Date();
-      hoy.setHours(0, 0, 0, 0); // Ignorar la hora, solo el día
-
-      let tieneAdeudos = false;
-
-      for (let adeudo of adeudos) {
-        if (adeudo.estatus_pago === "vencido") {
-          tieneAdeudos = true;
-          break;
-        }
-
-        // Si está pendiente y tiene fecha...
-        if (adeudo.estatus_pago === "pendiente" && adeudo.fecha_vencimiento) {
-          const fechaLimite = new Date(adeudo.fecha_vencimiento);
-          // Si la fecha de hoy es mayor a la fecha límite...
-          if (hoy > fechaLimite) {
-            tieneAdeudos = true;
-            break;
-          }
-        }
-      }
-
-      // 3. Usamos la función helper para obtener o crear la config
+      const tieneAdeudos = adeudos[0].vencidos > 0;
 
       // 3. Usamos la función helper para obtener o crear la config
       const config = await getOrCreateAulaConfig(grupoId, asignaturaId);
@@ -8895,7 +8790,7 @@ docenteRouter.get(
   },
 );
 
-// 2. GENERAR EQUIPOS AUTOMÁTICAMENTEdfsdfsdf
+// 2. GENERAR EQUIPOS AUTOMÁTICAMENTE
 docenteRouter.post(
   "/aula-virtual/:grupoId/:asignaturaId/generar-equipos",
   async (req, res) => {
