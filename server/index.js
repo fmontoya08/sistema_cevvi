@@ -2728,7 +2728,7 @@ app.get("/alumno/finanzas/resumen", authenticateToken, async (req, res) => {
         a.monto_a_pagar,
         -- CAMBIO: Evalúa la fecha en tiempo real para mostrar 'vencido'
         CASE 
-          WHEN a.estatus_pago = 'pendiente' AND a.fecha_vencimiento < CURDATE() THEN 'vencido'
+          WHEN a.estatus_pago = 'pendiente' AND DATE(a.fecha_vencimiento) < CURDATE() THEN 'vencido'
           ELSE a.estatus_pago 
         END as estatus_pago, 
         a.fecha_vencimiento,
@@ -3397,7 +3397,7 @@ adminRouter.get("/alumnos/:id/adeudos", async (req, res) => {
          aa.fecha_vencimiento, aa.fecha_pago,
          -- CAMBIO: Evalúa la fecha en tiempo real
          CASE 
-           WHEN aa.estatus_pago = 'pendiente' AND aa.fecha_vencimiento < CURDATE() THEN 'vencido'
+           WHEN aa.estatus_pago = 'pendiente' AND DATE(aa.fecha_vencimiento) < CURDATE() THEN 'vencido'
            ELSE aa.estatus_pago 
          END as estatus_pago,
          cp.nombre_concepto
@@ -6930,7 +6930,7 @@ alumnoRouter.get(
         `SELECT COUNT(*) as vencidos 
          FROM adeudos_alumnos 
          WHERE alumno_id = ? 
-         AND (estatus_pago = 'vencido' OR (estatus_pago = 'pendiente' AND fecha_vencimiento < CURDATE()))`,
+         AND (estatus_pago = 'vencido' OR (estatus_pago = 'pendiente' AND DATE(fecha_vencimiento) < CURDATE()))`,
         [alumnoId],
       );
       const tieneAdeudos = adeudos[0].vencidos > 0;

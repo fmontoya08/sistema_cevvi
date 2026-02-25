@@ -1,5 +1,6 @@
 import CorreoPage from "./pages/CorreoAdminPage";
 import RegistroPage from "./pages/RegistroPage";
+import RegistroDocentePage from "./pages/RegistroDocentePage";
 import ExploradorArchivos from "./pages/ExploradorArchivos";
 import MiDrivePage from "./pages/MiDrivePage";
 // --- IMPORTACIONES NUEVAS PARA EL AULA VIRTUAL ---
@@ -14628,6 +14629,7 @@ function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/registro" element={<RegistroPage />} />
+          <Route path="/registro_docentes" element={<RegistroDocentePage />} />
           <Route
             path="/unauthorized"
             element={
