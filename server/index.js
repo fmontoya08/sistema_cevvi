@@ -105,15 +105,16 @@ async function enviarCredenciales(
   passCorreo,
 ) {
   try {
-    // 1. CONFIGURACIÓN DEL SERVIDOR CPANEL (En lugar de Gmail)
+    // 1. CONFIGURACIÓN DEL SERVIDOR (Tus credenciales reales)
     let transporter = nodemailer.createTransport({
-      host: "mail.universidadsigloxxi.com", // Tu servidor de Neubox
-      port: 465, // 465 es el puerto seguro SSL
-      secure: true, // true para el puerto 465
+      host: "smtp.gmail.com",
+      port: 587,
+      secure: false, // true para 465
       auth: {
-        user: "controlescolar@universidadsigloxxi.com", // Tu correo real creado en cPanel
-        pass: "_(Wx!5CSLI9jmof#", // La contraseña de ese correo
+        user: "franksnake08@gmail.com", // <--- Pon tu Gmail aquí (el mismo donde creaste la clave)
+        pass: "yipfsxwwmoikajlu", // <--- PEGA AQUÍ LAS 16 LETRAS QUE TE DIO GOOGLE
       },
+      family: 4,
     });
 
     // 2. DISEÑO DEL CORREO
@@ -146,12 +147,10 @@ async function enviarCredenciales(
 
     // 3. ENVÍO (AQUÍ ESTABA EL ERROR ANTES)
     await transporter.sendMail({
-      from: '"Universidad Siglo XXI" <controlescolar@universidadsigloxxi.com>', // Debe coincidir con el 'user' de arriba
+      from: '"Centro Universitario Siglo XXI" <controlescolar@universidadsigloxxi.com>', // Gmail forzará que salga de tu correo real, así que mejor ponlo aquí para evitar confusiones.
       to: destinatario,
       subject: "🎓 ¡Bienvenido! Tus Accesos Oficiales",
-      // Es súper importante agregar la versión en texto plano para evitar el SPAM
-      text: `Hola ${nombre}, tu registro fue exitoso. Matrícula: ${matricula}, Contraseña: ${passPlataforma}. Correo: ${correoInstitucional}, Contraseña Correo: ${passCorreo}. Ingresa en: https://www.universidadsigloxxi.com/login`,
-      html: htmlContent, // Tu variable con el diseño HTML
+      html: htmlContent,
     });
 
     console.log(`✅ Correo enviado correctamente a: ${destinatario}`);
