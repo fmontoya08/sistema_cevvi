@@ -169,40 +169,103 @@ const CPANEL_CONFIG = {
   domain: "universidadsigloxxi.com",
 };
 
-async function crearCorreoCpanel(usuario, passwordCorreo) {
-  console.log(`[CPANEL] Creando correo: ${usuario}@${CPANEL_CONFIG.domain}`);
+async function crearCorreoCpanel(correoCompleto, passwordCorreo) {
+  console.log(`[CPANEL] Intentando crear correo: ${correoCompleto}`);
   try {
+    // 1. Validar que tengamos un correo válido
+    if (!correoCompleto || !correoCompleto.includes("@")) {
+      console.log("❌ Correo inválido provisto a cPanel.");
+      return false;
+    }
+
+    // 2. Extraer solo el prefijo (lo que va antes del @)
+    const usuarioPrefix = correoCompleto.split("@")[0];
+
+    // 3. Preparar la URL y parámetros
+    // Usamos el puerto 2083 que es el de cPanel seguro
     const url = `https://${CPANEL_CONFIG.host}:2083/execute/Email/add_pop`;
     const params = new URLSearchParams({
-      email: usuario,
+      email: usuarioPrefix,
       password: passwordCorreo,
       domain: CPANEL_CONFIG.domain,
       quota: 250, // 250MB de espacio
     });
 
-    // Autenticación Básica (Usuario:Password en base64)
+    // 4. Preparar la autenticación básica
     const authString = Buffer.from(
       `${CPANEL_CONFIG.user}:${CPANEL_CONFIG.password}`,
     ).toString("base64");
 
-    const response = await axios.get(`${url}?${params.toString()}`, {
-      headers: { Authorization: `Basic ${authString}` },
+    // Ignorar errores de certificado SSL (Neubox suele dar lata con esto)
+    const agent = new https.Agent({
+      rejectUnauthorized: false,
     });
 
-    if (response.data.status === 1) {
-      console.log("✅ Correo creado en cPanel.");
+    // 5. HACER LA PETICIÓN
+    const response = await axios.get(`${url}?${params.toString()}`, {
+      headers: {
+        Authorization: `Basic ${authString}`,
+        // Algunos servidores de Neubox bloquean peticiones que no parezcan venir de un navegador
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+      },
+      httpsAgent: agent,
+      timeout: 10000, // Si Neubox no responde en 10 seg, abortamos para no trabar el servidor
+    });
+
+    // 6. ANALIZAR LA RESPUESTA
+    // A) Si nos devuelve un HTML (Probablemente un bloqueo de ModSecurity o Firewall de Neubox)
+    if (
+      typeof response.data === "string" &&
+      response.data.trim().startsWith("<")
+    ) {
+      console.log(
+        "❌ cPanel devolvió una página web en lugar de JSON. Es muy probable que el Firewall de Neubox esté bloqueando la IP de Render.",
+      );
+      // No imprimimos todo el HTML para no ensuciar la consola
+      return false;
+    }
+
+    // B) Si nos devuelve un JSON válido
+    if (response.data && response.data.status === 1) {
+      console.log("✅ Correo creado exitosamente en cPanel.");
       return true;
     } else {
-      const errorMsg = response.data.errors
-        ? response.data.errors[0]
-        : "Error desconocido";
-      if (errorMsg.includes("already exists")) return true; // Si ya existe, todo bien
-      console.error("❌ Error cPanel:", errorMsg);
-      // No lanzamos error fatal para no detener el registro del alumno
+      // C) Si cPanel procesó la petición pero dio error (ej. ya existe)
+      const errorMsg = response.data?.errors
+        ? response.data.errors.join(", ")
+        : "Respuesta inesperada de cPanel";
+
+      if (errorMsg.toLowerCase().includes("already exists")) {
+        console.log(
+          `⚠️ El correo ${correoCompleto} ya existía en cPanel. Continuando...`,
+        );
+        return true;
+      }
+
+      console.log(`❌ cPanel rechazó la petición. Motivo: ${errorMsg}`);
       return false;
     }
   } catch (error) {
-    console.error("Error conexión cPanel:", error.message);
+    // 7. MANEJO DE ERRORES DE RED O HTTP
+    if (error.response) {
+      // El servidor de Neubox respondió, pero con un código de error (401, 403, 404...)
+      console.log(`❌ Error HTTP cPanel: ${error.response.status}`);
+      if (error.response.status === 401) {
+        console.log(
+          "⚠️ ERROR 401: El usuario o contraseña de cPanel son incorrectos.",
+        );
+      } else if (error.response.status === 403) {
+        console.log(
+          "⚠️ ERROR 403: Neubox está bloqueando la IP de Render (Firewall/ModSecurity).",
+        );
+      }
+    } else if (error.code === "ECONNABORTED") {
+      console.log("❌ cPanel tardó demasiado en responder (Timeout).");
+    } else {
+      console.log("❌ Falló la conexión hacia cPanel:", error.message);
+    }
+
+    // Devolvemos false para que el resto del código siga (que el docente se guarde en BD aunque el email falle)
     return false;
   }
 }
