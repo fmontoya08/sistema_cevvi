@@ -8832,7 +8832,7 @@ docenteRouter.get(
   },
 );
 
-// 2. GENERAR EQUIPOS AUTOMÁTICAMENTE
+// 2. GENERAR EQUIPOS AUTOMÁTICAMENTEdfsdfsdf
 docenteRouter.post(
   "/aula-virtual/:grupoId/:asignaturaId/generar-equipos",
   async (req, res) => {
