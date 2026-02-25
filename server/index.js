@@ -160,68 +160,55 @@ async function enviarCredenciales(
 }
 
 // ==========================================
-// NUEVO: CONFIGURACIÓN CPANEL (NEUBOX CON TOKEN)
+// CONFIGURACIÓN CPANEL (NEUBOX) - VERSIÓN ORIGINAL FUNCIONAL
 // ==========================================
 const CPANEL_CONFIG = {
   host: "svgt326.serverneubox.com.mx",
-  user: "puntoce6", // Tu usuario sigue siendo necesario para armar la UAPI
-  // PEGA AQUÍ TU TOKEN GENERADO EN CPANEL:
-  token: "AQUI_PEGA_EL_TOKEN_LARGO_DE_CPANEL",
+  user: "puntoce6",
+  password: "5r6q8aV4lB.I]F",
   domain: "universidadsigloxxi.com",
 };
 
-async function crearCorreoCpanel(correoCompleto, passwordCorreo) {
-  console.log(`[CPANEL] Intentando crear correo: ${correoCompleto}`);
+async function crearCorreoCpanel(usuario, passwordCorreo) {
+  console.log(`[CPANEL] Creando correo: ${usuario}@${CPANEL_CONFIG.domain}`);
   try {
-    if (!correoCompleto || !correoCompleto.includes("@")) {
-      console.log("❌ Correo inválido.");
-      return false;
-    }
-
-    const usuarioPrefix = correoCompleto.split("@")[0];
-
-    // Para tokens, usamos la URL de UAPI directa (más segura y moderna)
-    // Fíjate que en la URL va el nombre de usuario de cPanel
     const url = `https://${CPANEL_CONFIG.host}:2083/execute/Email/add_pop`;
     const params = new URLSearchParams({
-      email: usuarioPrefix,
+      email: usuario, // Recibe solo el prefijo (ej: fmontoya)
       password: passwordCorreo,
       domain: CPANEL_CONFIG.domain,
-      quota: 250,
+      quota: 250, // 250MB de espacio
     });
 
+    // Autenticación Básica (Usuario:Password en base64)
+    const authString = Buffer.from(
+      `${CPANEL_CONFIG.user}:${CPANEL_CONFIG.password}`,
+    ).toString("base64");
+
+    // Ignoramos errores de certificado SSL por seguridad de la petición
     const agent = new https.Agent({ rejectUnauthorized: false });
 
-    // EL CAMBIO ESTÁ AQUÍ: Usamos Authorization: cpanel usuario:TOKEN
     const response = await axios.get(`${url}?${params.toString()}`, {
-      headers: {
-        Authorization: `cpanel ${CPANEL_CONFIG.user}:${CPANEL_CONFIG.token}`,
-      },
+      headers: { Authorization: `Basic ${authString}` },
       httpsAgent: agent,
-      timeout: 10000,
     });
 
-    if (response.data && response.data.status === 1) {
-      console.log("✅ Correo creado exitosamente en cPanel.");
+    if (response.data.status === 1) {
+      console.log("✅ Correo creado en cPanel.");
       return true;
     } else {
-      const errorMsg = response.data?.errors
-        ? response.data.errors.join(", ")
-        : "Respuesta desconocida";
-      if (errorMsg.toLowerCase().includes("already exists")) {
-        console.log(`⚠️ El correo ya existía. Todo bien.`);
+      const errorMsg = response.data.errors
+        ? response.data.errors[0]
+        : "Error desconocido";
+      if (errorMsg.includes("already exists")) {
+        console.log("⚠️ El correo ya existía.");
         return true;
       }
-      console.log(`❌ cPanel rechazó la petición. Motivo: ${errorMsg}`);
+      console.error("❌ Error cPanel:", errorMsg);
       return false;
     }
   } catch (error) {
-    if (error.response) {
-      console.log(`❌ Error HTTP cPanel: ${error.response.status}`);
-      // Si te da 403 con esta versión, significa 100% que el Firewall de Neubox bloquea a Render.
-    } else {
-      console.log("❌ Falló la conexión hacia cPanel:", error.message);
-    }
+    console.error("Error conexión cPanel:", error.message);
     return false;
   }
 }
