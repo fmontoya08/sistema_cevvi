@@ -1703,19 +1703,11 @@ adminRouter.post(
 // 1. OBTENER FINANZAS DE UN ALUMNO ESPECÍFICO (ADMIN)
 adminRouter.get("/alumnos/:id/finanzas", async (req, res) => {
   try {
+    // Consulta limpia
     const [rows] = await db.query(
       `
       SELECT 
-        a.id,
-        c.nombre_concepto,
-        a.monto_a_pagar,
-        -- CAMBIO APLICADO: Evalúa la fecha en tiempo real ignorando las horas
-        CASE 
-          WHEN a.estatus_pago = 'pendiente' AND DATE(a.fecha_vencimiento) < CURDATE() THEN 'vencido'
-          ELSE a.estatus_pago 
-        END as estatus_pago,
-        a.fecha_vencimiento,
-        a.fecha_pago,
+        a.id, c.nombre_concepto, a.monto_a_pagar, a.estatus_pago, a.fecha_vencimiento, a.fecha_pago,
         u.nombre, u.apellido_paterno, u.matricula
       FROM adeudos_alumnos a
       INNER JOIN conceptos_pago c ON a.concepto_id = c.id
@@ -1725,7 +1717,23 @@ adminRouter.get("/alumnos/:id/finanzas", async (req, res) => {
     `,
       [req.params.id],
     );
-    res.json(rows);
+
+    // Matemáticas de JavaScript
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+
+    const pagosProcesados = rows.map((pago) => {
+      let estatusFinal = pago.estatus_pago;
+
+      if (pago.estatus_pago === "pendiente" && pago.fecha_vencimiento) {
+        const limite = new Date(pago.fecha_vencimiento);
+        if (hoy > limite) estatusFinal = "vencido";
+      }
+
+      return { ...pago, estatus_pago: estatusFinal };
+    });
+
+    res.json(pagosProcesados);
   } catch (error) {
     res.status(500).send({ message: "Error al cargar finanzas" });
   }
@@ -2718,25 +2726,16 @@ adminRouter.delete("/conceptos_pago/:id", async (req, res) => {
 });
 
 // --- RUTA FINANZAS ALUMNO (ESTADO DE CUENTA) ---
+// --- RUTA FINANZAS ALUMNO (ESTADO DE CUENTA) ---
 app.get("/alumno/finanzas/resumen", authenticateToken, async (req, res) => {
-  // Solo permitimos alumnos
   if (req.user.rol !== "alumno") return res.sendStatus(403);
 
   try {
     const alumnoId = req.user.id;
-
+    // Traemos los datos limpios sin el CASE de SQL
     const sql = `
       SELECT 
-        a.id,
-        c.nombre_concepto,
-        a.monto_a_pagar,
-        -- CAMBIO APLICADO: Agregamos DATE() para asegurar la comparación
-        CASE 
-          WHEN a.estatus_pago = 'pendiente' AND DATE(a.fecha_vencimiento) < CURDATE() THEN 'vencido'
-          ELSE a.estatus_pago 
-        END as estatus_pago, 
-        a.fecha_vencimiento,
-        a.fecha_pago
+        a.id, c.nombre_concepto, a.monto_a_pagar, a.estatus_pago, a.fecha_vencimiento, a.fecha_pago
       FROM adeudos_alumnos a
       INNER JOIN conceptos_pago c ON a.concepto_id = c.id
       WHERE a.alumno_id = ?
@@ -2744,9 +2743,24 @@ app.get("/alumno/finanzas/resumen", authenticateToken, async (req, res) => {
     `;
 
     const [rows] = await db.query(sql, [alumnoId]);
-    res.json(rows);
+
+    // Usamos JavaScript para decidir si dice "vencido"
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+
+    const pagosProcesados = rows.map((pago) => {
+      let estatusFinal = pago.estatus_pago;
+
+      if (pago.estatus_pago === "pendiente" && pago.fecha_vencimiento) {
+        const limite = new Date(pago.fecha_vencimiento);
+        if (hoy > limite) estatusFinal = "vencido";
+      }
+
+      return { ...pago, estatus_pago: estatusFinal };
+    });
+
+    res.json(pagosProcesados);
   } catch (error) {
-    console.error("Error al obtener finanzas:", error);
     res.status(500).send({ message: "Error al cargar estado de cuenta" });
   }
 });
@@ -6930,14 +6944,38 @@ alumnoRouter.get(
       // ==========================================
       // 2. SISTEMA DE BLOQUEO POR ADEUDO VENCIDO (INTELIGENTE)
       // ==========================================
+      // ==========================================
+      // 2. SISTEMA DE BLOQUEO (REVISADO POR JAVASCRIPT)
+      // ==========================================
       const [adeudos] = await db.query(
-        `SELECT COUNT(*) as vencidos 
-         FROM adeudos_alumnos 
-         WHERE alumno_id = ? 
-         AND (estatus_pago = 'vencido' OR (estatus_pago = 'pendiente' AND DATE(fecha_vencimiento) < CURDATE()))`,
+        "SELECT estatus_pago, fecha_vencimiento FROM adeudos_alumnos WHERE alumno_id = ?",
         [alumnoId],
       );
-      const tieneAdeudos = adeudos[0].vencidos > 0;
+
+      // Usamos JS para saber si hoy ya pasó la fecha de vencimiento
+      const hoy = new Date();
+      hoy.setHours(0, 0, 0, 0); // Ignorar la hora, solo el día
+
+      let tieneAdeudos = false;
+
+      for (let adeudo of adeudos) {
+        if (adeudo.estatus_pago === "vencido") {
+          tieneAdeudos = true;
+          break;
+        }
+
+        // Si está pendiente y tiene fecha...
+        if (adeudo.estatus_pago === "pendiente" && adeudo.fecha_vencimiento) {
+          const fechaLimite = new Date(adeudo.fecha_vencimiento);
+          // Si la fecha de hoy es mayor a la fecha límite...
+          if (hoy > fechaLimite) {
+            tieneAdeudos = true;
+            break;
+          }
+        }
+      }
+
+      // 3. Usamos la función helper para obtener o crear la config
 
       // 3. Usamos la función helper para obtener o crear la config
       const config = await getOrCreateAulaConfig(grupoId, asignaturaId);
