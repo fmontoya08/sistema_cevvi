@@ -187,27 +187,68 @@ async function crearCorreoCpanel(usuario, passwordCorreo) {
 
     const response = await axios.get(`${url}?${params.toString()}`, {
       headers: { Authorization: `Basic ${authString}` },
+      validateStatus: function (status) {
+        return status >= 200 && status < 500; // Para capturar errores HTTP 400 o 401 en lugar de ir al catch
+      },
     });
 
-    // CORRECCIÓN AQUÍ: cPanel devuelve la data real dentro de "result"
-    const cpanelResult = response.data.result || response.data;
+    // --- ZONA DE DEPURACIÓN PROFUNDA ---
+    console.log("=== CPANEL RAW RESPONSE ===");
+    console.log("Status HTTP:", response.status);
+    if (typeof response.data === "string") {
+      console.log(
+        "Respuesta es TEXTO/HTML (Posible bloqueo o login):",
+        response.data.substring(0, 200) + "...",
+      );
+    } else {
+      console.log(JSON.stringify(response.data, null, 2));
+    }
+    console.log("===========================");
 
-    if (cpanelResult.status === 1) {
+    // Verificamos si la respuesta es HTML en lugar de JSON (esto suele pasar si falla la autenticación)
+    if (typeof response.data === "string" && response.data.includes("<html")) {
+      console.error(
+        "❌ Error cPanel: La API devolvió una página web en lugar de datos. Verifica tu USUARIO y CONTRASEÑA de cPanel, o podría haber un bloqueo de seguridad en Neubox.",
+      );
+      return false;
+    }
+
+    const cpanelResult =
+      response.data.result || response.data.cpanelresult || response.data;
+    const status =
+      cpanelResult.status !== undefined
+        ? cpanelResult.status
+        : response.data.cpanelresult
+          ? !response.data.cpanelresult.error
+          : 0;
+
+    if (status === 1 || status === true) {
       console.log("✅ Correo creado en cPanel.");
       return true;
     } else {
-      // Tomamos el error real devuelto por cPanel
-      const errorMsg =
-        cpanelResult.errors && cpanelResult.errors.length > 0
-          ? cpanelResult.errors[0]
-          : "Error desconocido (Revisa credenciales o dominio)";
+      let errorMsg = "Error desconocido (Revisa credenciales o dominio)";
 
-      if (errorMsg.includes("already exists")) return true; // Si ya existe, todo bien
+      if (cpanelResult.errors && cpanelResult.errors.length > 0) {
+        errorMsg = cpanelResult.errors[0];
+      } else if (
+        response.data.cpanelresult &&
+        response.data.cpanelresult.error
+      ) {
+        errorMsg = response.data.cpanelresult.error;
+      }
+
+      if (typeof errorMsg === "string" && errorMsg.includes("already exists")) {
+        console.log("✅ Correo creado en cPanel (Ya existía).");
+        return true;
+      }
       console.error("❌ Error cPanel:", errorMsg);
       return false;
     }
   } catch (error) {
     console.error("Error conexión cPanel:", error.message);
+    if (error.response && error.response.data) {
+      console.log("Detalle del error:", error.response.data);
+    }
     return false;
   }
 }
