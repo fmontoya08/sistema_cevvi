@@ -11,8 +11,6 @@ const path = require("path");
 const fs = require("fs");
 const MailComposer = require("nodemailer/lib/mail-composer");
 
-const https = require("https");
-
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -162,12 +160,12 @@ async function enviarCredenciales(
 }
 
 // ==========================================
-// CONFIGURACIÓN CPANEL (NEUBOX) - VERSIÓN ORIGINAL FUNCIONAL
+// NUEVO: CONFIGURACIÓN CPANEL (NEUBOX)
 // ==========================================
 const CPANEL_CONFIG = {
   host: "svgt326.serverneubox.com.mx",
-  user: "puntoce6",
-  password: "5r6q8aV4lB.I]F",
+  user: "puntoce6", // <--- CAMBIA ESTO por tu usuario de cPanel
+  password: "5r6q8aV4lB.I]F", // <--- CAMBIA ESTO por tu contraseña de cPanel
   domain: "universidadsigloxxi.com",
 };
 
@@ -176,7 +174,7 @@ async function crearCorreoCpanel(usuario, passwordCorreo) {
   try {
     const url = `https://${CPANEL_CONFIG.host}:2083/execute/Email/add_pop`;
     const params = new URLSearchParams({
-      email: usuario, // Recibe solo el prefijo (ej: fmontoya)
+      email: usuario,
       password: passwordCorreo,
       domain: CPANEL_CONFIG.domain,
       quota: 250, // 250MB de espacio
@@ -187,12 +185,8 @@ async function crearCorreoCpanel(usuario, passwordCorreo) {
       `${CPANEL_CONFIG.user}:${CPANEL_CONFIG.password}`,
     ).toString("base64");
 
-    // Ignoramos errores de certificado SSL por seguridad de la petición
-    const agent = new https.Agent({ rejectUnauthorized: false });
-
     const response = await axios.get(`${url}?${params.toString()}`, {
       headers: { Authorization: `Basic ${authString}` },
-      httpsAgent: agent,
     });
 
     if (response.data.status === 1) {
@@ -202,11 +196,9 @@ async function crearCorreoCpanel(usuario, passwordCorreo) {
       const errorMsg = response.data.errors
         ? response.data.errors[0]
         : "Error desconocido";
-      if (errorMsg.includes("already exists")) {
-        console.log("⚠️ El correo ya existía.");
-        return true;
-      }
+      if (errorMsg.includes("already exists")) return true; // Si ya existe, todo bien
       console.error("❌ Error cPanel:", errorMsg);
+      // No lanzamos error fatal para no detener el registro del alumno
       return false;
     }
   } catch (error) {
@@ -1708,7 +1700,7 @@ adminRouter.post(
 
 // --- RUTAS DE GESTIÓN FINANCIERA (ADMIN --> ALUMNO) ---
 
-// 1. OBTENER FINANZAS DE UN ALUMNO ESPECÍFICO
+// 1. OBTENER FINANZAS DE UN ALUMNO ESPECÍFICO (ADMIN)
 adminRouter.get("/alumnos/:id/finanzas", async (req, res) => {
   try {
     const [rows] = await db.query(
@@ -1717,10 +1709,14 @@ adminRouter.get("/alumnos/:id/finanzas", async (req, res) => {
         a.id,
         c.nombre_concepto,
         a.monto_a_pagar,
-        a.estatus_pago,
+        -- CAMBIO APLICADO: Evalúa la fecha en tiempo real ignorando las horas
+        CASE 
+          WHEN a.estatus_pago = 'pendiente' AND DATE(a.fecha_vencimiento) < CURDATE() THEN 'vencido'
+          ELSE a.estatus_pago 
+        END as estatus_pago,
         a.fecha_vencimiento,
         a.fecha_pago,
-        u.nombre, u.apellido_paterno, u.matricula -- Datos del alumno
+        u.nombre, u.apellido_paterno, u.matricula
       FROM adeudos_alumnos a
       INNER JOIN conceptos_pago c ON a.concepto_id = c.id
       INNER JOIN usuarios u ON a.alumno_id = u.id
@@ -2734,7 +2730,7 @@ app.get("/alumno/finanzas/resumen", authenticateToken, async (req, res) => {
         a.id,
         c.nombre_concepto,
         a.monto_a_pagar,
-        -- CAMBIO: Evalúa la fecha en tiempo real para mostrar 'vencido'
+        -- CAMBIO APLICADO: Agregamos DATE() para asegurar la comparación
         CASE 
           WHEN a.estatus_pago = 'pendiente' AND DATE(a.fecha_vencimiento) < CURDATE() THEN 'vencido'
           ELSE a.estatus_pago 
