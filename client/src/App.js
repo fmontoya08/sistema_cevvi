@@ -1026,6 +1026,7 @@ const DocenteLayout = () => {
                 )}
               </div>
             </Link>
+            <TutorialGuide user={user} />
           </div>
         </header>
 
@@ -10024,124 +10025,222 @@ const TransferirAlumnoModal = ({
   );
 };
 
-// --- DASHBOARD DOCENTE REDISEÑADO (TARJETAS ESTILO DASHBOARD) ---
+// --- DASHBOARD DOCENTE REDISEÑADO ---
 const DocenteDashboardPage = () => {
+  const { user } = useAuth();
   const [cursos, setCursos] = useState([]);
+  const [anuncios, setAnuncios] = useState([]);
+  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
-    const fetchCursos = async () => {
+    const fetchDashboardData = async () => {
       try {
-        const { data } = await api.get("/docente/mis-cursos");
-        setCursos(data);
+        const [resCursos, resAnuncios] = await Promise.all([
+          api.get("/docente/mis-cursos"),
+          api.get("/anuncios/feed"), // Traemos los anuncios institucionales
+        ]);
+        setCursos(resCursos.data);
+        setAnuncios(resAnuncios.data);
       } catch (error) {
-        console.error("Error al cargar los cursos del docente", error);
+        console.error("Error al cargar el dashboard del docente", error);
+      } finally {
+        setLoading(false);
       }
     };
-    fetchCursos();
+    fetchDashboardData();
   }, []);
 
+  if (loading)
+    return (
+      <div className="p-10 text-center text-gray-500">
+        Preparando su espacio de trabajo...
+      </div>
+    );
+
   return (
-    <div className="space-y-8">
-      {/* Encabezado Principal */}
-      <div className="flex flex-col md:flex-row justify-between items-center gap-4 border-b border-gray-200 pb-6">
-        <div>
-          <h2 className="text-3xl font-bold text-gray-800 tracking-tight">
-            Mis Cursos Asignados
-          </h2>
-          <p className="text-gray-500 mt-1">
-            Gestiona tus grupos y calificaciones académicas.
-          </p>
+    <div className="space-y-8 animate-in fade-in duration-500 max-w-7xl mx-auto">
+      {/* 1. SECCIÓN HERO (BIENVENIDA) */}
+      <div
+        id="tour-docente-hero"
+        className="bg-gradient-to-r from-[#1e3a8a] to-[#3b82f6] rounded-3xl p-8 text-white shadow-xl relative overflow-hidden flex flex-col md:flex-row items-center gap-6"
+      >
+        <div className="w-24 h-24 rounded-full border-4 border-white/20 overflow-hidden bg-white/10 shrink-0 z-10 flex items-center justify-center text-3xl font-bold">
+          {user?.foto_perfil ? (
+            <img
+              src={`https://api-universidad-c5o8.onrender.com/uploads/perfiles/${user.foto_perfil}`}
+              className="w-full h-full object-cover"
+              alt="Perfil"
+            />
+          ) : (
+            user?.nombre?.charAt(0)
+          )}
         </div>
+        <div className="z-10 text-center md:text-left">
+          <h1 className="text-3xl font-black mb-1">
+            ¡Bienvenido, Profesor {user.apellido_paterno}! 🎓
+          </h1>
+          <p className="text-blue-100 text-lg">
+            Tiene {cursos.length}{" "}
+            {cursos.length === 1 ? "grupo asignado" : "grupos asignados"} este
+            ciclo escolar.
+          </p>
+          <div className="mt-3 inline-flex gap-3 text-sm font-bold bg-black/20 px-4 py-2 rounded-full">
+            <span>ID Docente: {user.matricula || "N/A"}</span>
+          </div>
+        </div>
+        {/* Decoración CSS */}
+        <div className="absolute right-0 top-0 h-full w-1/2 bg-white/5 skew-x-12 translate-x-20"></div>
       </div>
 
-      {/* Grid de Tarjetas */}
-      {cursos.length === 0 ? (
-        <div className="text-center py-12 bg-white rounded-2xl border border-dashed border-gray-300">
-          <Book size={48} className="mx-auto text-gray-300 mb-4" />
-          <p className="text-gray-500 font-medium">
-            No tienes cursos asignados para este ciclo.
-          </p>
+      {/* 2. ACCESOS RÁPIDOS */}
+      <div
+        id="tour-docente-accesos"
+        className="grid grid-cols-2 md:grid-cols-4 gap-4"
+      >
+        <Link
+          to="/docente/calendario"
+          className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center justify-center text-center hover:shadow-md hover:border-blue-200 transition-all group"
+        >
+          <div className="p-3 bg-blue-50 text-blue-600 rounded-full mb-2 group-hover:scale-110 transition-transform">
+            <Calendar size={24} />
+          </div>
+          <span className="font-bold text-gray-700">Calendario</span>
+        </Link>
+        <Link
+          to="/docente/correo"
+          className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center justify-center text-center hover:shadow-md hover:border-red-200 transition-all group"
+        >
+          <div className="p-3 bg-red-50 text-red-600 rounded-full mb-2 group-hover:scale-110 transition-transform">
+            <Mail size={24} />
+          </div>
+          <span className="font-bold text-gray-700">Correo</span>
+        </Link>
+        <Link
+          to="/docente/mi-nube"
+          className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center justify-center text-center hover:shadow-md hover:border-orange-200 transition-all group"
+        >
+          <div className="p-3 bg-orange-50 text-orange-600 rounded-full mb-2 group-hover:scale-110 transition-transform">
+            <UploadCloud size={24} />
+          </div>
+          <span className="font-bold text-gray-700">Mi Nube</span>
+        </Link>
+        <Link
+          to="/docente/mi-perfil"
+          className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center justify-center text-center hover:shadow-md hover:border-purple-200 transition-all group"
+        >
+          <div className="p-3 bg-purple-50 text-purple-600 rounded-full mb-2 group-hover:scale-110 transition-transform">
+            <User size={24} />
+          </div>
+          <span className="font-bold text-gray-700">Mi Perfil</span>
+        </Link>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        {/* 3. COLUMNA IZQUIERDA: MIS GRUPOS */}
+        <div id="tour-docente-cursos" className="lg:col-span-8 space-y-6">
+          <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+            <BookOpen className="text-blue-600" /> Mis Grupos y Materias
+          </h2>
+
+          {cursos.length === 0 ? (
+            <div className="text-center py-12 bg-white rounded-2xl border border-dashed border-gray-300">
+              <Book size={48} className="mx-auto text-gray-300 mb-4" />
+              <p className="text-gray-500 font-medium">
+                No tiene cursos asignados para este ciclo.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {cursos.map((curso) => {
+                const isCompleted =
+                  curso.total_alumnos > 0 &&
+                  curso.total_calificaciones >= curso.total_alumnos;
+                return (
+                  <div
+                    key={`${curso.grupo_id}-${curso.asignatura_id}`}
+                    onClick={() =>
+                      navigate(
+                        `/docente/grupo/${curso.grupo_id}/asignatura/${curso.asignatura_id}/aula`,
+                      )
+                    }
+                    className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 hover:shadow-lg hover:border-blue-300 transition-all group relative overflow-hidden cursor-pointer flex flex-col"
+                  >
+                    <div className="absolute top-0 left-0 w-full h-1.5 bg-blue-600"></div>
+                    <div className="flex justify-between items-start mb-2 mt-2">
+                      <h3 className="font-bold text-lg text-gray-800 line-clamp-2 group-hover:text-blue-600 transition-colors">
+                        {curso.nombre_asignatura}
+                      </h3>
+                    </div>
+                    <div className="space-y-1 mb-4">
+                      <p className="text-sm text-gray-500 flex items-center gap-2">
+                        <Users size={14} className="text-gray-400" />{" "}
+                        <span className="font-medium text-gray-700">
+                          Grupo:
+                        </span>{" "}
+                        {curso.nombre_grupo}
+                      </p>
+                      <p className="text-sm text-gray-500 flex items-center gap-2">
+                        <Calendar size={14} className="text-gray-400" />{" "}
+                        <span className="font-medium text-gray-700">
+                          Ciclo:
+                        </span>{" "}
+                        {curso.nombre_ciclo}
+                      </p>
+                    </div>
+                    <div className="mt-auto pt-3 border-t border-gray-50 flex justify-between items-center text-sm">
+                      <div className="text-gray-500">
+                        <span className="font-bold text-gray-800">
+                          {curso.total_alumnos}
+                        </span>{" "}
+                        Alumnos
+                      </div>
+                      <div className="text-blue-600 font-bold flex items-center gap-1 opacity-0 group-hover:opacity-100 transform translate-x-2 group-hover:translate-x-0 transition-all">
+                        Entrar al Aula <ArrowRightCircle size={16} />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {cursos.map((curso) => {
-            // Calcular porcentaje de progreso (opcional, visual)
-            const isCompleted =
-              curso.total_alumnos > 0 &&
-              curso.total_calificaciones >= curso.total_alumnos;
 
-            return (
-              <div
-                key={`${curso.grupo_id}-${curso.asignatura_id}`}
-                onClick={() =>
-                  navigate(
-                    `/docente/grupo/${curso.grupo_id}/asignatura/${curso.asignatura_id}/aula`,
-                  )
-                }
-                className="group relative bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer overflow-hidden flex flex-col"
-              >
-                {/* Decoración Superior (Barra Roja) */}
-                <div className="absolute top-0 left-0 w-full h-1 bg-[#a72a34]"></div>
+        {/* 4. COLUMNA DERECHA: TABLERO DE ANUNCIOS */}
+        <div id="tour-docente-avisos" className="lg:col-span-4 space-y-6">
+          <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+            <Megaphone className="text-orange-500" /> Avisos de Dirección
+          </h2>
 
-                <div className="p-6 flex-1 flex flex-col">
-                  {/* Encabezado de la Tarjeta */}
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="p-3 bg-red-50 text-[#a72a34] rounded-xl group-hover:bg-[#a72a34] group-hover:text-white transition-colors">
-                      <Book size={24} />
-                    </div>
-                    {/* Badge de Estado */}
-                    <span
-                      className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border ${
-                        isCompleted
-                          ? "bg-green-50 text-green-700 border-green-100"
-                          : "bg-yellow-50 text-yellow-700 border-yellow-100"
-                      }`}
-                    >
-                      {isCompleted ? "Completado" : "En Curso"}
-                    </span>
-                  </div>
-
-                  {/* Título y Detalles */}
-                  <h3 className="text-xl font-bold text-gray-800 mb-2 group-hover:text-[#a72a34] transition-colors line-clamp-2">
-                    {curso.nombre_asignatura}
-                  </h3>
-
-                  <div className="space-y-2 mb-6">
-                    <p className="text-sm text-gray-500 flex items-center gap-2">
-                      <Users size={16} className="text-gray-400" />
-                      <span className="font-medium text-gray-700">
-                        Grupo:
-                      </span>{" "}
-                      {curso.nombre_grupo}
-                    </p>
-                    <p className="text-sm text-gray-500 flex items-center gap-2">
-                      <Calendar size={16} className="text-gray-400" />
-                      <span className="font-medium text-gray-700">
-                        Ciclo:
-                      </span>{" "}
-                      {curso.nombre_ciclo}
-                    </p>
-                  </div>
-
-                  {/* Footer de la Tarjeta (Estadísticas) */}
-                  <div className="mt-auto pt-4 border-t border-gray-50 flex justify-between items-center text-sm">
-                    <div className="text-gray-500">
-                      <span className="font-bold text-gray-800">
-                        {curso.total_alumnos}
-                      </span>{" "}
-                      Alumnos
-                    </div>
-                    <div className="text-[#a72a34] font-bold flex items-center gap-1 opacity-0 group-hover:opacity-100 transform translate-x-2 group-hover:translate-x-0 transition-all">
-                      Ir al Aula <ArrowRightCircle size={16} />
-                    </div>
-                  </div>
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-1 flex flex-col h-[500px]">
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+              {anuncios.length === 0 ? (
+                <div className="text-center text-gray-400 py-10">
+                  No hay avisos recientes.
                 </div>
-              </div>
-            );
-          })}
+              ) : (
+                anuncios.map((anuncio) => (
+                  <div
+                    key={anuncio.id}
+                    className="bg-orange-50/50 border border-orange-100 p-4 rounded-xl"
+                  >
+                    <h4 className="font-bold text-gray-800 text-sm leading-tight mb-2">
+                      {anuncio.titulo}
+                    </h4>
+                    <p className="text-sm text-gray-600 mb-3 whitespace-pre-wrap">
+                      {anuncio.mensaje}
+                    </p>
+                    <div className="flex items-center gap-2 text-xs text-gray-400">
+                      <Clock size={12} />{" "}
+                      {new Date(anuncio.fecha_creacion).toLocaleDateString()}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
         </div>
-      )}
+      </div>
     </div>
   );
 };
@@ -11469,7 +11568,7 @@ const AulaVirtualPage = () => {
           htmlFor="enlace_videollamada"
           className="block text-sm font-bold text-gray-700 mb-2"
         >
-          Enlace de la Videollamada (Zoom, Meet, etc.)
+          Enlace de la Videollamada (Jitsi Meet)
         </label>
         <input
           type="url"
@@ -11990,6 +12089,7 @@ const AulaVirtualPage = () => {
             <>
               {/* Botón Asistencia */}
               <button
+                id="tour-docente-asistencia"
                 onClick={handleIniciarSesionHoy}
                 disabled={isCreatingSession}
                 className="flex items-center px-5 py-3 text-sm font-bold text-white bg-[#a72a34] rounded-xl hover:bg-[#802028] disabled:bg-gray-400 shadow-lg shadow-red-900/20 transition-all active:scale-95"
@@ -12000,6 +12100,7 @@ const AulaVirtualPage = () => {
 
               {/* Botón Editar (Estilo secundario pero acorde) */}
               <button
+                id="tour-docente-editar"
                 onClick={() => setIsEditing(true)}
                 className="flex items-center px-4 py-3 text-sm font-bold text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:text-[#a72a34] hover:border-[#a72a34]/30 transition-all shadow-sm"
               >
@@ -12008,6 +12109,7 @@ const AulaVirtualPage = () => {
 
               {/* Botón Calificaciones */}
               <button
+                id="tour-docente-acta"
                 onClick={() =>
                   navigate(
                     `/docente/grupo/${grupoId}/asignatura/${asignaturaId}`,
@@ -12035,6 +12137,16 @@ const AulaVirtualPage = () => {
             }`}
           >
             <Book size={18} /> Información
+          </button>
+          <button
+            onClick={() => setActiveTab("equipos")}
+            className={`pb-4 px-2 text-sm font-bold flex items-center gap-2 border-b-2 transition-all ${
+              activeTab === "equipos"
+                ? "border-[#a72a34] text-[#a72a34]"
+                : "border-transparent text-gray-400 hover:text-gray-600"
+            }`}
+          >
+            <Users size={18} /> Salas de Trabajo
           </button>
           <button
             onClick={() => setActiveTab("tareas")}
@@ -12325,6 +12437,7 @@ const AulaVirtualPage = () => {
               </h3>
               {user.rol === "docente" && (
                 <button
+                  id="tour-docente-btn-tarea"
                   onClick={() => setShowCrearTareaModal(true)}
                   className="bg-[#a72a34] text-white px-5 py-2.5 rounded-xl font-bold hover:bg-[#802028] shadow-lg shadow-red-900/10 flex items-center gap-2 transition-transform active:scale-95"
                 >
@@ -12340,6 +12453,23 @@ const AulaVirtualPage = () => {
         {activeTab === "muro" && (
           <div id="tour-muro-novedades" className="mt-6">
             <MuroDocentePage />
+          </div>
+        )}
+        {activeTab === "equipos" && (
+          <div id="tour-equipos" className="animate-in fade-in duration-300">
+            {user.rol === "docente" ? (
+              // VISTA DEL DOCENTE
+              <EquiposDocenteView
+                grupoId={grupoId}
+                asignaturaId={asignaturaId}
+              />
+            ) : (
+              // VISTA DEL ALUMNO
+              <EquiposAlumnoView
+                grupoId={grupoId}
+                asignaturaId={asignaturaId}
+              />
+            )}
           </div>
         )}
 
@@ -12368,6 +12498,7 @@ const AulaVirtualPage = () => {
               </h3>
               {user.rol === "docente" && (
                 <button
+                  id="tour-docente-btn-recurso"
                   onClick={() => setShowRecursoModal(true)}
                   className="bg-white border-2 border-[#a72a34] text-[#a72a34] px-5 py-2.5 rounded-xl font-bold hover:bg-[#a72a34] hover:text-white transition-all flex items-center gap-2"
                 >
@@ -14316,6 +14447,185 @@ const AnunciosAdminPage = () => {
           </form>
         </div>
       )}
+    </div>
+  );
+};
+
+const EquiposDocenteView = ({ grupoId, asignaturaId }) => {
+  const [equipos, setEquipos] = useState([]);
+  const [cantidad, setCantidad] = useState(2);
+  const [loading, setLoading] = useState(true);
+
+  const fetchEquipos = async () => {
+    setLoading(true);
+    const { data } = await api.get(
+      `/docente/aula-virtual/${grupoId}/${asignaturaId}/equipos`,
+    );
+    setEquipos(data);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchEquipos();
+  }, []);
+
+  const generarEquipos = async () => {
+    if (
+      !window.confirm(
+        `¿Dividir al grupo en ${cantidad} equipos aleatorios? Esto borrará los equipos anteriores.`,
+      )
+    )
+      return;
+    try {
+      await api.post(
+        `/docente/aula-virtual/${grupoId}/${asignaturaId}/generar-equipos`,
+        { cantidad_equipos: cantidad },
+      );
+      fetchEquipos();
+    } catch (e) {
+      alert("Error al crear salas");
+    }
+  };
+
+  const borrarEquipos = async () => {
+    if (
+      !window.confirm(
+        "¿Cerrar todas las salas de trabajo y regresar al grupo principal?",
+      )
+    )
+      return;
+    try {
+      await api.delete(
+        `/docente/aula-virtual/${grupoId}/${asignaturaId}/borrar-equipos`,
+      );
+      fetchEquipos();
+    } catch (e) {
+      alert("Error");
+    }
+  };
+
+  if (loading) return <p>Cargando salas...</p>;
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-blue-50 p-6 rounded-2xl border border-blue-100 flex flex-col md:flex-row justify-between items-center gap-4">
+        <div>
+          <h3 className="text-xl font-bold text-blue-900">
+            Salas de Trabajo (Breakout Rooms)
+          </h3>
+          <p className="text-blue-700 text-sm">
+            Divida a sus alumnos en pequeños grupos para dinámicas. El sistema
+            creará una sala de video privada para cada equipo.
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <input
+            type="number"
+            min="2"
+            max="10"
+            className="w-20 p-2 border rounded-xl text-center font-bold"
+            value={cantidad}
+            onChange={(e) => setCantidad(e.target.value)}
+            title="Cantidad de equipos"
+          />
+          <button
+            onClick={generarEquipos}
+            className="bg-blue-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-blue-700 flex items-center gap-2 shadow-lg"
+          >
+            <Users size={18} /> Crear Equipos
+          </button>
+          {equipos.length > 0 && (
+            <button
+              onClick={borrarEquipos}
+              className="bg-red-100 text-red-600 px-4 py-2 rounded-xl font-bold hover:bg-red-200"
+            >
+              Cerrar Salas
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {equipos.map((eq) => (
+          <div
+            key={eq.id}
+            className="bg-white border-2 border-gray-200 p-5 rounded-2xl shadow-sm"
+          >
+            <div className="flex justify-between items-center border-b pb-3 mb-3">
+              <h4 className="font-black text-lg text-gray-800">
+                {eq.nombre_equipo}
+              </h4>
+              <a
+                href={eq.enlace_sala}
+                target="_blank"
+                rel="noreferrer"
+                className="bg-green-100 text-green-700 px-4 py-1.5 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-green-200 transition-colors"
+              >
+                <Video size={16} /> Supervisar Sala
+              </a>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {eq.alumnos.map((al) => (
+                <span
+                  key={al.id}
+                  className="bg-gray-100 text-gray-700 text-xs px-2 py-1 rounded-full font-medium"
+                >
+                  {al.nombre} {al.apellido_paterno}
+                </span>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const EquiposAlumnoView = ({ grupoId, asignaturaId }) => {
+  const [miEquipo, setMiEquipo] = useState(null);
+
+  useEffect(() => {
+    api
+      .get(`/alumno/aula-virtual/${grupoId}/${asignaturaId}/mi-equipo`)
+      .then((res) => setMiEquipo(res.data))
+      .catch((err) => console.log(err));
+  }, []);
+
+  if (!miEquipo) {
+    return (
+      <div className="text-center py-12 bg-gray-50 rounded-2xl border border-dashed border-gray-300">
+        <Users size={48} className="mx-auto text-gray-300 mb-4" />
+        <h3 className="text-xl font-bold text-gray-700">Sin equipo asignado</h3>
+        <p className="text-gray-500 mt-2">
+          Actualmente no estás asignado a ninguna sala de trabajo.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-gradient-to-r from-teal-500 to-emerald-500 p-8 rounded-3xl shadow-xl text-center text-white max-w-xl mx-auto transform hover:scale-105 transition-transform duration-300">
+      <Users size={64} className="mx-auto text-white/80 mb-4" />
+      <h2 className="text-3xl font-black mb-2">
+        ¡Tienes una actividad en equipo!
+      </h2>
+      <p className="text-lg text-teal-50 mb-8">
+        El profesor te ha asignado a la{" "}
+        <strong>{miEquipo.nombre_equipo}</strong>.
+      </p>
+
+      <a
+        href={miEquipo.enlace_sala}
+        target="_blank"
+        rel="noreferrer"
+        className="inline-flex items-center gap-3 bg-white text-teal-700 px-8 py-4 rounded-full font-black text-xl shadow-lg hover:shadow-2xl transition-all"
+      >
+        <Video size={24} className="text-teal-500" />
+        Entrar a mi Sala de Equipo
+      </a>
+      <p className="text-xs text-teal-100 mt-4">
+        Haz clic para abrir tu videollamada privada con tu equipo.
+      </p>
     </div>
   );
 };

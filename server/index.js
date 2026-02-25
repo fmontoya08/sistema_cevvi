@@ -8452,11 +8452,9 @@ adminRouter.post("/anuncios", async (req, res) => {
     }
 
     await connection.commit();
-    res
-      .status(201)
-      .send({
-        message: "Anuncio publicado y notificaciones enviadas con éxito.",
-      });
+    res.status(201).send({
+      message: "Anuncio publicado y notificaciones enviadas con éxito.",
+    });
   } catch (error) {
     await connection.rollback();
     console.error("Error al publicar el anuncio:", error);
@@ -8499,6 +8497,159 @@ apiRouter.get("/anuncios/feed", async (req, res) => {
     res.status(500).send({ message: "Error al cargar el feed." });
   }
 });
+
+// ==========================================
+// MÓDULO DE EQUIPOS / BREAKOUT ROOMS
+// ==========================================
+
+// 1. OBTENER LOS EQUIPOS ACTUALES DE LA CLASE
+docenteRouter.get(
+  "/aula-virtual/:grupoId/:asignaturaId/equipos",
+  async (req, res) => {
+    const { grupoId, asignaturaId } = req.params;
+    try {
+      const [equipos] = await db.query(
+        "SELECT * FROM aula_equipos WHERE grupo_id = ? AND asignatura_id = ?",
+        [grupoId, asignaturaId],
+      );
+
+      // Buscar los alumnos de cada equipo
+      for (let equipo of equipos) {
+        const [alumnos] = await db.query(
+          `SELECT u.id, u.nombre, u.apellido_paterno, u.foto_perfil 
+         FROM aula_equipo_alumnos aea 
+         JOIN usuarios u ON aea.alumno_id = u.id 
+         WHERE aea.equipo_id = ?`,
+          [equipo.id],
+        );
+        equipo.alumnos = alumnos;
+      }
+      res.json(equipos);
+    } catch (error) {
+      res.status(500).send({ message: "Error al obtener equipos." });
+    }
+  },
+);
+
+// 2. GENERAR EQUIPOS AUTOMÁTICAMENTE
+docenteRouter.post(
+  "/aula-virtual/:grupoId/:asignaturaId/generar-equipos",
+  async (req, res) => {
+    const { grupoId, asignaturaId } = req.params;
+    const { cantidad_equipos } = req.body; // Ej. 4 equipos
+
+    const connection = await db.getConnection();
+    try {
+      await connection.beginTransaction();
+
+      // A) Borrar equipos anteriores si existían (Limpiar la casa)
+      await connection.query(
+        "DELETE FROM aula_equipos WHERE grupo_id = ? AND asignatura_id = ?",
+        [grupoId, asignaturaId],
+      );
+
+      // B) Obtener a todos los alumnos del grupo
+      const [alumnos] = await connection.query(
+        "SELECT alumno_id FROM grupo_alumnos WHERE grupo_id = ?",
+        [grupoId],
+      );
+
+      if (alumnos.length === 0)
+        return res
+          .status(400)
+          .send({ message: "No hay alumnos para dividir." });
+
+      // Mezclar alumnos al azar (Algoritmo Fisher-Yates)
+      let mezclados = [...alumnos].sort(() => Math.random() - 0.5);
+
+      // C) Crear los equipos y repartir alumnos
+      for (let i = 1; i <= cantidad_equipos; i++) {
+        const nombreEquipo = `Sala de Trabajo ${i}`;
+        // Usamos Jitsi. Cada enlace debe ser único.
+        const enlaceSala = `https://meet.jit.si/SIGLOXXI-G${grupoId}-A${asignaturaId}-Sala${i}-${Date.now()}`;
+
+        // Insertar Equipo
+        const [resEquipo] = await connection.query(
+          "INSERT INTO aula_equipos (grupo_id, asignatura_id, nombre_equipo, enlace_sala) VALUES (?, ?, ?, ?)",
+          [grupoId, asignaturaId, nombreEquipo, enlaceSala],
+        );
+        const nuevoEquipoId = resEquipo.insertId;
+
+        // Asignar alumnos a este equipo (reparto equitativo)
+        // Ejemplo: si son 10 alumnos y 2 equipos, mete 5 en cada uno.
+        const pedazo = Math.ceil(mezclados.length / (cantidad_equipos - i + 1));
+        const alumnosParaEsteEquipo = mezclados.splice(0, pedazo);
+
+        for (let al of alumnosParaEsteEquipo) {
+          await connection.query(
+            "INSERT INTO aula_equipo_alumnos (equipo_id, alumno_id) VALUES (?, ?)",
+            [nuevoEquipoId, al.alumno_id],
+          );
+
+          // ==========================================
+          // NOTIFICAR AL ALUMNO QUE TIENE SALA NUEVA
+          // ==========================================
+          const mensaje = `El profesor te asignó a la ${nombreEquipo} para trabajar. Entra al Aula Virtual.`;
+          const urlDestino = `/alumno/grupo/${grupoId}/asignatura/${asignaturaId}/aula`;
+
+          await connection.query(
+            "INSERT INTO notificaciones (usuario_id, mensaje, url_destino, leido, fecha, tipo) VALUES (?, ?, ?, 0, NOW(), 'sistema')",
+            [al.alumno_id, mensaje, urlDestino],
+          );
+        }
+      }
+
+      await connection.commit();
+      res.json({ message: "Equipos generados y alumnos notificados." });
+    } catch (error) {
+      await connection.rollback();
+      console.error(error);
+      res.status(500).send({ message: "Error al generar equipos." });
+    } finally {
+      connection.release();
+    }
+  },
+);
+
+// 3. ELIMINAR TODOS LOS EQUIPOS (Para regresar a clase normal)
+docenteRouter.delete(
+  "/aula-virtual/:grupoId/:asignaturaId/borrar-equipos",
+  async (req, res) => {
+    try {
+      await db.query(
+        "DELETE FROM aula_equipos WHERE grupo_id = ? AND asignatura_id = ?",
+        [req.params.grupoId, req.params.asignaturaId],
+      );
+      res.json({ message: "Salas de trabajo cerradas." });
+    } catch (error) {
+      res.status(500).send({ message: "Error al cerrar salas." });
+    }
+  },
+);
+
+// OBTENER LA SALA DE EQUIPO DEL ALUMNO
+alumnoRouter.get(
+  "/aula-virtual/:grupoId/:asignaturaId/mi-equipo",
+  async (req, res) => {
+    try {
+      const [equipo] = await db.query(
+        `SELECT ae.nombre_equipo, ae.enlace_sala 
+       FROM aula_equipos ae 
+       JOIN aula_equipo_alumnos aea ON ae.id = aea.equipo_id 
+       WHERE ae.grupo_id = ? AND ae.asignatura_id = ? AND aea.alumno_id = ?`,
+        [req.params.grupoId, req.params.asignaturaId, req.user.id],
+      );
+
+      if (equipo.length > 0) {
+        res.json(equipo[0]);
+      } else {
+        res.json(null); // No tiene equipo
+      }
+    } catch (error) {
+      res.status(500).send("Error");
+    }
+  },
+);
 
 app.listen(PORT, () => {
   console.log(`Servidor corriendo en http://localhost:${PORT}`);
