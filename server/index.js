@@ -170,9 +170,7 @@ const CPANEL_CONFIG = {
 };
 
 async function crearCorreoCpanel(usuario, passwordCorreo) {
-  console.log(
-    `[CPANEL] Intentando crear correo: ${usuario}@${CPANEL_CONFIG.domain}`,
-  );
+  console.log(`[CPANEL] Creando correo: ${usuario}@${CPANEL_CONFIG.domain}`);
   try {
     const url = `https://${CPANEL_CONFIG.host}:2083/execute/Email/add_pop`;
     const params = new URLSearchParams({
@@ -182,51 +180,29 @@ async function crearCorreoCpanel(usuario, passwordCorreo) {
       quota: 250, // 250MB de espacio
     });
 
+    // Autenticación Básica (Usuario:Password en base64)
     const authString = Buffer.from(
       `${CPANEL_CONFIG.user}:${CPANEL_CONFIG.password}`,
     ).toString("base64");
 
-    const agent = new https.Agent({
-      rejectUnauthorized: false,
-    });
-
     const response = await axios.get(`${url}?${params.toString()}`, {
       headers: { Authorization: `Basic ${authString}` },
-      httpsAgent: agent,
     });
 
-    // 👇 AGREGAMOS ESTO PARA VER QUÉ DEVUELVE REALMENTE NEUBOX
-    console.log("\n====== RESPUESTA DE CPANEL ======");
-    if (typeof response.data === "string") {
-      console.log(response.data.substring(0, 500) + "\n... [HTML TRUNCADO]");
-    } else {
-      console.log(JSON.stringify(response.data, null, 2));
-    }
-    console.log("=================================\n");
-
-    if (response.data && response.data.status === 1) {
-      console.log("✅ Correo creado exitosamente en cPanel.");
+    if (response.data.status === 1) {
+      console.log("✅ Correo creado en cPanel.");
       return true;
     } else {
-      const errorMsg = response.data?.errors
-        ? response.data.errors.join(", ")
-        : "Revisa la consola para ver el error completo arriba 👆";
-
-      if (errorMsg.includes("already exists")) {
-        console.log("⚠️ El correo ya existía en cPanel, omitiendo...");
-        return true;
-      }
-
-      console.error("❌ cPanel rechazó la petición. Motivo:", errorMsg);
+      const errorMsg = response.data.errors
+        ? response.data.errors[0]
+        : "Error desconocido";
+      if (errorMsg.includes("already exists")) return true; // Si ya existe, todo bien
+      console.error("❌ Error cPanel:", errorMsg);
+      // No lanzamos error fatal para no detener el registro del alumno
       return false;
     }
   } catch (error) {
-    console.error("❌ Falló la conexión hacia cPanel:", error.message);
-    if (error.response && error.response.status === 401) {
-      console.error(
-        "⚠️ ERROR 401: El usuario o contraseña de cPanel son incorrectos.",
-      );
-    }
+    console.error("Error conexión cPanel:", error.message);
     return false;
   }
 }
