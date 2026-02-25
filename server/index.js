@@ -1700,7 +1700,7 @@ adminRouter.post(
 
 // --- RUTAS DE GESTIÓN FINANCIERA (ADMIN --> ALUMNO) ---
 
-// 1. OBTENER FINANZAS DE UN ALUMNO ESPECÍFICO
+// 1. OBTENER FINANZAS DE UN ALUMNO ESPECÍFICO (ADMIN)
 adminRouter.get("/alumnos/:id/finanzas", async (req, res) => {
   try {
     const [rows] = await db.query(
@@ -1709,10 +1709,14 @@ adminRouter.get("/alumnos/:id/finanzas", async (req, res) => {
         a.id,
         c.nombre_concepto,
         a.monto_a_pagar,
-        a.estatus_pago,
+        -- CAMBIO APLICADO: Evalúa la fecha en tiempo real ignorando las horas
+        CASE 
+          WHEN a.estatus_pago = 'pendiente' AND DATE(a.fecha_vencimiento) < CURDATE() THEN 'vencido'
+          ELSE a.estatus_pago 
+        END as estatus_pago,
         a.fecha_vencimiento,
         a.fecha_pago,
-        u.nombre, u.apellido_paterno, u.matricula -- Datos del alumno
+        u.nombre, u.apellido_paterno, u.matricula
       FROM adeudos_alumnos a
       INNER JOIN conceptos_pago c ON a.concepto_id = c.id
       INNER JOIN usuarios u ON a.alumno_id = u.id
@@ -2726,7 +2730,7 @@ app.get("/alumno/finanzas/resumen", authenticateToken, async (req, res) => {
         a.id,
         c.nombre_concepto,
         a.monto_a_pagar,
-        -- CAMBIO: Evalúa la fecha en tiempo real para mostrar 'vencido'
+        -- CAMBIO APLICADO: Agregamos DATE() para asegurar la comparación
         CASE 
           WHEN a.estatus_pago = 'pendiente' AND DATE(a.fecha_vencimiento) < CURDATE() THEN 'vencido'
           ELSE a.estatus_pago 
