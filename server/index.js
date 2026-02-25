@@ -182,28 +182,35 @@ async function crearCorreoCpanel(usuario, passwordCorreo) {
       quota: 250, // 250MB de espacio
     });
 
-    // Autenticación Básica (Usuario:Password en base64)
     const authString = Buffer.from(
       `${CPANEL_CONFIG.user}:${CPANEL_CONFIG.password}`,
     ).toString("base64");
 
-    // --- SOLUCIÓN: Agente HTTPS para ignorar bloqueos de SSL de Neubox ---
     const agent = new https.Agent({
       rejectUnauthorized: false,
     });
 
     const response = await axios.get(`${url}?${params.toString()}`, {
       headers: { Authorization: `Basic ${authString}` },
-      httpsAgent: agent, // <--- Se lo pasamos a axios
+      httpsAgent: agent,
     });
 
-    if (response.data.status === 1) {
+    // 👇 AGREGAMOS ESTO PARA VER QUÉ DEVUELVE REALMENTE NEUBOX
+    console.log("\n====== RESPUESTA DE CPANEL ======");
+    if (typeof response.data === "string") {
+      console.log(response.data.substring(0, 500) + "\n... [HTML TRUNCADO]");
+    } else {
+      console.log(JSON.stringify(response.data, null, 2));
+    }
+    console.log("=================================\n");
+
+    if (response.data && response.data.status === 1) {
       console.log("✅ Correo creado exitosamente en cPanel.");
       return true;
     } else {
-      const errorMsg = response.data.errors
-        ? response.data.errors[0]
-        : "Error desconocido en el servidor";
+      const errorMsg = response.data?.errors
+        ? response.data.errors.join(", ")
+        : "Revisa la consola para ver el error completo arriba 👆";
 
       if (errorMsg.includes("already exists")) {
         console.log("⚠️ El correo ya existía en cPanel, omitiendo...");
@@ -214,11 +221,10 @@ async function crearCorreoCpanel(usuario, passwordCorreo) {
       return false;
     }
   } catch (error) {
-    // Si falla la conexión de red o credenciales incorrectas
     console.error("❌ Falló la conexión hacia cPanel:", error.message);
     if (error.response && error.response.status === 401) {
       console.error(
-        "⚠️ ERROR 401: El usuario o contraseña de cPanel (CPANEL_CONFIG) son incorrectos o el proveedor bloqueó la API.",
+        "⚠️ ERROR 401: El usuario o contraseña de cPanel son incorrectos.",
       );
     }
     return false;
