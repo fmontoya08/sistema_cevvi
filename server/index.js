@@ -105,16 +105,15 @@ async function enviarCredenciales(
   passCorreo,
 ) {
   try {
-    // 1. CONFIGURACIÓN DEL SERVIDOR (Tus credenciales reales)
+    // 1. CONFIGURACIÓN DEL SERVIDOR CPANEL (En lugar de Gmail)
     let transporter = nodemailer.createTransport({
-      host: "smtp.gmail.com",
-      port: 587,
-      secure: false, // true para 465
+      host: "mail.universidadsigloxxi.com", // Tu servidor de Neubox
+      port: 465, // 465 es el puerto seguro SSL
+      secure: true, // true para el puerto 465
       auth: {
-        user: "franksnake08@gmail.com", // <--- Pon tu Gmail aquí (el mismo donde creaste la clave)
-        pass: "yipfsxwwmoikajlu", // <--- PEGA AQUÍ LAS 16 LETRAS QUE TE DIO GOOGLE
+        user: "controlescolar@universidadsigloxxi.com", // Tu correo real creado en cPanel
+        pass: "_(Wx!5CSLI9jmof#", // La contraseña de ese correo
       },
-      family: 4,
     });
 
     // 2. DISEÑO DEL CORREO
@@ -139,7 +138,7 @@ async function enviarCredenciales(
           </div>
           
           <p style="text-align: center; margin-top: 30px;">
-            <a href="https://www.universidadsigloxxi.com/login" style="background-color: #a72a34; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold;">Iniciar Sesión</a>
+            <a href="https://www.universidadsigloxxi.com/plataforma/login" style="background-color: #a72a34; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold;">Iniciar Sesión</a>
           </p>
         </div>
       </div>
@@ -147,10 +146,12 @@ async function enviarCredenciales(
 
     // 3. ENVÍO (AQUÍ ESTABA EL ERROR ANTES)
     await transporter.sendMail({
-      from: '"Universidad Siglo XXI" <franksnake08@gmail.com>', // Gmail forzará que salga de tu correo real, así que mejor ponlo aquí para evitar confusiones.
+      from: '"Universidad Siglo XXI" <controlescolar@universidadsigloxxi.com>', // Debe coincidir con el 'user' de arriba
       to: destinatario,
       subject: "🎓 ¡Bienvenido! Tus Accesos Oficiales",
-      html: htmlContent,
+      // Es súper importante agregar la versión en texto plano para evitar el SPAM
+      text: `Hola ${nombre}, tu registro fue exitoso. Matrícula: ${matricula}, Contraseña: ${passPlataforma}. Correo: ${correoInstitucional}, Contraseña Correo: ${passCorreo}. Ingresa en: https://www.universidadsigloxxi.com/login`,
+      html: htmlContent, // Tu variable con el diseño HTML
     });
 
     console.log(`✅ Correo enviado correctamente a: ${destinatario}`);
