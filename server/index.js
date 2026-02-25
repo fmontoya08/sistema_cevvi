@@ -2548,7 +2548,11 @@ app.get("/alumno/finanzas/resumen", authenticateToken, async (req, res) => {
         a.id,
         c.nombre_concepto,
         a.monto_a_pagar,
-        a.estatus_pago, -- 'pendiente','pagado','vencido'
+        -- CAMBIO: Evalúa la fecha en tiempo real para mostrar 'vencido'
+        CASE 
+          WHEN a.estatus_pago = 'pendiente' AND a.fecha_vencimiento < CURDATE() THEN 'vencido'
+          ELSE a.estatus_pago 
+        END as estatus_pago, 
         a.fecha_vencimiento,
         a.fecha_pago
       FROM adeudos_alumnos a
@@ -3210,7 +3214,15 @@ adminRouter.get("/alumnos/:id/adeudos", async (req, res) => {
   const { id: alumnoId } = req.params;
   try {
     const [adeudos] = await db.query(
-      `SELECT aa.*, cp.nombre_concepto
+      `SELECT 
+         aa.id, aa.alumno_id, aa.concepto_id, aa.monto_a_pagar, 
+         aa.fecha_vencimiento, aa.fecha_pago,
+         -- CAMBIO: Evalúa la fecha en tiempo real
+         CASE 
+           WHEN aa.estatus_pago = 'pendiente' AND aa.fecha_vencimiento < CURDATE() THEN 'vencido'
+           ELSE aa.estatus_pago 
+         END as estatus_pago,
+         cp.nombre_concepto
        FROM adeudos_alumnos aa
        JOIN conceptos_pago cp ON aa.concepto_id = cp.id
        WHERE aa.alumno_id = ?
@@ -6714,16 +6726,18 @@ alumnoRouter.post("/solicitudes", async (req, res) => {
   }
 });
 
-// GET (Alumno): Obtener la config del aula virtual
+// GET (Alumno): Obtener la config del aula virtual (CON BLOQUEO DE PAGO)
 alumnoRouter.get(
   "/aula-virtual/:grupoId/:asignaturaId/config",
   async (req, res) => {
     try {
       const { grupoId, asignaturaId } = req.params;
-      // Validar que el alumno está inscrito en este grupo
+      const alumnoId = req.user.id;
+
+      // 1. Validar que el alumno está inscrito en este grupo
       const [[inscripcion]] = await db.query(
         "SELECT * FROM grupo_alumnos WHERE grupo_id = ? AND alumno_id = ?",
-        [grupoId, req.user.id],
+        [grupoId, alumnoId],
       );
       if (!inscripcion) {
         return res
@@ -6731,8 +6745,24 @@ alumnoRouter.get(
           .send({ message: "No estás inscrito en este curso." });
       }
 
-      // Usamos la misma función helper para obtener o crear la config
+      // ==========================================
+      // 2. SISTEMA DE BLOQUEO POR ADEUDO VENCIDO (INTELIGENTE)
+      // ==========================================
+      const [adeudos] = await db.query(
+        `SELECT COUNT(*) as vencidos 
+         FROM adeudos_alumnos 
+         WHERE alumno_id = ? 
+         AND (estatus_pago = 'vencido' OR (estatus_pago = 'pendiente' AND fecha_vencimiento < CURDATE()))`,
+        [alumnoId],
+      );
+      const tieneAdeudos = adeudos[0].vencidos > 0;
+
+      // 3. Usamos la función helper para obtener o crear la config
       const config = await getOrCreateAulaConfig(grupoId, asignaturaId);
+
+      // Adjuntamos la bandera de bloqueo
+      config.bloqueado_por_pago = tieneAdeudos;
+
       res.json(config);
     } catch (error) {
       console.error("Error al obtener config de aula (alumno):", error);
@@ -6740,7 +6770,6 @@ alumnoRouter.get(
     }
   },
 );
-// --- INICIA NUEVO CÓDIGO (AGREGAR) ---
 
 // GET (Alumno): Obtener listado de tareas
 alumnoRouter.get(
@@ -7307,6 +7336,58 @@ apiRouter.post("/examenes", verifyToken, async (req, res) => {
           }
         }
       }
+    }
+
+    // ==========================================
+    // NOTIFICAR A LOS ALUMNOS DEL NUEVO EXAMEN
+    // ==========================================
+    try {
+      // 1. Obtener nombre de la materia
+      const [[materia]] = await connection.query(
+        "SELECT nombre_asignatura FROM asignaturas WHERE id = ?",
+        [asignatura_id],
+      );
+      const nombreMateria = materia ? materia.nombre_asignatura : "tu clase";
+
+      const mensajeNotif = `📖 Nuevo examen programado en ${nombreMateria}: "${titulo}"`;
+      const urlDestino = `/alumno/grupo/${grupo_id}/asignatura/${asignatura_id}/aula`;
+
+      // 2. Obtener alumnos del grupo
+      const [alumnos] = await connection.query(
+        "SELECT alumno_id FROM grupo_alumnos WHERE grupo_id = ?",
+        [grupo_id],
+      );
+
+      for (const al of alumnos) {
+        // A) Campanita
+        await connection.query(
+          "INSERT INTO notificaciones (usuario_id, mensaje, url_destino, leido, fecha, tipo) VALUES (?, ?, ?, 0, NOW(), 'examen')",
+          [al.alumno_id, mensajeNotif, urlDestino],
+        );
+
+        // B) Push Android
+        const [tokens] = await connection.query(
+          "SELECT token FROM push_tokens WHERE user_id = ?",
+          [al.alumno_id],
+        );
+        if (tokens.length > 0) {
+          const expoMessages = tokens.map((t) => ({
+            to: t.token,
+            sound: "default",
+            title: "¡Examen Programado! 📝",
+            body: mensajeNotif,
+            data: { url: urlDestino },
+          }));
+
+          fetch("https://exp.host/--/api/v2/push/send", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(expoMessages),
+          }).catch((e) => console.error("Error push examen:", e));
+        }
+      }
+    } catch (notifError) {
+      console.error("Error al notificar sobre nuevo examen:", notifError);
     }
 
     await connection.commit(); // Confirmar cambios en la BD

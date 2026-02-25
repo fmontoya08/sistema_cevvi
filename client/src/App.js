@@ -103,6 +103,7 @@ import {
   PlusCircle,
   PenTool, // <-- NUEVO PARA LA PIZARRA
   Megaphone,
+  AlertOctagon,
 } from "lucide-react";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
@@ -12044,488 +12045,477 @@ const AulaVirtualPage = () => {
   // --- Componente Principal de Vista (Rediseñado con Pestañas) ---
   // --- Componente Principal de Vista (Rediseñado con Pestañas) ---
   // --- Componente Principal de Vista (Rediseñado estilo Dashboard) ---
-  const renderView = () => (
-    <div className="space-y-6">
-      {/* 1. ENCABEZADO TIPO DASHBOARD (Fondo Blanco, Sombra Suave) */}
-      <div
-        id="tour-aula-header"
-        className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4"
-      >
-        <div>
-          {/* AQUI MOSTRAMOS EL NOMBRE DE LA ASIGNATURA */}
-          <h2 className="text-3xl font-bold text-gray-800 tracking-tight flex flex-col">
-            <span>{config.nombre_asignatura || "Aula Virtual"}</span>
-            <span className="text-sm font-medium text-gray-500 mt-1">
-              Grupo: {config.nombre_grupo}
-            </span>
-          </h2>
+  const renderView = () => {
+    // ==========================================
+    // PANTALLA DE BLOQUEO POR FALTA DE PAGO
+    // ==========================================
+    if (user.rol === "alumno" && config.bloqueado_por_pago) {
+      return (
+        <div className="min-h-[60vh] flex items-center justify-center p-4 animate-in zoom-in duration-300">
+          <div className="bg-white p-8 md:p-12 rounded-3xl shadow-2xl text-center max-w-lg border-t-8 border-red-600">
+            <div className="bg-red-50 w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-6">
+              <AlertOctagon size={48} className="text-red-600 animate-pulse" />
+            </div>
+            <h2 className="text-3xl font-black text-gray-900 mb-4">
+              Acceso Suspendido
+            </h2>
+            <p className="text-gray-600 text-lg mb-8 leading-relaxed">
+              Hemos detectado colegiaturas o cargos con estatus{" "}
+              <strong className="text-red-600">Vencido</strong>. Por favor,
+              regulariza tu situación en caja para recuperar el acceso a tus
+              salones de clase.
+            </p>
+            <Link
+              to="/alumno/mis-pagos"
+              className="bg-red-600 text-white px-8 py-4 rounded-xl font-bold text-lg hover:bg-red-700 shadow-lg hover:shadow-xl transition-all block w-full"
+            >
+              Revisar Estado de Cuenta
+            </Link>
+          </div>
+        </div>
+      );
+    }
 
-          <div className="flex items-center gap-2 mt-3">
-            {/* Badges de Estado con diseño sutil */}
-            <span
-              className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border ${
-                config.modalidad === "presencial"
-                  ? "bg-blue-50 text-blue-700 border-blue-100"
-                  : "bg-purple-50 text-purple-700 border-purple-100"
-              }`}
-            >
-              {config.modalidad}
-            </span>
-            <span
-              className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border ${
-                config.estatus === "activo"
-                  ? "bg-green-50 text-green-700 border-green-100"
-                  : "bg-red-50 text-red-700 border-red-100"
-              }`}
-            >
-              {config.estatus}
-            </span>
+    return (
+      <div className="space-y-6">
+        {/* 1. ENCABEZADO RESPONSIVO */}
+        <div
+          id="tour-aula-header"
+          className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4"
+        >
+          <div className="w-full lg:w-auto">
+            <h2 className="text-2xl md:text-3xl font-bold text-gray-800 tracking-tight flex flex-col">
+              <span>{config.nombre_asignatura || "Aula Virtual"}</span>
+              <span className="text-sm font-medium text-gray-500 mt-1">
+                Grupo: {config.nombre_grupo}
+              </span>
+            </h2>
+
+            <div className="flex flex-wrap items-center gap-2 mt-3">
+              <span
+                className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${config.modalidad === "presencial" ? "bg-blue-50 text-blue-700 border-blue-100" : "bg-purple-50 text-purple-700 border-purple-100"}`}
+              >
+                {config.modalidad}
+              </span>
+              <span
+                className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${config.estatus === "activo" ? "bg-green-50 text-green-700 border-green-100" : "bg-red-50 text-red-700 border-red-100"}`}
+              >
+                {config.estatus}
+              </span>
+            </div>
+          </div>
+
+          {/* BOTONES DOCENTE (Se apilan en celular, en fila en PC) */}
+          <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto mt-2 lg:mt-0">
+            {user.rol === "docente" && (
+              <>
+                <button
+                  id="tour-docente-asistencia"
+                  onClick={handleIniciarSesionHoy}
+                  disabled={isCreatingSession}
+                  className="flex-1 lg:flex-none justify-center items-center px-4 py-3 text-sm font-bold text-white bg-[#a72a34] rounded-xl hover:bg-[#802028] disabled:bg-gray-400 shadow-md transition-all flex gap-2"
+                >
+                  <ClipboardCheck size={18} />{" "}
+                  {isCreatingSession ? "Iniciando..." : "Asistencia"}
+                </button>
+                <button
+                  id="tour-docente-editar"
+                  onClick={() => setIsEditing(true)}
+                  className="flex-1 lg:flex-none justify-center items-center px-4 py-3 text-sm font-bold text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:text-[#a72a34] shadow-sm transition-all flex gap-2"
+                >
+                  <Edit2 size={18} /> Editar
+                </button>
+                <button
+                  id="tour-docente-acta"
+                  onClick={() =>
+                    navigate(
+                      `/docente/grupo/${grupoId}/asignatura/${asignaturaId}`,
+                    )
+                  }
+                  className="flex-1 lg:flex-none justify-center items-center px-4 py-3 text-sm font-bold text-[#a72a34] bg-red-50 border border-red-100 rounded-xl hover:bg-[#a72a34] hover:text-white shadow-sm transition-all flex gap-2"
+                >
+                  <GraduationCap size={18} /> Acta
+                </button>
+              </>
+            )}
           </div>
         </div>
 
-        {/* BOTONES DE ACCIÓN DOCENTE (Ahora ROJOS y Estilizados) */}
-        <div className="flex items-center gap-3">
-          {user.rol === "docente" && (
-            <>
-              {/* Botón Asistencia */}
-              <button
-                id="tour-docente-asistencia"
-                onClick={handleIniciarSesionHoy}
-                disabled={isCreatingSession}
-                className="flex items-center px-5 py-3 text-sm font-bold text-white bg-[#a72a34] rounded-xl hover:bg-[#802028] disabled:bg-gray-400 shadow-lg shadow-red-900/20 transition-all active:scale-95"
-              >
-                <ClipboardCheck size={18} className="mr-2" />
-                {isCreatingSession ? "Iniciando..." : "Pasar Asistencia"}
-              </button>
+        {/* 2. NAVEGACIÓN DE PESTAÑAS (SCROLL HORIZONTAL EN MÓVIL) */}
+        <div
+          id="tour-tabs"
+          className="border-b border-gray-200 bg-white md:bg-transparent px-2 md:px-0 rounded-t-xl overflow-hidden"
+        >
+          <nav
+            className="-mb-px flex space-x-2 md:space-x-8 overflow-x-auto custom-scrollbar pb-1 pt-2"
+            aria-label="Tabs"
+          >
+            <button
+              onClick={() => setActiveTab("info")}
+              className={`pb-3 px-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all whitespace-nowrap ${activeTab === "info" ? "border-[#a72a34] text-[#a72a34]" : "border-transparent text-gray-400 hover:text-gray-600"}`}
+            >
+              <Book size={18} /> Información
+            </button>
+            <button
+              onClick={() => setActiveTab("muro")}
+              className={`pb-3 px-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all whitespace-nowrap ${activeTab === "muro" ? "border-[#a72a34] text-[#a72a34]" : "border-transparent text-gray-400 hover:text-gray-600"}`}
+            >
+              <Bell size={18} /> Novedades
+            </button>
+            <button
+              onClick={() => setActiveTab("tareas")}
+              className={`pb-3 px-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all whitespace-nowrap ${activeTab === "tareas" ? "border-[#a72a34] text-[#a72a34]" : "border-transparent text-gray-400 hover:text-gray-600"}`}
+            >
+              <FileText size={18} /> Tareas
+            </button>
+            <button
+              onClick={() => setActiveTab("recursos")}
+              className={`pb-3 px-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all whitespace-nowrap ${activeTab === "recursos" ? "border-[#a72a34] text-[#a72a34]" : "border-transparent text-gray-400 hover:text-gray-600"}`}
+            >
+              <Paperclip size={18} /> Recursos
+            </button>
+            <button
+              onClick={() => setActiveTab("foro")}
+              className={`pb-3 px-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all whitespace-nowrap ${activeTab === "foro" ? "border-[#a72a34] text-[#a72a34]" : "border-transparent text-gray-400 hover:text-gray-600"}`}
+            >
+              <MessageSquare size={18} /> Foro
+            </button>
+            <button
+              onClick={() => setActiveTab("examenes")}
+              className={`pb-3 px-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all whitespace-nowrap ${activeTab === "examenes" ? "border-[#a72a34] text-[#a72a34]" : "border-transparent text-gray-400 hover:text-gray-600"}`}
+            >
+              <CheckCircle size={18} /> Exámenes
+            </button>
+            <button
+              onClick={() => setActiveTab("equipos")}
+              className={`pb-3 px-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all whitespace-nowrap ${activeTab === "equipos" ? "border-[#a72a34] text-[#a72a34]" : "border-transparent text-gray-400 hover:text-gray-600"}`}
+            >
+              <Users size={18} /> Equipos
+            </button>
+            <button
+              onClick={() => setActiveTab("analiticas")}
+              className={`pb-3 px-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all whitespace-nowrap ${activeTab === "analiticas" ? "border-[#a72a34] text-[#a72a34]" : "border-transparent text-gray-400 hover:text-gray-600"}`}
+            >
+              <TrendingUp size={18} /> Analíticas
+            </button>
+          </nav>
+        </div>
 
-              {/* Botón Editar (Estilo secundario pero acorde) */}
-              <button
-                id="tour-docente-editar"
-                onClick={() => setIsEditing(true)}
-                className="flex items-center px-4 py-3 text-sm font-bold text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:text-[#a72a34] hover:border-[#a72a34]/30 transition-all shadow-sm"
+        {/* 3. CONTENIDO DE LA PESTAÑA ACTIVA (Card Blanca Limpia) */}
+        <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 min-h-[400px]">
+          {/* Pestaña: Información */}
+          {activeTab === "info" && (
+            <div className="space-y-8 animate-in fade-in duration-300">
+              {/* Sección Videollamada Destacada */}
+              {/* Sección Videollamada Destacada */}
+              <div
+                id="tour-info-videollamada"
+                className="bg-gradient-to-r from-gray-900 to-gray-800 p-6 rounded-2xl text-white flex justify-between items-center shadow-lg"
               >
-                <Edit2 size={18} className="mr-2" /> Editar Curso
-              </button>
+                <div>
+                  <h4 className="font-bold text-lg mb-1 flex items-center gap-2">
+                    <Video className="text-red-500" /> Sala de Videoconferencia
+                  </h4>
+                  <p className="text-gray-300 text-sm">
+                    {config.enlace_videollamada
+                      ? "Enlace activo para la sesión en vivo."
+                      : "El docente aún no ha configurado el enlace."}
+                  </p>
+                </div>
 
-              {/* Botón Calificaciones */}
-              <button
-                id="tour-docente-acta"
-                onClick={() =>
-                  navigate(
-                    `/docente/grupo/${grupoId}/asignatura/${asignaturaId}`,
-                  )
-                }
-                className="flex items-center px-4 py-3 text-sm font-bold text-[#a72a34] bg-red-50 border border-red-100 rounded-xl hover:bg-[#a72a34] hover:text-white transition-all shadow-sm"
-              >
-                <GraduationCap size={18} className="mr-2" />
-                Acta Final
-              </button>
-            </>
+                {config.enlace_videollamada && (
+                  // VOLVEMOS AL ENLACE DIRECTO (Abre nueva pestaña)
+                  <a
+                    href={config.enlace_videollamada}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-6 py-3 bg-[#a72a34] hover:bg-[#802028] text-white font-bold rounded-xl transition-all shadow-lg transform hover:-translate-y-1 flex items-center gap-2"
+                  >
+                    Unirse a la Clase <ArrowRightCircle size={18} />
+                  </a>
+                )}
+              </div>
+
+              {config.descripcion_curso && (
+                <div className="bg-blue-50 p-6 rounded-2xl border border-blue-100 shadow-sm">
+                  <h4 className="font-bold text-blue-800 text-lg mb-2 flex items-center gap-2">
+                    <Sparkles size={20} /> Bienvenida / Descripción General
+                  </h4>
+                  <p className="text-gray-700 text-sm leading-relaxed whitespace-pre-wrap">
+                    {config.descripcion_curso}
+                  </p>
+                </div>
+              )}
+
+              {/* Grid de Información */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-4">
+                  <div>
+                    <h4 className="font-bold text-gray-800 border-b border-gray-100 pb-2 mb-2 flex items-center gap-2">
+                      <Sparkles size={16} className="text-[#a72a34]" />{" "}
+                      Objetivos
+                    </h4>
+                    <p className="text-gray-600 text-sm leading-relaxed whitespace-pre-wrap">
+                      {config.objetivos || "Sin información definida."}
+                    </p>
+                  </div>
+                  {/* BLOQUE DE EVALUACIÓN DINÁMICO */}
+                  <div
+                    id="tour-info-evaluacion"
+                    className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm"
+                  >
+                    <h4 className="font-bold text-gray-800 border-b border-gray-100 pb-2 mb-4 flex items-center gap-2">
+                      <Award size={18} className="text-[#a72a34]" /> Criterios
+                      de Evaluación
+                    </h4>
+
+                    {/* Texto adicional */}
+                    {config.evaluacion && (
+                      <p className="text-gray-600 text-sm mb-4 italic">
+                        "{config.evaluacion}"
+                      </p>
+                    )}
+
+                    {/* Barras Dinámicas */}
+                    <div className="space-y-4">
+                      {config.criterios &&
+                        config.criterios.map((c, i) => {
+                          // Asignamos colores según el tipo
+                          let colorBar = "bg-gray-500";
+                          let colorText = "text-gray-600";
+
+                          if (c.tipo_origen === "sistema_tareas") {
+                            colorBar = "bg-blue-500";
+                            colorText = "text-blue-600";
+                          }
+                          if (c.tipo_origen === "sistema_examenes") {
+                            colorBar = "bg-purple-500";
+                            colorText = "text-purple-600";
+                          }
+                          if (c.tipo_origen === "sistema_asistencia") {
+                            colorBar = "bg-green-500";
+                            colorText = "text-green-600";
+                          }
+                          if (c.tipo_origen === "manual") {
+                            colorBar = "bg-orange-500";
+                            colorText = "text-orange-600";
+                          }
+
+                          return (
+                            <div key={i}>
+                              <div className="flex justify-between text-xs font-bold mb-1">
+                                <span className={`${colorText} uppercase`}>
+                                  {c.nombre_criterio}
+                                </span>
+                                <span className="text-gray-700">
+                                  {c.porcentaje}%
+                                </span>
+                              </div>
+                              <div className="w-full bg-gray-100 rounded-full h-2.5">
+                                <div
+                                  className={`h-2.5 rounded-full transition-all duration-1000 ${colorBar}`}
+                                  style={{ width: `${c.porcentaje}%` }}
+                                ></div>
+                              </div>
+                            </div>
+                          );
+                        })}
+
+                      {(!config.criterios || config.criterios.length === 0) && (
+                        <p className="text-xs text-gray-400 text-center">
+                          El docente aún no define los criterios.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                    <h4 className="font-bold text-gray-800 mb-2 flex items-center gap-2">
+                      <Clock size={16} className="text-[#a72a34]" /> Horario
+                    </h4>
+                    <p className="text-gray-600 text-sm whitespace-pre-wrap">
+                      {config.horario || "Por definir."}
+                    </p>
+                  </div>
+                  <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                    <h4 className="font-bold text-gray-800 mb-2 flex items-center gap-2">
+                      <User size={16} className="text-[#a72a34]" /> Contacto
+                      Docente
+                    </h4>
+                    <p className="text-gray-600 text-sm whitespace-pre-wrap">
+                      {config.contacto_docente || "No especificado."}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Historial Asistencia (Solo Alumno) */}
+              {user.rol === "alumno" && (
+                <div
+                  id="tour-info-asistencia"
+                  className="mt-8 pt-8 border-t border-gray-100"
+                >
+                  <h4 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+                    <History size={20} className="text-gray-400" /> Mi
+                    Asistencia
+                  </h4>
+                  {loadingHistorial ? (
+                    <p className="text-sm text-gray-400">Cargando...</p>
+                  ) : historialAsistencia.length === 0 ? (
+                    <div className="p-6 bg-gray-50 rounded-xl text-center text-gray-400 text-sm border border-dashed">
+                      No hay registros de asistencia.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
+                      {/* --- BLOQUE CORREGIDO: HISTORIAL DE ASISTENCIA --- */}
+                      {historialAsistencia.map((reg) => (
+                        <div
+                          key={reg.sesion_id}
+                          className={`p-3 rounded-xl border text-center transition-all hover:shadow-md ${
+                            reg.mi_estatus === "presente"
+                              ? "bg-green-50 border-green-100"
+                              : reg.mi_estatus === "justificado"
+                                ? "bg-yellow-50 border-yellow-100"
+                                : "bg-red-50 border-red-100"
+                          }`}
+                        >
+                          {/* AQUÍ AGREGAMOS LA PALABRA "ASISTENCIA" */}
+                          <p className="text-[10px] uppercase font-bold tracking-wider text-gray-400 mb-1">
+                            Asistencia
+                          </p>
+
+                          {/* AQUÍ USAMOS LA FECHA BONITA QUE VIENE DEL BACKEND */}
+                          <p className="text-xs font-bold text-gray-700 mb-2">
+                            {reg.fecha_mostrar || "Fecha pendiente"}
+                          </p>
+
+                          {/* ESTATUS (Presente/Falta) */}
+                          <span
+                            className={`text-xs font-black uppercase px-2 py-0.5 rounded-full ${
+                              reg.mi_estatus === "presente"
+                                ? "bg-green-100 text-green-700"
+                                : reg.mi_estatus === "justificado"
+                                  ? "bg-yellow-100 text-yellow-700"
+                                  : "bg-red-100 text-red-700"
+                            }`}
+                          >
+                            {reg.mi_estatus}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Pestaña: Tareas */}
+          {activeTab === "tareas" && (
+            <div
+              id="tour-tareas-lista"
+              className="animate-in fade-in duration-300"
+            >
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xl font-bold text-gray-800">
+                  Actividades de Aprendizaje
+                </h3>
+                {user.rol === "docente" && (
+                  <button
+                    id="tour-docente-btn-tarea"
+                    onClick={() => setShowCrearTareaModal(true)}
+                    className="bg-[#a72a34] text-white px-5 py-2.5 rounded-xl font-bold hover:bg-[#802028] shadow-lg shadow-red-900/10 flex items-center gap-2 transition-transform active:scale-95"
+                  >
+                    <Plus size={18} /> Nueva Tarea
+                  </button>
+                )}
+              </div>
+              {renderTareasList()}
+            </div>
+          )}
+          {/* CONTENIDO DE LAS PESTAÑAS NUEVAS */}
+
+          {activeTab === "muro" && (
+            <div id="tour-muro-novedades" className="mt-6">
+              <MuroDocentePage />
+            </div>
+          )}
+          {activeTab === "equipos" && (
+            <div id="tour-equipos" className="animate-in fade-in duration-300">
+              {user.rol === "docente" ? (
+                // VISTA DEL DOCENTE
+                <EquiposDocenteView
+                  grupoId={grupoId}
+                  asignaturaId={asignaturaId}
+                />
+              ) : (
+                // VISTA DEL ALUMNO
+                <EquiposAlumnoView
+                  grupoId={grupoId}
+                  asignaturaId={asignaturaId}
+                />
+              )}
+            </div>
+          )}
+
+          {activeTab === "examenes" && (
+            <div id="tour-examenes-lista" className="mt-6">
+              {/* Cargamos la LISTA, no el creador directo */}
+              <ExamenesPage />
+            </div>
+          )}
+
+          {activeTab === "analiticas" && (
+            <div className="mt-6">
+              <AnaliticasGrupoPage />
+            </div>
+          )}
+
+          {/* Pestaña: Recursos */}
+          {activeTab === "recursos" && (
+            <div
+              id="tour-recursos-lista"
+              className="animate-in fade-in duration-300"
+            >
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xl font-bold text-gray-800">
+                  Material de Consulta
+                </h3>
+                {user.rol === "docente" && (
+                  <button
+                    id="tour-docente-btn-recurso"
+                    onClick={() => setShowRecursoModal(true)}
+                    className="bg-white border-2 border-[#a72a34] text-[#a72a34] px-5 py-2.5 rounded-xl font-bold hover:bg-[#a72a34] hover:text-white transition-all flex items-center gap-2"
+                  >
+                    <UploadCloud size={18} /> Subir Material
+                  </button>
+                )}
+              </div>
+              {renderRecursosList()}
+            </div>
+          )}
+
+          {/* Pestaña: Foro */}
+          {activeTab === "foro" && (
+            <div
+              id="tour-foro-lista"
+              className="animate-in fade-in duration-300"
+            >
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xl font-bold text-gray-800">
+                  Foro de Discusión
+                </h3>
+                {/* Botón del Foro movido a la nueva función de renderizado o aquí mismo si prefieres */}
+              </div>
+              {renderForoList()}
+            </div>
           )}
         </div>
       </div>
-
-      {/* 2. NAVEGACIÓN DE PESTAÑAS (Estilo "Underline" limpio) */}
-      <div id="tour-tabs" className="border-b border-gray-200">
-        <nav className="-mb-px flex space-x-8" aria-label="Tabs">
-          <button
-            onClick={() => setActiveTab("info")}
-            className={`pb-4 px-2 text-sm font-bold flex items-center gap-2 border-b-2 transition-all ${
-              activeTab === "info"
-                ? "border-[#a72a34] text-[#a72a34]"
-                : "border-transparent text-gray-400 hover:text-gray-600 hover:border-gray-300"
-            }`}
-          >
-            <Book size={18} /> Información
-          </button>
-          <button
-            onClick={() => setActiveTab("equipos")}
-            className={`pb-4 px-2 text-sm font-bold flex items-center gap-2 border-b-2 transition-all ${
-              activeTab === "equipos"
-                ? "border-[#a72a34] text-[#a72a34]"
-                : "border-transparent text-gray-400 hover:text-gray-600"
-            }`}
-          >
-            <Users size={18} /> Salas de Trabajo
-          </button>
-          <button
-            onClick={() => setActiveTab("tareas")}
-            className={`pb-4 px-2 text-sm font-bold flex items-center gap-2 border-b-2 transition-all ${
-              activeTab === "tareas"
-                ? "border-[#a72a34] text-[#a72a34]"
-                : "border-transparent text-gray-400 hover:text-gray-600 hover:border-gray-300"
-            }`}
-          >
-            <FileText size={18} /> Tareas
-          </button>
-          <button
-            onClick={() => setActiveTab("recursos")}
-            className={`pb-4 px-2 text-sm font-bold flex items-center gap-2 border-b-2 transition-all ${
-              activeTab === "recursos"
-                ? "border-[#a72a34] text-[#a72a34]"
-                : "border-transparent text-gray-400 hover:text-gray-600 hover:border-gray-300"
-            }`}
-          >
-            <Paperclip size={18} /> Recursos
-          </button>
-          <button
-            onClick={() => setActiveTab("foro")}
-            className={`pb-4 px-2 text-sm font-bold flex items-center gap-2 border-b-2 transition-all ${
-              activeTab === "foro"
-                ? "border-[#a72a34] text-[#a72a34]"
-                : "border-transparent text-gray-400 hover:text-gray-600 hover:border-gray-300"
-            }`}
-          >
-            <MessageSquare size={18} /> Foro
-          </button>
-          {/* --- BOTÓN MURO (Nuevo) --- */}
-          <button
-            onClick={() => setActiveTab("muro")}
-            className={`pb-4 px-2 text-sm font-bold flex items-center gap-2 border-b-2 transition-all ${
-              activeTab === "muro"
-                ? "border-[#a72a34] text-[#a72a34]"
-                : "border-transparent text-gray-400 hover:text-gray-600 hover:border-gray-300"
-            }`}
-          >
-            <Bell size={18} /> Novedades
-          </button>
-
-          {/* --- BOTÓN EXÁMENES (Nuevo) --- */}
-          <button
-            onClick={() => setActiveTab("examenes")}
-            className={`pb-4 px-2 text-sm font-bold flex items-center gap-2 border-b-2 transition-all ${
-              activeTab === "examenes"
-                ? "border-[#a72a34] text-[#a72a34]"
-                : "border-transparent text-gray-400 hover:text-gray-600 hover:border-gray-300"
-            }`}
-          >
-            <CheckCircle size={18} /> Exámenes
-          </button>
-
-          {/* --- BOTÓN ANALÍTICAS (Nuevo) --- */}
-          <button
-            onClick={() => setActiveTab("analiticas")}
-            className={`pb-4 px-2 text-sm font-bold flex items-center gap-2 border-b-2 transition-all ${
-              activeTab === "analiticas"
-                ? "border-[#a72a34] text-[#a72a34]"
-                : "border-transparent text-gray-400 hover:text-gray-600 hover:border-gray-300"
-            }`}
-          >
-            <TrendingUp size={18} /> Analíticas
-          </button>
-        </nav>
-      </div>
-
-      {/* 3. CONTENIDO DE LA PESTAÑA ACTIVA (Card Blanca Limpia) */}
-      <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 min-h-[400px]">
-        {/* Pestaña: Información */}
-        {activeTab === "info" && (
-          <div className="space-y-8 animate-in fade-in duration-300">
-            {/* Sección Videollamada Destacada */}
-            {/* Sección Videollamada Destacada */}
-            <div
-              id="tour-info-videollamada"
-              className="bg-gradient-to-r from-gray-900 to-gray-800 p-6 rounded-2xl text-white flex justify-between items-center shadow-lg"
-            >
-              <div>
-                <h4 className="font-bold text-lg mb-1 flex items-center gap-2">
-                  <Video className="text-red-500" /> Sala de Videoconferencia
-                </h4>
-                <p className="text-gray-300 text-sm">
-                  {config.enlace_videollamada
-                    ? "Enlace activo para la sesión en vivo."
-                    : "El docente aún no ha configurado el enlace."}
-                </p>
-              </div>
-
-              {config.enlace_videollamada && (
-                // VOLVEMOS AL ENLACE DIRECTO (Abre nueva pestaña)
-                <a
-                  href={config.enlace_videollamada}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-6 py-3 bg-[#a72a34] hover:bg-[#802028] text-white font-bold rounded-xl transition-all shadow-lg transform hover:-translate-y-1 flex items-center gap-2"
-                >
-                  Unirse a la Clase <ArrowRightCircle size={18} />
-                </a>
-              )}
-            </div>
-
-            {config.descripcion_curso && (
-              <div className="bg-blue-50 p-6 rounded-2xl border border-blue-100 shadow-sm">
-                <h4 className="font-bold text-blue-800 text-lg mb-2 flex items-center gap-2">
-                  <Sparkles size={20} /> Bienvenida / Descripción General
-                </h4>
-                <p className="text-gray-700 text-sm leading-relaxed whitespace-pre-wrap">
-                  {config.descripcion_curso}
-                </p>
-              </div>
-            )}
-
-            {/* Grid de Información */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div className="space-y-4">
-                <div>
-                  <h4 className="font-bold text-gray-800 border-b border-gray-100 pb-2 mb-2 flex items-center gap-2">
-                    <Sparkles size={16} className="text-[#a72a34]" /> Objetivos
-                  </h4>
-                  <p className="text-gray-600 text-sm leading-relaxed whitespace-pre-wrap">
-                    {config.objetivos || "Sin información definida."}
-                  </p>
-                </div>
-                {/* BLOQUE DE EVALUACIÓN DINÁMICO */}
-                <div
-                  id="tour-info-evaluacion"
-                  className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm"
-                >
-                  <h4 className="font-bold text-gray-800 border-b border-gray-100 pb-2 mb-4 flex items-center gap-2">
-                    <Award size={18} className="text-[#a72a34]" /> Criterios de
-                    Evaluación
-                  </h4>
-
-                  {/* Texto adicional */}
-                  {config.evaluacion && (
-                    <p className="text-gray-600 text-sm mb-4 italic">
-                      "{config.evaluacion}"
-                    </p>
-                  )}
-
-                  {/* Barras Dinámicas */}
-                  <div className="space-y-4">
-                    {config.criterios &&
-                      config.criterios.map((c, i) => {
-                        // Asignamos colores según el tipo
-                        let colorBar = "bg-gray-500";
-                        let colorText = "text-gray-600";
-
-                        if (c.tipo_origen === "sistema_tareas") {
-                          colorBar = "bg-blue-500";
-                          colorText = "text-blue-600";
-                        }
-                        if (c.tipo_origen === "sistema_examenes") {
-                          colorBar = "bg-purple-500";
-                          colorText = "text-purple-600";
-                        }
-                        if (c.tipo_origen === "sistema_asistencia") {
-                          colorBar = "bg-green-500";
-                          colorText = "text-green-600";
-                        }
-                        if (c.tipo_origen === "manual") {
-                          colorBar = "bg-orange-500";
-                          colorText = "text-orange-600";
-                        }
-
-                        return (
-                          <div key={i}>
-                            <div className="flex justify-between text-xs font-bold mb-1">
-                              <span className={`${colorText} uppercase`}>
-                                {c.nombre_criterio}
-                              </span>
-                              <span className="text-gray-700">
-                                {c.porcentaje}%
-                              </span>
-                            </div>
-                            <div className="w-full bg-gray-100 rounded-full h-2.5">
-                              <div
-                                className={`h-2.5 rounded-full transition-all duration-1000 ${colorBar}`}
-                                style={{ width: `${c.porcentaje}%` }}
-                              ></div>
-                            </div>
-                          </div>
-                        );
-                      })}
-
-                    {(!config.criterios || config.criterios.length === 0) && (
-                      <p className="text-xs text-gray-400 text-center">
-                        El docente aún no define los criterios.
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
-                  <h4 className="font-bold text-gray-800 mb-2 flex items-center gap-2">
-                    <Clock size={16} className="text-[#a72a34]" /> Horario
-                  </h4>
-                  <p className="text-gray-600 text-sm whitespace-pre-wrap">
-                    {config.horario || "Por definir."}
-                  </p>
-                </div>
-                <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
-                  <h4 className="font-bold text-gray-800 mb-2 flex items-center gap-2">
-                    <User size={16} className="text-[#a72a34]" /> Contacto
-                    Docente
-                  </h4>
-                  <p className="text-gray-600 text-sm whitespace-pre-wrap">
-                    {config.contacto_docente || "No especificado."}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Historial Asistencia (Solo Alumno) */}
-            {user.rol === "alumno" && (
-              <div
-                id="tour-info-asistencia"
-                className="mt-8 pt-8 border-t border-gray-100"
-              >
-                <h4 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
-                  <History size={20} className="text-gray-400" /> Mi Asistencia
-                </h4>
-                {loadingHistorial ? (
-                  <p className="text-sm text-gray-400">Cargando...</p>
-                ) : historialAsistencia.length === 0 ? (
-                  <div className="p-6 bg-gray-50 rounded-xl text-center text-gray-400 text-sm border border-dashed">
-                    No hay registros de asistencia.
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
-                    {/* --- BLOQUE CORREGIDO: HISTORIAL DE ASISTENCIA --- */}
-                    {historialAsistencia.map((reg) => (
-                      <div
-                        key={reg.sesion_id}
-                        className={`p-3 rounded-xl border text-center transition-all hover:shadow-md ${
-                          reg.mi_estatus === "presente"
-                            ? "bg-green-50 border-green-100"
-                            : reg.mi_estatus === "justificado"
-                              ? "bg-yellow-50 border-yellow-100"
-                              : "bg-red-50 border-red-100"
-                        }`}
-                      >
-                        {/* AQUÍ AGREGAMOS LA PALABRA "ASISTENCIA" */}
-                        <p className="text-[10px] uppercase font-bold tracking-wider text-gray-400 mb-1">
-                          Asistencia
-                        </p>
-
-                        {/* AQUÍ USAMOS LA FECHA BONITA QUE VIENE DEL BACKEND */}
-                        <p className="text-xs font-bold text-gray-700 mb-2">
-                          {reg.fecha_mostrar || "Fecha pendiente"}
-                        </p>
-
-                        {/* ESTATUS (Presente/Falta) */}
-                        <span
-                          className={`text-xs font-black uppercase px-2 py-0.5 rounded-full ${
-                            reg.mi_estatus === "presente"
-                              ? "bg-green-100 text-green-700"
-                              : reg.mi_estatus === "justificado"
-                                ? "bg-yellow-100 text-yellow-700"
-                                : "bg-red-100 text-red-700"
-                          }`}
-                        >
-                          {reg.mi_estatus}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Pestaña: Tareas */}
-        {activeTab === "tareas" && (
-          <div
-            id="tour-tareas-lista"
-            className="animate-in fade-in duration-300"
-          >
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold text-gray-800">
-                Actividades de Aprendizaje
-              </h3>
-              {user.rol === "docente" && (
-                <button
-                  id="tour-docente-btn-tarea"
-                  onClick={() => setShowCrearTareaModal(true)}
-                  className="bg-[#a72a34] text-white px-5 py-2.5 rounded-xl font-bold hover:bg-[#802028] shadow-lg shadow-red-900/10 flex items-center gap-2 transition-transform active:scale-95"
-                >
-                  <Plus size={18} /> Nueva Tarea
-                </button>
-              )}
-            </div>
-            {renderTareasList()}
-          </div>
-        )}
-        {/* CONTENIDO DE LAS PESTAÑAS NUEVAS */}
-
-        {activeTab === "muro" && (
-          <div id="tour-muro-novedades" className="mt-6">
-            <MuroDocentePage />
-          </div>
-        )}
-        {activeTab === "equipos" && (
-          <div id="tour-equipos" className="animate-in fade-in duration-300">
-            {user.rol === "docente" ? (
-              // VISTA DEL DOCENTE
-              <EquiposDocenteView
-                grupoId={grupoId}
-                asignaturaId={asignaturaId}
-              />
-            ) : (
-              // VISTA DEL ALUMNO
-              <EquiposAlumnoView
-                grupoId={grupoId}
-                asignaturaId={asignaturaId}
-              />
-            )}
-          </div>
-        )}
-
-        {activeTab === "examenes" && (
-          <div id="tour-examenes-lista" className="mt-6">
-            {/* Cargamos la LISTA, no el creador directo */}
-            <ExamenesPage />
-          </div>
-        )}
-
-        {activeTab === "analiticas" && (
-          <div className="mt-6">
-            <AnaliticasGrupoPage />
-          </div>
-        )}
-
-        {/* Pestaña: Recursos */}
-        {activeTab === "recursos" && (
-          <div
-            id="tour-recursos-lista"
-            className="animate-in fade-in duration-300"
-          >
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold text-gray-800">
-                Material de Consulta
-              </h3>
-              {user.rol === "docente" && (
-                <button
-                  id="tour-docente-btn-recurso"
-                  onClick={() => setShowRecursoModal(true)}
-                  className="bg-white border-2 border-[#a72a34] text-[#a72a34] px-5 py-2.5 rounded-xl font-bold hover:bg-[#a72a34] hover:text-white transition-all flex items-center gap-2"
-                >
-                  <UploadCloud size={18} /> Subir Material
-                </button>
-              )}
-            </div>
-            {renderRecursosList()}
-          </div>
-        )}
-
-        {/* Pestaña: Foro */}
-        {activeTab === "foro" && (
-          <div id="tour-foro-lista" className="animate-in fade-in duration-300">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold text-gray-800">
-                Foro de Discusión
-              </h3>
-              {/* Botón del Foro movido a la nueva función de renderizado o aquí mismo si prefieres */}
-            </div>
-            {renderForoList()}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-
+    );
+  };
   // --- Renderizado Principal y Modales ---
   return (
     <div>
