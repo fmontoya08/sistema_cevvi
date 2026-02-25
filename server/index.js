@@ -359,6 +359,184 @@ app.post("/api/public/registro-aspirante", async (req, res) => {
   }
 });
 
+// Función para generar un correo profesional evitando duplicados
+async function generarEmailDocente(nombre, apellido_paterno, connection) {
+  // Limpiamos acentos y caracteres especiales, tomamos primera letra del nombre + apellido
+  const primeraLetra = nombre.trim().charAt(0).toLowerCase();
+  const apellidoLimpio = apellido_paterno
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  const baseEmail = `${primeraLetra}${apellidoLimpio}`;
+  let emailPropuesto = `${baseEmail}@${CPANEL_CONFIG.domain}`;
+  let contador = 1;
+
+  // Ciclo para asegurar que el correo no exista ya en la BD
+  while (true) {
+    const [existe] = await connection.query(
+      "SELECT id FROM usuarios WHERE email = ?",
+      [emailPropuesto],
+    );
+    if (existe.length === 0) break; // Si está libre, salimos del ciclo
+
+    // Si ya existe (ej. fmontoya), intentamos fmontoya2
+    contador++;
+    emailPropuesto = `${baseEmail}${contador}@${CPANEL_CONFIG.domain}`;
+  }
+
+  return {
+    usuarioCpanel: emailPropuesto.split("@")[0], // Solo 'fmontoya'
+    correoCompleto: emailPropuesto, // 'fmontoya@universidadsigloxxi.com'
+  };
+}
+
+// Ruta Pública: Registro Docente
+app.post("/api/public/registro-docente", async (req, res) => {
+  const {
+    nombre,
+    apellido_paterno,
+    apellido_materno,
+    email_personal,
+    telefono,
+    domicilio,
+    colonia,
+    edad,
+    contacto_emergencia_nombre,
+    contacto_emergencia_telefono,
+    genero,
+    curp,
+    fecha_nacimiento,
+    sede_id,
+  } = req.body;
+
+  const curpSanitized = curp ? curp.toUpperCase().trim() : "";
+  const connection = await db.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    // 1. Validaciones
+    if (curpSanitized && !CURP_REGEX.test(curpSanitized)) {
+      await connection.rollback();
+      return res
+        .status(400)
+        .send({ message: "El formato de la CURP es inválido." });
+    }
+
+    const [existing] = await connection.query(
+      "SELECT curp FROM usuarios WHERE curp = ?",
+      [curpSanitized],
+    );
+    if (existing.length > 0) {
+      await connection.rollback();
+      return res.status(400).send({ message: "Esta CURP ya está registrada." });
+    }
+
+    // 2. Generar Clave Docente (Ej: DOC2026001)
+    const currentYear = new Date().getFullYear().toString();
+    const prefix = `DOC${currentYear}`;
+    const [lastDocente] = await connection.query(
+      "SELECT matricula FROM usuarios WHERE matricula LIKE ? ORDER BY CAST(SUBSTRING(matricula, 8) AS UNSIGNED) DESC LIMIT 1",
+      [`${prefix}%`],
+    );
+
+    let nextSequence = 1;
+    if (lastDocente.length > 0 && lastDocente[0].matricula) {
+      nextSequence = parseInt(lastDocente[0].matricula.substring(7)) + 1;
+    }
+    const claveDocente = `${prefix}${nextSequence.toString().padStart(3, "0")}`;
+
+    // 3. Generar Correo Profesional (Ej: fmontoya@...)
+    // (Asegúrate de tener la función generarEmailDocente que creamos en el paso anterior)
+    const datosEmail = await generarEmailDocente(
+      nombre,
+      apellido_paterno,
+      connection,
+    );
+
+    // 4. Generar Contraseñas
+    const passwordCorreoStrong = `Docente.${claveDocente}!`;
+    const passwordHash = await bcrypt.hash(claveDocente, 10);
+
+    // 5. Crear correo en cPanel usando el prefijo
+    await crearCorreoCpanel(datosEmail.usuarioCpanel, passwordCorreoStrong);
+
+    const fechaFinal = fecha_nacimiento === "" ? null : fecha_nacimiento;
+
+    // 6. Guardar en BD
+    const sql = `
+      INSERT INTO usuarios 
+      (nombre, apellido_paterno, apellido_materno, email, email_personal, password, password_email, telefono, domicilio, colonia, edad, contacto_emergencia_nombre, contacto_emergencia_telefono, genero, curp, fecha_nacimiento, rol, sede_id, matricula, activo) 
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'docente', ?, ?, 1)
+    `;
+
+    await connection.query(sql, [
+      nombre,
+      apellido_paterno,
+      apellido_materno || null,
+      datosEmail.correoCompleto,
+      email_personal,
+      passwordHash,
+      passwordCorreoStrong,
+      telefono,
+      domicilio || null,
+      colonia || null,
+      edad || null,
+      contacto_emergencia_nombre || null,
+      contacto_emergencia_telefono || null,
+      genero,
+      curpSanitized,
+      fechaFinal,
+      sede_id || null,
+      claveDocente,
+    ]);
+
+    await connection.commit(); // <-- GUARDADO EXITOSO EN BD
+
+    // ==========================================
+    // 7. ENVIAR CORREO DE BIENVENIDA AL DOCENTE
+    // ==========================================
+    if (email_personal) {
+      try {
+        // Reutilizamos tu función enviarCredenciales pasándole los datos generados
+        await enviarCredenciales(
+          email_personal, // Destinatario
+          nombre, // Nombre del docente
+          claveDocente, // Clave/Usuario (Matrícula)
+          claveDocente, // Contraseña de plataforma (la misma al inicio)
+          datosEmail.correoCompleto, // Correo institucional
+          passwordCorreoStrong, // Contraseña fuerte del correo
+        );
+      } catch (emailError) {
+        console.error("❌ Error enviando correo al nuevo docente:", emailError);
+        // Si falla, solo lo marcamos en consola, pero no detenemos el proceso
+      }
+    }
+
+    // 8. Responder al Frontend (Abre el Modal Verde)
+    res.status(201).send({
+      message: "Registro exitoso.",
+      credenciales: {
+        usuario: claveDocente,
+        correo: datosEmail.correoCompleto,
+        password: claveDocente,
+        password_correo: passwordCorreoStrong,
+      },
+    });
+  } catch (error) {
+    await connection.rollback();
+    console.error("Error registro público docente:", error);
+    res.status(500).send({
+      message: "Error al registrar: " + (error.sqlMessage || error.message),
+    });
+  } finally {
+    connection.release();
+  }
+});
+
 const upload = multer({ storage: storage });
 
 // --- INICIA NUEVO CÓDIGO (AGREGAR) ---
