@@ -169,44 +169,65 @@ const CPANEL_CONFIG = {
   domain: "universidadsigloxxi.com",
 };
 
+// ==========================================
+// NUEVO: CONFIGURACIÓN CPANEL (MÉTODO POST ANTI-FIREWALL)
+// ==========================================
 async function crearCorreoCpanel(usuario, passwordCorreo) {
-  console.log(`[CPANEL] Creando correo: ${usuario}@${CPANEL_CONFIG.domain}`);
+  console.log(
+    `[CPANEL] Intentando crear correo: ${usuario}@${CPANEL_CONFIG.domain}`,
+  );
   try {
     const url = `https://${CPANEL_CONFIG.host}:2083/execute/Email/add_pop`;
-    const params = new URLSearchParams({
-      email: usuario,
-      password: passwordCorreo,
-      domain: CPANEL_CONFIG.domain,
-      quota: 250, // 250MB de espacio
-    });
 
-    // Autenticación Básica (Usuario:Password en base64)
+    // 1. Ocultamos los datos en un formulario codificado (Imunify360 no bloquea esto)
+    const formData = new URLSearchParams();
+    formData.append("email", usuario);
+    formData.append("password", passwordCorreo);
+    formData.append("domain", CPANEL_CONFIG.domain);
+    formData.append("quota", "250"); // 250MB
+
+    // 2. Autenticación Básica clásica
     const authString = Buffer.from(
       `${CPANEL_CONFIG.user}:${CPANEL_CONFIG.password}`,
     ).toString("base64");
 
-    const response = await axios.get(`${url}?${params.toString()}`, {
-      headers: { Authorization: `Basic ${authString}` },
+    // 3. Enviamos por POST en lugar de GET
+    const response = await axios.post(url, formData, {
+      headers: {
+        Authorization: `Basic ${authString}`,
+        "Content-Type": "application/x-www-form-urlencoded", // <-- Crucial para que cPanel lo entienda
+      },
     });
 
-    if (response.data.status === 1) {
-      console.log("✅ Correo creado en cPanel.");
+    if (response.data && response.data.status === 1) {
+      console.log("✅ Correo creado en cPanel exitosamente.");
       return true;
     } else {
       const errorMsg = response.data.errors
         ? response.data.errors[0]
-        : "Error desconocido";
-      if (errorMsg.includes("already exists")) return true; // Si ya existe, todo bien
-      console.error("❌ Error cPanel:", errorMsg);
-      // No lanzamos error fatal para no detener el registro del alumno
+        : "Respuesta inesperada de cPanel";
+      if (typeof errorMsg === "string" && errorMsg.includes("already exists")) {
+        console.log("⚠️ El correo ya existía.");
+        return true;
+      }
+      console.error("❌ Error interno de cPanel:", errorMsg);
       return false;
     }
   } catch (error) {
-    console.error("Error conexión cPanel:", error.message);
+    console.error(
+      "❌ Error de red/Firewall al conectar con cPanel:",
+      error.message,
+    );
+    // Si Imunify360 nos sigue bloqueando, esto nos dirá por qué exactamente
+    if (error.response && error.response.data) {
+      console.log(
+        "🔍 DETALLE DEL BLOQUEO SERVER:",
+        error.response.data.toString().substring(0, 300),
+      );
+    }
     return false;
   }
 }
-
 // --- NUEVA RUTA PÚBLICA PARA LLENAR LOS SELECTS ---
 app.get("/api/public/catalogos", async (req, res) => {
   try {
