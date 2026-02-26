@@ -180,69 +180,25 @@ async function crearCorreoCpanel(usuario, passwordCorreo) {
       quota: 250, // 250MB de espacio
     });
 
+    // Autenticación Básica (Usuario:Password en base64)
     const authString = Buffer.from(
       `${CPANEL_CONFIG.user}:${CPANEL_CONFIG.password}`,
     ).toString("base64");
 
     const response = await axios.get(`${url}?${params.toString()}`, {
-      headers: {
-        Authorization: `Basic ${authString}`,
-        // TRUCO: Fingimos ser un navegador Google Chrome normal en Windows
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        Accept: "application/json, text/plain, */*",
-        "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
-      },
-      validateStatus: function (status) {
-        return status >= 200 && status < 500;
-      },
+      headers: { Authorization: `Basic ${authString}` },
     });
 
-    console.log("=== CPANEL RAW RESPONSE ===");
-    console.log(JSON.stringify(response.data, null, 2));
-    console.log("===========================");
-
-    // Si sigue saliendo el error de Imunify360
-    if (
-      response.data &&
-      response.data.message &&
-      response.data.message.includes("Imunify360")
-    ) {
-      console.error(
-        "❌ Error cPanel: Imunify360 sigue bloqueando la petición. Tendrás que contactar a Neubox.",
-      );
-      return false;
-    }
-
-    const cpanelResult =
-      response.data.result || response.data.cpanelresult || response.data;
-    const status =
-      cpanelResult.status !== undefined
-        ? cpanelResult.status
-        : response.data.cpanelresult
-          ? !response.data.cpanelresult.error
-          : 0;
-
-    if (status === 1 || status === true) {
+    if (response.data.status === 1) {
       console.log("✅ Correo creado en cPanel.");
       return true;
     } else {
-      let errorMsg = "Error desconocido (Revisa credenciales o dominio)";
-
-      if (cpanelResult.errors && cpanelResult.errors.length > 0) {
-        errorMsg = cpanelResult.errors[0];
-      } else if (
-        response.data.cpanelresult &&
-        response.data.cpanelresult.error
-      ) {
-        errorMsg = response.data.cpanelresult.error;
-      }
-
-      if (typeof errorMsg === "string" && errorMsg.includes("already exists")) {
-        console.log("✅ Correo creado en cPanel (Ya existía).");
-        return true;
-      }
+      const errorMsg = response.data.errors
+        ? response.data.errors[0]
+        : "Error desconocido";
+      if (errorMsg.includes("already exists")) return true; // Si ya existe, todo bien
       console.error("❌ Error cPanel:", errorMsg);
+      // No lanzamos error fatal para no detener el registro del alumno
       return false;
     }
   } catch (error) {
@@ -395,184 +351,6 @@ app.post("/api/public/registro-aspirante", async (req, res) => {
   } catch (error) {
     await connection.rollback();
     console.error("Error registro público:", error);
-    res.status(500).send({
-      message: "Error al registrar: " + (error.sqlMessage || error.message),
-    });
-  } finally {
-    connection.release();
-  }
-});
-
-// Función para generar un correo profesional evitando duplicados
-async function generarEmailDocente(nombre, apellido_paterno, connection) {
-  // Limpiamos acentos y caracteres especiales, tomamos primera letra del nombre + apellido
-  const primeraLetra = nombre.trim().charAt(0).toLowerCase();
-  const apellidoLimpio = apellido_paterno
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
-
-  const baseEmail = `${primeraLetra}${apellidoLimpio}`;
-  let emailPropuesto = `${baseEmail}@${CPANEL_CONFIG.domain}`;
-  let contador = 1;
-
-  // Ciclo para asegurar que el correo no exista ya en la BD
-  while (true) {
-    const [existe] = await connection.query(
-      "SELECT id FROM usuarios WHERE email = ?",
-      [emailPropuesto],
-    );
-    if (existe.length === 0) break; // Si está libre, salimos del ciclo
-
-    // Si ya existe (ej. fmontoya), intentamos fmontoya2
-    contador++;
-    emailPropuesto = `${baseEmail}${contador}@${CPANEL_CONFIG.domain}`;
-  }
-
-  return {
-    usuarioCpanel: emailPropuesto.split("@")[0], // Solo 'fmontoya'
-    correoCompleto: emailPropuesto, // 'fmontoya@universidadsigloxxi.com'
-  };
-}
-
-// Ruta Pública: Registro Docente
-app.post("/api/public/registro-docente", async (req, res) => {
-  const {
-    nombre,
-    apellido_paterno,
-    apellido_materno,
-    email_personal,
-    telefono,
-    domicilio,
-    colonia,
-    edad,
-    contacto_emergencia_nombre,
-    contacto_emergencia_telefono,
-    genero,
-    curp,
-    fecha_nacimiento,
-    sede_id,
-  } = req.body;
-
-  const curpSanitized = curp ? curp.toUpperCase().trim() : "";
-  const connection = await db.getConnection();
-
-  try {
-    await connection.beginTransaction();
-
-    // 1. Validaciones
-    if (curpSanitized && !CURP_REGEX.test(curpSanitized)) {
-      await connection.rollback();
-      return res
-        .status(400)
-        .send({ message: "El formato de la CURP es inválido." });
-    }
-
-    const [existing] = await connection.query(
-      "SELECT curp FROM usuarios WHERE curp = ?",
-      [curpSanitized],
-    );
-    if (existing.length > 0) {
-      await connection.rollback();
-      return res.status(400).send({ message: "Esta CURP ya está registrada." });
-    }
-
-    // 2. Generar Clave Docente (Ej: DOC2026001)
-    const currentYear = new Date().getFullYear().toString();
-    const prefix = `DOC${currentYear}`;
-    const [lastDocente] = await connection.query(
-      "SELECT matricula FROM usuarios WHERE matricula LIKE ? ORDER BY CAST(SUBSTRING(matricula, 8) AS UNSIGNED) DESC LIMIT 1",
-      [`${prefix}%`],
-    );
-
-    let nextSequence = 1;
-    if (lastDocente.length > 0 && lastDocente[0].matricula) {
-      nextSequence = parseInt(lastDocente[0].matricula.substring(7)) + 1;
-    }
-    const claveDocente = `${prefix}${nextSequence.toString().padStart(3, "0")}`;
-
-    // 3. Generar Correo Profesional (Ej: fmontoya@...)
-    // (Asegúrate de tener la función generarEmailDocente que creamos en el paso anterior)
-    const datosEmail = await generarEmailDocente(
-      nombre,
-      apellido_paterno,
-      connection,
-    );
-
-    // 4. Generar Contraseñas
-    const passwordCorreoStrong = `Docente.${claveDocente}!`;
-    const passwordHash = await bcrypt.hash(claveDocente, 10);
-
-    // 5. Crear correo en cPanel usando el prefijo
-    await crearCorreoCpanel(datosEmail.usuarioCpanel, passwordCorreoStrong);
-
-    const fechaFinal = fecha_nacimiento === "" ? null : fecha_nacimiento;
-
-    // 6. Guardar en BD
-    const sql = `
-      INSERT INTO usuarios 
-      (nombre, apellido_paterno, apellido_materno, email, email_personal, password, password_email, telefono, domicilio, colonia, edad, contacto_emergencia_nombre, contacto_emergencia_telefono, genero, curp, fecha_nacimiento, rol, sede_id, matricula, activo) 
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'docente', ?, ?, 1)
-    `;
-
-    await connection.query(sql, [
-      nombre,
-      apellido_paterno,
-      apellido_materno || null,
-      datosEmail.correoCompleto,
-      email_personal,
-      passwordHash,
-      passwordCorreoStrong,
-      telefono,
-      domicilio || null,
-      colonia || null,
-      edad || null,
-      contacto_emergencia_nombre || null,
-      contacto_emergencia_telefono || null,
-      genero,
-      curpSanitized,
-      fechaFinal,
-      sede_id || null,
-      claveDocente,
-    ]);
-
-    await connection.commit(); // <-- GUARDADO EXITOSO EN BD
-
-    // ==========================================
-    // 7. ENVIAR CORREO DE BIENVENIDA AL DOCENTE
-    // ==========================================
-    if (email_personal) {
-      try {
-        // Reutilizamos tu función enviarCredenciales pasándole los datos generados
-        await enviarCredenciales(
-          email_personal, // Destinatario
-          nombre, // Nombre del docente
-          claveDocente, // Clave/Usuario (Matrícula)
-          claveDocente, // Contraseña de plataforma (la misma al inicio)
-          datosEmail.correoCompleto, // Correo institucional
-          passwordCorreoStrong, // Contraseña fuerte del correo
-        );
-      } catch (emailError) {
-        console.error("❌ Error enviando correo al nuevo docente:", emailError);
-        // Si falla, solo lo marcamos en consola, pero no detenemos el proceso
-      }
-    }
-
-    // 8. Responder al Frontend (Abre el Modal Verde)
-    res.status(201).send({
-      message: "Registro exitoso.",
-      credenciales: {
-        usuario: claveDocente,
-        correo: datosEmail.correoCompleto,
-        password: claveDocente,
-        password_correo: passwordCorreoStrong,
-      },
-    });
-  } catch (error) {
-    await connection.rollback();
-    console.error("Error registro público docente:", error);
     res.status(500).send({
       message: "Error al registrar: " + (error.sqlMessage || error.message),
     });
@@ -1744,7 +1522,7 @@ adminRouter.post(
 
 // --- RUTAS DE GESTIÓN FINANCIERA (ADMIN --> ALUMNO) ---
 
-// 1. OBTENER FINANZAS DE UN ALUMNO ESPECÍFICO (ADMIN)
+// 1. OBTENER FINANZAS DE UN ALUMNO ESPECÍFICO
 adminRouter.get("/alumnos/:id/finanzas", async (req, res) => {
   try {
     const [rows] = await db.query(
@@ -1753,14 +1531,10 @@ adminRouter.get("/alumnos/:id/finanzas", async (req, res) => {
         a.id,
         c.nombre_concepto,
         a.monto_a_pagar,
-        -- CAMBIO APLICADO: Evalúa la fecha en tiempo real ignorando las horas
-        CASE 
-          WHEN a.estatus_pago = 'pendiente' AND DATE(a.fecha_vencimiento) < CURDATE() THEN 'vencido'
-          ELSE a.estatus_pago 
-        END as estatus_pago,
+        a.estatus_pago,
         a.fecha_vencimiento,
         a.fecha_pago,
-        u.nombre, u.apellido_paterno, u.matricula
+        u.nombre, u.apellido_paterno, u.matricula -- Datos del alumno
       FROM adeudos_alumnos a
       INNER JOIN conceptos_pago c ON a.concepto_id = c.id
       INNER JOIN usuarios u ON a.alumno_id = u.id
@@ -2774,11 +2548,7 @@ app.get("/alumno/finanzas/resumen", authenticateToken, async (req, res) => {
         a.id,
         c.nombre_concepto,
         a.monto_a_pagar,
-        -- CAMBIO APLICADO: Agregamos DATE() para asegurar la comparación
-        CASE 
-          WHEN a.estatus_pago = 'pendiente' AND DATE(a.fecha_vencimiento) < CURDATE() THEN 'vencido'
-          ELSE a.estatus_pago 
-        END as estatus_pago, 
+        a.estatus_pago, -- 'pendiente','pagado','vencido'
         a.fecha_vencimiento,
         a.fecha_pago
       FROM adeudos_alumnos a
@@ -3440,15 +3210,7 @@ adminRouter.get("/alumnos/:id/adeudos", async (req, res) => {
   const { id: alumnoId } = req.params;
   try {
     const [adeudos] = await db.query(
-      `SELECT 
-         aa.id, aa.alumno_id, aa.concepto_id, aa.monto_a_pagar, 
-         aa.fecha_vencimiento, aa.fecha_pago,
-         -- CAMBIO: Evalúa la fecha en tiempo real
-         CASE 
-           WHEN aa.estatus_pago = 'pendiente' AND DATE(aa.fecha_vencimiento) < CURDATE() THEN 'vencido'
-           ELSE aa.estatus_pago 
-         END as estatus_pago,
-         cp.nombre_concepto
+      `SELECT aa.*, cp.nombre_concepto
        FROM adeudos_alumnos aa
        JOIN conceptos_pago cp ON aa.concepto_id = cp.id
        WHERE aa.alumno_id = ?
@@ -6952,18 +6714,16 @@ alumnoRouter.post("/solicitudes", async (req, res) => {
   }
 });
 
-// GET (Alumno): Obtener la config del aula virtual (CON BLOQUEO DE PAGO)
+// GET (Alumno): Obtener la config del aula virtual
 alumnoRouter.get(
   "/aula-virtual/:grupoId/:asignaturaId/config",
   async (req, res) => {
     try {
       const { grupoId, asignaturaId } = req.params;
-      const alumnoId = req.user.id;
-
-      // 1. Validar que el alumno está inscrito en este grupo
+      // Validar que el alumno está inscrito en este grupo
       const [[inscripcion]] = await db.query(
         "SELECT * FROM grupo_alumnos WHERE grupo_id = ? AND alumno_id = ?",
-        [grupoId, alumnoId],
+        [grupoId, req.user.id],
       );
       if (!inscripcion) {
         return res
@@ -6971,24 +6731,8 @@ alumnoRouter.get(
           .send({ message: "No estás inscrito en este curso." });
       }
 
-      // ==========================================
-      // 2. SISTEMA DE BLOQUEO POR ADEUDO VENCIDO (INTELIGENTE)
-      // ==========================================
-      const [adeudos] = await db.query(
-        `SELECT COUNT(*) as vencidos 
-         FROM adeudos_alumnos 
-         WHERE alumno_id = ? 
-         AND (estatus_pago = 'vencido' OR (estatus_pago = 'pendiente' AND DATE(fecha_vencimiento) < CURDATE()))`,
-        [alumnoId],
-      );
-      const tieneAdeudos = adeudos[0].vencidos > 0;
-
-      // 3. Usamos la función helper para obtener o crear la config
+      // Usamos la misma función helper para obtener o crear la config
       const config = await getOrCreateAulaConfig(grupoId, asignaturaId);
-
-      // Adjuntamos la bandera de bloqueo
-      config.bloqueado_por_pago = tieneAdeudos;
-
       res.json(config);
     } catch (error) {
       console.error("Error al obtener config de aula (alumno):", error);
@@ -6996,6 +6740,7 @@ alumnoRouter.get(
     }
   },
 );
+// --- INICIA NUEVO CÓDIGO (AGREGAR) ---
 
 // GET (Alumno): Obtener listado de tareas
 alumnoRouter.get(
@@ -7562,58 +7307,6 @@ apiRouter.post("/examenes", verifyToken, async (req, res) => {
           }
         }
       }
-    }
-
-    // ==========================================
-    // NOTIFICAR A LOS ALUMNOS DEL NUEVO EXAMEN
-    // ==========================================
-    try {
-      // 1. Obtener nombre de la materia
-      const [[materia]] = await connection.query(
-        "SELECT nombre_asignatura FROM asignaturas WHERE id = ?",
-        [asignatura_id],
-      );
-      const nombreMateria = materia ? materia.nombre_asignatura : "tu clase";
-
-      const mensajeNotif = `📖 Nuevo examen programado en ${nombreMateria}: "${titulo}"`;
-      const urlDestino = `/alumno/grupo/${grupo_id}/asignatura/${asignatura_id}/aula`;
-
-      // 2. Obtener alumnos del grupo
-      const [alumnos] = await connection.query(
-        "SELECT alumno_id FROM grupo_alumnos WHERE grupo_id = ?",
-        [grupo_id],
-      );
-
-      for (const al of alumnos) {
-        // A) Campanita
-        await connection.query(
-          "INSERT INTO notificaciones (usuario_id, mensaje, url_destino, leido, fecha, tipo) VALUES (?, ?, ?, 0, NOW(), 'examen')",
-          [al.alumno_id, mensajeNotif, urlDestino],
-        );
-
-        // B) Push Android
-        const [tokens] = await connection.query(
-          "SELECT token FROM push_tokens WHERE user_id = ?",
-          [al.alumno_id],
-        );
-        if (tokens.length > 0) {
-          const expoMessages = tokens.map((t) => ({
-            to: t.token,
-            sound: "default",
-            title: "¡Examen Programado! 📝",
-            body: mensajeNotif,
-            data: { url: urlDestino },
-          }));
-
-          fetch("https://exp.host/--/api/v2/push/send", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(expoMessages),
-          }).catch((e) => console.error("Error push examen:", e));
-        }
-      }
-    } catch (notifError) {
-      console.error("Error al notificar sobre nuevo examen:", notifError);
     }
 
     await connection.commit(); // Confirmar cambios en la BD
