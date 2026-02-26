@@ -8111,7 +8111,7 @@ const PORT = 3001;
 // MÓDULO CALENDARIO (LADO ADMIN)
 // ==========================================
 
-// 1. Middleware de Seguridad (Solo para Admin)
+// 1. Middleware de Seguridad (Admin y Control Escolar)
 const verificarAdmin = (req, res, next) => {
   const authHeader = req.headers["authorization"];
   if (!authHeader) return res.sendStatus(401);
@@ -8120,9 +8120,12 @@ const verificarAdmin = (req, res, next) => {
   jwt.verify(token, JWT_SECRET, (err, user) => {
     if (err) return res.sendStatus(403);
 
-    // Verificamos que sea ADMIN (sin importar mayúsculas)
-    if (user.rol.toLowerCase() !== "admin") {
-      return res.status(403).send("Acceso denegado: Solo administradores.");
+    // AQUÍ ESTÁ LA CORRECCIÓN: Permitimos a admin Y a control_escolar
+    const rol = user.rol.toLowerCase();
+    if (rol !== "admin" && rol !== "control_escolar") {
+      return res
+        .status(403)
+        .send("Acceso denegado: Solo administradores o control escolar.");
     }
     req.user = user;
     next();
