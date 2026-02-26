@@ -180,7 +180,6 @@ async function crearCorreoCpanel(usuario, passwordCorreo) {
       quota: 250, // 250MB de espacio
     });
 
-    // Autenticación Básica (Usuario:Password en base64)
     const authString = Buffer.from(
       `${CPANEL_CONFIG.user}:${CPANEL_CONFIG.password}`,
     ).toString("base64");
@@ -188,35 +187,29 @@ async function crearCorreoCpanel(usuario, passwordCorreo) {
     const response = await axios.get(`${url}?${params.toString()}`, {
       headers: {
         Authorization: `Basic ${authString}`,
-        // Agregamos estos headers para simular un navegador real
+        // TRUCO: Fingimos ser un navegador Google Chrome normal en Windows
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         Accept: "application/json, text/plain, */*",
-        "Accept-Language": "es-MX,es;q=0.9,en-US;q=0.8,en;q=0.7",
-        Connection: "keep-alive",
+        "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
       },
       validateStatus: function (status) {
         return status >= 200 && status < 500;
       },
     });
 
-    // --- ZONA DE DEPURACIÓN PROFUNDA ---
     console.log("=== CPANEL RAW RESPONSE ===");
-    console.log("Status HTTP:", response.status);
-    if (typeof response.data === "string") {
-      console.log(
-        "Respuesta es TEXTO/HTML (Posible bloqueo o login):",
-        response.data.substring(0, 200) + "...",
-      );
-    } else {
-      console.log(JSON.stringify(response.data, null, 2));
-    }
+    console.log(JSON.stringify(response.data, null, 2));
     console.log("===========================");
 
-    // Verificamos si la respuesta es HTML en lugar de JSON (esto suele pasar si falla la autenticación)
-    if (typeof response.data === "string" && response.data.includes("<html")) {
+    // Si sigue saliendo el error de Imunify360
+    if (
+      response.data &&
+      response.data.message &&
+      response.data.message.includes("Imunify360")
+    ) {
       console.error(
-        "❌ Error cPanel: La API devolvió una página web en lugar de datos. Verifica tu USUARIO y CONTRASEÑA de cPanel, o podría haber un bloqueo de seguridad en Neubox.",
+        "❌ Error cPanel: Imunify360 sigue bloqueando la petición. Tendrás que contactar a Neubox.",
       );
       return false;
     }
@@ -254,9 +247,6 @@ async function crearCorreoCpanel(usuario, passwordCorreo) {
     }
   } catch (error) {
     console.error("Error conexión cPanel:", error.message);
-    if (error.response && error.response.data) {
-      console.log("Detalle del error:", error.response.data);
-    }
     return false;
   }
 }
