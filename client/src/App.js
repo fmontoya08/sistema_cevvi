@@ -135,7 +135,7 @@ ChartJS.register(
 
 // --- CONFIGURACIÓN DE MARCA Y COLORES ---
 const BRAND = {
-  name: "Centro universitario Siglo XXI", // O el nombre de tu escuela
+  name: "Centro Universitario Siglo XXI", // O el nombre de tu escuela
   logo: "plataforma/logo.png",
   colors: {
     primary: "#a72a34", // Rojo Vino (Botones, Headers activos)
@@ -14095,6 +14095,7 @@ const MiPerfilPage = () => {
                   />
                   <input
                     type="email"
+                    disabled
                     className="w-full pl-10 p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#a72a34]"
                     value={formData.email}
                     onChange={(e) =>
@@ -14128,6 +14129,7 @@ const MiPerfilPage = () => {
                 </label>
                 <input
                   type="date"
+                  disabled
                   className="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#a72a34]"
                   value={formData.fecha_nacimiento}
                   onChange={(e) =>
@@ -14139,21 +14141,30 @@ const MiPerfilPage = () => {
                 />
               </div>
               <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">
+                <label className="text-xs font-bold text-gray-400 uppercase mb-2 block">
                   Género
                 </label>
-                <select
-                  className="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#a72a34] bg-white"
-                  value={formData.genero}
-                  onChange={(e) =>
-                    setFormData({ ...formData, genero: e.target.value })
-                  }
-                >
-                  <option value="">Seleccionar...</option>
-                  <option value="Masculino">Masculino</option>
-                  <option value="Femenino">Femenino</option>
-                  <option value="Otro">Otro</option>
-                </select>
+                <input
+                  type="text"
+                  disabled
+                  className="w-full p-4 bg-gray-100 border border-gray-200 rounded-xl text-gray-500 font-medium cursor-not-allowed select-none"
+                  value={(() => {
+                    const valorBD = formData?.genero;
+
+                    if (!valorBD) return "No especificado";
+
+                    const normalizado = String(valorBD).toUpperCase();
+                    const traducciones = {
+                      H: "Masculino",
+                      F: "Femenino",
+                      M: "Femenino" /* Por si guardaste M de Mujer en la BD */,
+                      MASCULINO: "Masculino",
+                      FEMENINO: "Femenino",
+                      O: "Otro",
+                    };
+                    return traducciones[normalizado] || valorBD;
+                  })()}
+                />
               </div>
               <div className="col-span-full pt-4">
                 <button
@@ -14623,6 +14634,25 @@ const EquiposAlumnoView = ({ grupoId, asignaturaId }) => {
 
 // --- COMPONENTE PRINCIPAL DE LA APP ---
 function App() {
+  // Función para transformar la letra de la BD en una palabra completa
+  const obtenerNombreGenero = (generoCrudo) => {
+    if (!generoCrudo) return "No especificado";
+    const generoNormalizado = String(generoCrudo).toUpperCase();
+    switch (generoNormalizado) {
+      case "H":
+      case "MASCULINO":
+        return "Masculino";
+      case "F":
+      case "M":
+      case "FEMENINO":
+        return "Femenino";
+      case "O":
+      case "OTRO":
+        return "Otro";
+      default:
+        return generoCrudo;
+    }
+  };
   return (
     <BrowserRouter basename="/plataforma">
       <AuthProvider>

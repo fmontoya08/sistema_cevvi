@@ -705,7 +705,7 @@ apiRouter.post("/login", async (req, res) => {
   const { email, password } = req.body;
   try {
     const [results] = await db.query(
-      "SELECT id, email, password, nombre, apellido_paterno, rol, foto_perfil, activo FROM usuarios WHERE email = ?",
+      "SELECT id, email, password, nombre, apellido_paterno, rol, foto_perfil, activo, matricula FROM usuarios WHERE email = ?",
       [email],
     );
 
@@ -737,6 +737,7 @@ apiRouter.post("/login", async (req, res) => {
       nombre: user.nombre,
       apellido_paterno: user.apellido_paterno,
       foto_perfil: user.foto_perfil, // <-- Agrega foto_perfil
+      matricula: user.matricula,
     };
     const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "8h" });
     res.json({ token, user: payload });
