@@ -170,80 +170,44 @@ const CPANEL_CONFIG = {
 };
 
 // ==========================================
-// NUEVO: CONFIGURACIÓN CPANEL (MÉTODO DE DOBLE PASO - LOGIN + API)
+// NUEVO: CONFIGURACIÓN CPANEL (MÉTODO PUENTE PHP)
 // ==========================================
 async function crearCorreoCpanel(usuario, passwordCorreo) {
   console.log(
-    `[CPANEL] Intentando crear correo: ${usuario}@${CPANEL_CONFIG.domain}`,
+    `[CPANEL-BRIDGE] Intentando crear correo: ${usuario}@universidadsigloxxi.com`,
   );
+
   try {
-    // ---------------------------------------------------------
-    // PASO 1: Iniciar sesión real para obtener el Token (cpsess)
-    // ---------------------------------------------------------
-    const loginUrl = `https://${CPANEL_CONFIG.host}:2083/login/`;
+    // Apuntamos al archivo PHP que acabas de crear en public_html
+    const bridgeUrl = `https://www.universidadsigloxxi.com/plataforma/crear_api_correo.php`;
 
-    const loginData = new URLSearchParams();
-    loginData.append("user", CPANEL_CONFIG.user);
-    loginData.append("pass", CPANEL_CONFIG.password);
+    const formData = new URLSearchParams();
+    formData.append("secreto", "ClaveSecretaNode2026"); // Debe coincidir con el PHP
+    formData.append("email", usuario);
+    formData.append("password", passwordCorreo);
 
-    const loginResponse = await axios.post(loginUrl, loginData, {
+    // Hacemos un POST web normal. ¡Los firewalls no bloquean esto!
+    const response = await axios.post(bridgeUrl, formData, {
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
     });
 
-    // Extraemos el token de seguridad (/cpsessXXXXXXXXX) y las cookies
-    const cpsess = loginResponse.data.security_token;
-    const cookies = loginResponse.headers["set-cookie"];
-
-    if (!cpsess) {
-      console.error(
-        "❌ Falla en el login de cPanel. Verifica tu usuario y contraseña de Neubox.",
-      );
-      return false;
-    }
-
-    console.log(`✅ Sesión de cPanel iniciada con éxito. Token: ${cpsess}`);
-
-    // ---------------------------------------------------------
-    // PASO 2: Usar el Token (cpsess) para ejecutar la función de crear correo
-    // ---------------------------------------------------------
-    // Nota cómo metemos el token directamente en la URL, así lo exige cPanel
-    const uapiUrl = `https://${CPANEL_CONFIG.host}:2083${cpsess}/execute/Email/add_pop`;
-
-    const formData = new URLSearchParams();
-    formData.append("email", usuario);
-    formData.append("password", passwordCorreo);
-    formData.append("domain", CPANEL_CONFIG.domain);
-    formData.append("quota", "250"); // 250MB de espacio
-
-    const response = await axios.post(uapiUrl, formData, {
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        Cookie: cookies ? cookies.join("; ") : "", // Mandamos las cookies para que no nos cierre la sesión
-      },
-    });
-
-    // ---------------------------------------------------------
-    // PASO 3: Validar respuesta
-    // ---------------------------------------------------------
     if (response.data && response.data.status === 1) {
-      console.log("✅ Correo creado en cPanel exitosamente.");
+      console.log("✅ Correo creado exitosamente mediante el Puente PHP.");
       return true;
     } else {
       const errorMsg = response.data.errors
         ? response.data.errors[0]
-        : "Respuesta desconocida de la API";
-      if (typeof errorMsg === "string" && errorMsg.includes("already exists")) {
-        console.log("⚠️ El correo ya existía en cPanel. Continuando...");
+        : "Error desconocido";
+      if (errorMsg.includes("already exists")) {
+        console.log("⚠️ El correo ya existía. Todo en orden.");
         return true;
       }
-      console.error(
-        "❌ Error interno de cPanel al intentar crear el correo:",
-        errorMsg,
-      );
+
+      console.error("❌ Error en Puente PHP:", errorMsg);
       return false;
     }
   } catch (error) {
-    console.error("❌ Error de red/conexión con cPanel:", error.message);
+    console.error("❌ Error de conexión con el Puente PHP:", error.message);
     return false;
   }
 }
