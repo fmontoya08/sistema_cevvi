@@ -170,64 +170,84 @@ const CPANEL_CONFIG = {
 };
 
 // ==========================================
-// NUEVO: CONFIGURACIÓN CPANEL (MÉTODO POST ANTI-FIREWALL)
+// NUEVO: CONFIGURACIÓN CPANEL (MÉTODO DE DOBLE PASO - LOGIN + API)
 // ==========================================
 async function crearCorreoCpanel(usuario, passwordCorreo) {
   console.log(
     `[CPANEL] Intentando crear correo: ${usuario}@${CPANEL_CONFIG.domain}`,
   );
   try {
-    const url = `https://${CPANEL_CONFIG.host}:2083/execute/Email/add_pop`;
+    // ---------------------------------------------------------
+    // PASO 1: Iniciar sesión real para obtener el Token (cpsess)
+    // ---------------------------------------------------------
+    const loginUrl = `https://${CPANEL_CONFIG.host}:2083/login/`;
 
-    // 1. Ocultamos los datos en un formulario codificado (Imunify360 no bloquea esto)
+    const loginData = new URLSearchParams();
+    loginData.append("user", CPANEL_CONFIG.user);
+    loginData.append("pass", CPANEL_CONFIG.password);
+
+    const loginResponse = await axios.post(loginUrl, loginData, {
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    });
+
+    // Extraemos el token de seguridad (/cpsessXXXXXXXXX) y las cookies
+    const cpsess = loginResponse.data.security_token;
+    const cookies = loginResponse.headers["set-cookie"];
+
+    if (!cpsess) {
+      console.error(
+        "❌ Falla en el login de cPanel. Verifica tu usuario y contraseña de Neubox.",
+      );
+      return false;
+    }
+
+    console.log(`✅ Sesión de cPanel iniciada con éxito. Token: ${cpsess}`);
+
+    // ---------------------------------------------------------
+    // PASO 2: Usar el Token (cpsess) para ejecutar la función de crear correo
+    // ---------------------------------------------------------
+    // Nota cómo metemos el token directamente en la URL, así lo exige cPanel
+    const uapiUrl = `https://${CPANEL_CONFIG.host}:2083${cpsess}/execute/Email/add_pop`;
+
     const formData = new URLSearchParams();
     formData.append("email", usuario);
     formData.append("password", passwordCorreo);
     formData.append("domain", CPANEL_CONFIG.domain);
-    formData.append("quota", "250"); // 250MB
+    formData.append("quota", "250"); // 250MB de espacio
 
-    // 2. Autenticación Básica clásica
-    const authString = Buffer.from(
-      `${CPANEL_CONFIG.user}:${CPANEL_CONFIG.password}`,
-    ).toString("base64");
-
-    // 3. Enviamos por POST en lugar de GET
-    const response = await axios.post(url, formData, {
+    const response = await axios.post(uapiUrl, formData, {
       headers: {
-        Authorization: `Basic ${authString}`,
-        "Content-Type": "application/x-www-form-urlencoded", // <-- Crucial para que cPanel lo entienda
+        "Content-Type": "application/x-www-form-urlencoded",
+        Cookie: cookies ? cookies.join("; ") : "", // Mandamos las cookies para que no nos cierre la sesión
       },
     });
 
+    // ---------------------------------------------------------
+    // PASO 3: Validar respuesta
+    // ---------------------------------------------------------
     if (response.data && response.data.status === 1) {
       console.log("✅ Correo creado en cPanel exitosamente.");
       return true;
     } else {
       const errorMsg = response.data.errors
         ? response.data.errors[0]
-        : "Respuesta inesperada de cPanel";
+        : "Respuesta desconocida de la API";
       if (typeof errorMsg === "string" && errorMsg.includes("already exists")) {
-        console.log("⚠️ El correo ya existía.");
+        console.log("⚠️ El correo ya existía en cPanel. Continuando...");
         return true;
       }
-      console.error("❌ Error interno de cPanel:", errorMsg);
+      console.error(
+        "❌ Error interno de cPanel al intentar crear el correo:",
+        errorMsg,
+      );
       return false;
     }
   } catch (error) {
-    console.error(
-      "❌ Error de red/Firewall al conectar con cPanel:",
-      error.message,
-    );
-    // Si Imunify360 nos sigue bloqueando, esto nos dirá por qué exactamente
-    if (error.response && error.response.data) {
-      console.log(
-        "🔍 DETALLE DEL BLOQUEO SERVER:",
-        error.response.data.toString().substring(0, 300),
-      );
-    }
+    console.error("❌ Error de red/conexión con cPanel:", error.message);
     return false;
   }
 }
+
 // --- NUEVA RUTA PÚBLICA PARA LLENAR LOS SELECTS ---
 app.get("/api/public/catalogos", async (req, res) => {
   try {
