@@ -10080,7 +10080,20 @@ const DocenteDashboardPage = () => {
         </div>
         <div className="z-10 text-center md:text-left">
           <h1 className="text-3xl font-black mb-1">
-            ¡Bienvenido, Profesor {user.apellido_paterno}! 🎓
+            {(() => {
+              // Obtenemos el género de la base de datos, lo pasamos a mayúsculas para evitar errores
+              const generoUser = String(user?.genero || "").toUpperCase();
+
+              // Verificamos si es mujer (cubriendo las variaciones que usas en tus registros)
+              const esMujer =
+                generoUser === "F" ||
+                generoUser === "M" ||
+                generoUser === "FEMENINO";
+
+              // Retornamos el saludo correcto
+              return esMujer ? "Bienvenida, Profesora" : "Bienvenido, Profesor";
+            })()}{" "}
+            🎓
           </h1>
           <p className="text-blue-100 text-lg">
             Tiene {cursos.length}{" "}

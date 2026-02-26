@@ -341,8 +341,28 @@ app.post("/api/public/registro-aspirante", async (req, res) => {
 
     await connection.commit();
 
-    // 7. Enviar Correo de Bienvenida (Opcional, si tienes configurado Gmail)
-    // await enviarCredenciales(email_personal, nombre, finalMatricula, finalMatricula, emailInstitucional, passwordCorreoStrong);
+    // ==========================================
+    // 7. ENVIAR CORREO DE BIENVENIDA AL ASPIRANTE
+    // ==========================================
+    if (email_personal) {
+      try {
+        await enviarCredenciales(
+          email_personal, // Destinatario
+          nombre, // Nombre del aspirante
+          finalMatricula, // Usuario/Matrícula
+          finalMatricula, // Contraseña de la plataforma
+          emailInstitucional, // Correo institucional en cPanel
+          passwordCorreoStrong, // Contraseña fuerte del correo
+        );
+        console.log("✅ Correo de bienvenida enviado al aspirante.");
+      } catch (emailError) {
+        console.error(
+          "❌ Error enviando correo al nuevo aspirante:",
+          emailError,
+        );
+        // No detenemos el proceso si falla el correo
+      }
+    }
 
     res.status(201).send({
       message: "Registro exitoso.",
@@ -705,7 +725,7 @@ apiRouter.post("/login", async (req, res) => {
   const { email, password } = req.body;
   try {
     const [results] = await db.query(
-      "SELECT id, email, password, nombre, apellido_paterno, rol, foto_perfil, activo, matricula FROM usuarios WHERE email = ?",
+      "SELECT id, email, password, nombre, apellido_paterno, rol, foto_perfil, activo, matricula, genero FROM usuarios WHERE email = ?",
       [email],
     );
 
@@ -738,6 +758,7 @@ apiRouter.post("/login", async (req, res) => {
       apellido_paterno: user.apellido_paterno,
       foto_perfil: user.foto_perfil, // <-- Agrega foto_perfil
       matricula: user.matricula,
+      genero: user.genero,
     };
     const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "8h" });
     res.json({ token, user: payload });
