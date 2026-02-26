@@ -16,6 +16,7 @@ import RevisarExamenPage from "./pages/RevisarExamenPage";
 import PizarraPage from "./pages/PizarraPage";
 import ClaseEnVivoPage from "./pages/ClaseEnVivoPage";
 import TutorialGuide from "./components/TutorialGuide"; // Asegúrate de crear la carpeta components
+import RegistroControlEscolarPage from "./pages/RegistroControlEscolarPage";
 
 import React, {
   useState,
@@ -476,14 +477,14 @@ const AuthProvider = ({ children }) => {
       localStorage.setItem("user", JSON.stringify(userData));
       localStorage.setItem("token", token);
       setUser(userData);
-      if (userData.rol === "admin") {
-        navigate("/dashboard");
+
+      if (userData.rol === "admin" || userData.rol === "control_escolar") {
+        navigate("/dashboard"); // Ambos usan el mismo panel inicial
       } else if (userData.rol === "docente") {
         navigate("/docente/dashboard");
       } else if (userData.rol === "alumno") {
         navigate("/alumno/dashboard");
       } else if (userData.rol === "aspirante") {
-        // <-- AÑADE ESTO
         navigate("/aspirante/dashboard");
       } else {
         navigate("/login");
@@ -709,29 +710,109 @@ const AdminLayout = () => {
   }, []);
 
   const navItems = [
-    { icon: Home, label: "Dashboard", path: "/dashboard" },
-    { icon: Megaphone, label: "Avisos Escolares", path: "/admin/anuncios" }, // <--- NUEVO MENÚ AQUÍ
-    { icon: Users, label: "Usuarios", path: "/usuarios" },
-    { icon: Calendar, label: "Calendario", path: "/admin/calendario" },
-    { icon: Mail, label: "Correo Institucional", path: "/admin/correo" },
-    { icon: Calendar, label: "Ciclos Escolares", path: "/ciclos" },
-    { icon: FileText, label: "Planes de Estudio", path: "/planes-estudio" },
-    { icon: TrendingUp, label: "Grados", path: "/grados" },
-    { icon: GraduationCap, label: "Carreras", path: "/carreras" },
-    { icon: Building, label: "Sedes", path: "/sedes" },
+    {
+      icon: Home,
+      label: "Dashboard",
+      path: "/dashboard",
+      roles: ["admin", "control_escolar"],
+    },
+    {
+      icon: Megaphone,
+      label: "Avisos Escolares",
+      path: "/admin/anuncios",
+      roles: ["admin", "control_escolar"],
+    },
+    {
+      icon: Users,
+      label: "Usuarios",
+      path: "/usuarios",
+      roles: ["admin", "control_escolar"],
+    },
+    {
+      icon: Calendar,
+      label: "Calendario",
+      path: "/admin/calendario",
+      roles: ["admin", "control_escolar"],
+    },
+    {
+      icon: Mail,
+      label: "Correo Institucional",
+      path: "/admin/correo",
+      roles: ["admin", "control_escolar"],
+    },
+    {
+      icon: Calendar,
+      label: "Ciclos Escolares",
+      path: "/ciclos",
+      roles: ["admin"],
+    },
+    {
+      icon: FileText,
+      label: "Planes de Estudio",
+      path: "/planes-estudio",
+      roles: ["admin"],
+    },
+    { icon: TrendingUp, label: "Grados", path: "/grados", roles: ["admin"] },
+    {
+      icon: GraduationCap,
+      label: "Carreras",
+      path: "/carreras",
+      roles: ["admin"],
+    },
+    { icon: Building, label: "Sedes", path: "/sedes", roles: ["admin"] },
     {
       icon: ClipboardEdit,
       label: "Conceptos de Pago",
       path: "/conceptos-pago",
+      roles: ["admin"],
     },
-    { icon: Book, label: "Asignaturas", path: "/asignaturas" },
-    { icon: Group, label: "Grupos", path: "/grupos" },
-    { icon: GitBranch, label: "Migración", path: "/admin/migracion" },
-    { icon: DollarSign, label: "Caja y Finanzas", path: "/admin/finanzas" },
-    { icon: ClipboardEdit, label: "Solicitudes", path: "/admin/solicitudes" },
-    { icon: Folder, label: "Gestor de Archivos", path: "/admin/archivos" },
-    { icon: UploadCloud, label: "Mi Nube (Drive)", path: "/admin/drive" },
+    {
+      icon: Book,
+      label: "Asignaturas",
+      path: "/asignaturas",
+      roles: ["admin"],
+    },
+    {
+      icon: Group,
+      label: "Grupos",
+      path: "/grupos",
+      roles: ["admin", "control_escolar"],
+    },
+    {
+      icon: GitBranch,
+      label: "Migración",
+      path: "/admin/migracion",
+      roles: ["admin", "control_escolar"],
+    },
+    {
+      icon: DollarSign,
+      label: "Caja y Finanzas",
+      path: "/admin/finanzas",
+      roles: ["admin", "control_escolar"],
+    },
+    {
+      icon: ClipboardEdit,
+      label: "Solicitudes",
+      path: "/admin/solicitudes",
+      roles: ["admin", "control_escolar"],
+    },
+    {
+      icon: Folder,
+      label: "Gestor de Archivos",
+      path: "/admin/archivos",
+      roles: ["admin"],
+    },
+    {
+      icon: UploadCloud,
+      label: "Mi Nube (Drive)",
+      path: "/admin/drive",
+      roles: ["admin", "control_escolar"],
+    },
   ];
+
+  const visibleNavItems = navItems.filter((item) =>
+    item.roles.includes(user?.rol),
+  );
 
   return (
     <div className="flex h-screen bg-gray-50 font-sans overflow-hidden">
@@ -765,7 +846,7 @@ const AdminLayout = () => {
         </div>
 
         <nav className="flex-1 px-3 py-6 space-y-1 overflow-y-auto custom-scrollbar">
-          {navItems.map((item) => {
+          {visibleNavItems.map((item) => {
             const isActive = location.pathname.startsWith(item.path);
             return (
               <Link
@@ -788,7 +869,9 @@ const AdminLayout = () => {
             <p className="text-[10px] font-bold uppercase text-[#bb9a5a]">
               Rol Actual
             </p>
-            <p className="text-sm font-bold text-gray-700">Administrador</p>
+            <p className="text-sm font-bold text-gray-700 capitalize">
+              {user?.rol.replace("_", " ")}
+            </p>
           </div>
           <button
             onClick={logout}
@@ -1398,7 +1481,7 @@ const LoginPage = () => {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                placeholder="ej. 2026001"
+                placeholder="Correo institucional"
                 className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-[#a72a34] focus:border-[#a72a34] transition-all"
               />
             </div>
@@ -3150,6 +3233,7 @@ const UsuarioModal = ({ usuario, onClose, onSave }) => {
             <option value="aspirante">Aspirante</option>
             <option value="alumno">Alumno</option>
             <option value="docente">Docente</option>
+            <option value="control_escolar">Control Escolar</option>
             <option value="admin">Administrador</option>
           </select>
           <div className="flex justify-end space-x-4 mt-8">
@@ -14674,6 +14758,10 @@ function App() {
           <Route path="/registro" element={<RegistroPage />} />
           <Route path="/registro_docentes" element={<RegistroDocentePage />} />
           <Route
+            path="/registro_control_escolar"
+            element={<RegistroControlEscolarPage />}
+          />
+          <Route
             path="/unauthorized"
             element={
               <div className="flex h-screen flex-col items-center justify-center">
@@ -14684,43 +14772,27 @@ function App() {
           />
 
           {/* Rutas de Administrador */}
-          <Route element={<ProtectedRoute allowedRoles={["admin"]} />}>
+          <Route
+            element={
+              <ProtectedRoute allowedRoles={["admin", "control_escolar"]} />
+            }
+          >
             <Route element={<AdminLayout />}>
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="/dashboard" element={<DashboardPage />} />
-              <Route
-                path="/admin/anuncios"
-                element={<AnunciosAdminPage />}
-              />{" "}
-              {/* <--- NUEVA RUTA AQUÍ */}
-              <Route path="/asignaturas" element={<AsignaturasPage />} />
+              <Route path="/admin/anuncios" element={<AnunciosAdminPage />} />
               <Route path="/usuarios" element={<UsuariosPage />} />
-              <Route path="/admin/drive" element={<MiDrivePage />} />
               <Route
                 path="/usuarios/aspirante/:id"
                 element={<DetalleAspirantePage />}
               />
+              <Route path="/admin/calendario" element={<CalendarioAdmin />} />
+              <Route path="/admin/correo" element={<CorreoPage />} />
               <Route path="/grupos" element={<GruposPage />} />
               <Route path="/grupos/:id" element={<DetalleGrupoPage />} />
               <Route path="/admin/migracion" element={<MigracionPage />} />
-              <Route path="/admin/archivos" element={<ExploradorArchivos />} />
               <Route path="/migrar-grupos" element={<MigracionGruposPage />} />
-              <Route
-                path="/admin/grupos/:grupoId/asignatura/:asignaturaId/calificaciones"
-                element={<SubirCalificacionesPage />}
-              />
-              <Route
-                path="/admin/grupo/:grupoId/asignatura/:asignaturaId"
-                element={<AdminCalificarPage />}
-              />
-              <Route path="/ciclos" element={<CiclosPage />} />
-              <Route path="/planes-estudio" element={<PlanesEstudioPage />} />
-              <Route path="/grados" element={<GradosPage />} />
-              <Route path="/carreras" element={<CarrerasPage />} />
-              <Route path="/sedes" element={<SedesPage />} />
-              <Route path="/conceptos-pago" element={<ConceptosPagoPage />} />
               <Route path="/admin/finanzas" element={<CajaPage />} />
-              <Route path="/admin/correo" element={<CorreoPage />} />
               <Route
                 path="/admin/finanzas/alumno/:id"
                 element={<DetalleFinanzasAlumnoPage />}
@@ -14729,11 +14801,33 @@ function App() {
                 path="/admin/solicitudes"
                 element={<GestionSolicitudesPage />}
               />
+              <Route path="/admin/drive" element={<MiDrivePage />} />
               <Route path="/mi-perfil" element={<MiPerfilPage />} />
-              <Route path="/admin/calendario" element={<CalendarioAdmin />} />
+
+              {/* Anidamos una protección EXTRA para las rutas EXCLUSIVAS del Admin supremo */}
+              <Route element={<ProtectedRoute allowedRoles={["admin"]} />}>
+                <Route path="/ciclos" element={<CiclosPage />} />
+                <Route path="/planes-estudio" element={<PlanesEstudioPage />} />
+                <Route path="/grados" element={<GradosPage />} />
+                <Route path="/carreras" element={<CarrerasPage />} />
+                <Route path="/sedes" element={<SedesPage />} />
+                <Route path="/conceptos-pago" element={<ConceptosPagoPage />} />
+                <Route path="/asignaturas" element={<AsignaturasPage />} />
+                <Route
+                  path="/admin/archivos"
+                  element={<ExploradorArchivos />}
+                />
+                <Route
+                  path="/admin/grupos/:grupoId/asignatura/:asignaturaId/calificaciones"
+                  element={<SubirCalificacionesPage />}
+                />
+                <Route
+                  path="/admin/grupo/:grupoId/asignatura/:asignaturaId"
+                  element={<AdminCalificarPage />}
+                />
+              </Route>
             </Route>
           </Route>
-
           {/* Rutas de Docente */}
           <Route element={<ProtectedRoute allowedRoles={["docente"]} />}>
             <Route element={<DocenteLayout />}>

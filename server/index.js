@@ -562,6 +562,151 @@ app.post("/api/public/registro-docente", async (req, res) => {
   }
 });
 
+// ==========================================
+// RUTA PÚBLICA: REGISTRO CONTROL ESCOLAR
+// ==========================================
+app.post("/api/public/registro-control-escolar", async (req, res) => {
+  const {
+    nombre,
+    apellido_paterno,
+    apellido_materno,
+    email_personal,
+    telefono,
+    domicilio,
+    colonia,
+    edad,
+    contacto_emergencia_nombre,
+    contacto_emergencia_telefono,
+    genero,
+    curp,
+    fecha_nacimiento,
+    sede_id,
+  } = req.body;
+
+  const curpSanitized = curp ? curp.toUpperCase().trim() : "";
+  const connection = await db.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    // 1. Validaciones de CURP
+    if (curpSanitized && !CURP_REGEX.test(curpSanitized)) {
+      await connection.rollback();
+      return res
+        .status(400)
+        .send({ message: "El formato de la CURP es inválido." });
+    }
+
+    const [existing] = await connection.query(
+      "SELECT curp FROM usuarios WHERE curp = ?",
+      [curpSanitized],
+    );
+    if (existing.length > 0) {
+      await connection.rollback();
+      return res.status(400).send({ message: "Esta CURP ya está registrada." });
+    }
+
+    // 2. Generar Clave Administrativa (Ej: CE2026001) - "CE" de Control Escolar
+    const currentYear = new Date().getFullYear().toString();
+    const prefix = `CE${currentYear}`;
+    const [lastRecord] = await connection.query(
+      "SELECT matricula FROM usuarios WHERE matricula LIKE ? ORDER BY CAST(SUBSTRING(matricula, 7) AS UNSIGNED) DESC LIMIT 1",
+      [`${prefix}%`],
+    );
+
+    let nextSequence = 1;
+    if (lastRecord.length > 0 && lastRecord[0].matricula) {
+      nextSequence = parseInt(lastRecord[0].matricula.substring(6)) + 1;
+    }
+    const claveCE = `${prefix}${nextSequence.toString().padStart(3, "0")}`;
+
+    // 3. Generar Correo Profesional Automático (ej: alopez@...)
+    // Reutilizamos tu función generarEmailDocente que sirve perfecto para esto
+    const datosEmail = await generarEmailDocente(
+      nombre,
+      apellido_paterno,
+      connection,
+    );
+
+    // 4. Generar Contraseñas Seguras
+    const passwordCorreoStrong = `Admin.${claveCE}!`;
+    const passwordHash = await bcrypt.hash(claveCE, 10);
+
+    // 5. Crear correo real en cPanel mediante el puente PHP
+    await crearCorreoCpanel(datosEmail.usuarioCpanel, passwordCorreoStrong);
+
+    const fechaFinal = fecha_nacimiento === "" ? null : fecha_nacimiento;
+
+    // 6. Guardar en Base de Datos con el rol 'control_escolar'
+    const sql = `
+      INSERT INTO usuarios 
+      (nombre, apellido_paterno, apellido_materno, email, email_personal, password, password_email, telefono, domicilio, colonia, edad, contacto_emergencia_nombre, contacto_emergencia_telefono, genero, curp, fecha_nacimiento, rol, sede_id, matricula, activo) 
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'control_escolar', ?, ?, 1)
+    `;
+
+    await connection.query(sql, [
+      nombre,
+      apellido_paterno,
+      apellido_materno || null,
+      datosEmail.correoCompleto,
+      email_personal,
+      passwordHash,
+      passwordCorreoStrong,
+      telefono,
+      domicilio || null,
+      colonia || null,
+      edad || null,
+      contacto_emergencia_nombre || null,
+      contacto_emergencia_telefono || null,
+      genero,
+      curpSanitized,
+      fechaFinal,
+      sede_id || null,
+      claveCE,
+    ]);
+
+    await connection.commit();
+
+    // 7. ENVIAR CORREO DE BIENVENIDA CON CREDENCIALES
+    if (email_personal) {
+      try {
+        await enviarCredenciales(
+          email_personal, // Destinatario
+          nombre, // Nombre
+          claveCE, // Usuario/Clave para iniciar sesión
+          claveCE, // Contraseña de plataforma
+          datosEmail.correoCompleto, // Correo de cPanel
+          passwordCorreoStrong, // Contraseña fuerte del correo
+        );
+      } catch (emailError) {
+        console.error(
+          "❌ Error enviando correo a Control Escolar:",
+          emailError,
+        );
+      }
+    }
+
+    // 8. Respuesta al Frontend para mostrar la tarjeta verde
+    res.status(201).send({
+      message: "Registro exitoso.",
+      credenciales: {
+        usuario: claveCE,
+        correo: datosEmail.correoCompleto,
+        password: claveCE,
+        password_correo: passwordCorreoStrong,
+      },
+    });
+  } catch (error) {
+    await connection.rollback();
+    console.error("Error registro control escolar:", error);
+    res.status(500).send({
+      message: "Error al registrar: " + (error.sqlMessage || error.message),
+    });
+  } finally {
+    connection.release();
+  }
+});
+
 const upload = multer({ storage: storage });
 
 // --- INICIA NUEVO CÓDIGO (AGREGAR) ---
@@ -682,12 +827,16 @@ const verifyToken = (req, res, next) => {
 // Estos middlewares SÍ bloquean la ruta si no se cumple el rol
 
 const isAdmin = (req, res, next) => {
-  if (req.user && req.user.rol === "admin") {
+  // Ahora permite el paso si el usuario es admin o control_escolar
+  if (
+    req.user &&
+    (req.user.rol === "admin" || req.user.rol === "control_escolar")
+  ) {
     return next();
   }
-  return res
-    .status(403)
-    .send({ message: "Acceso denegado. Se requiere rol de administrador." });
+  return res.status(403).send({
+    message: "Acceso denegado. Se requiere rol directivo o de control escolar.",
+  });
 };
 
 const isDocente = (req, res, next) => {
