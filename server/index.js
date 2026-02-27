@@ -139,7 +139,7 @@ async function enviarCredenciales(
           </div>
           
           <p style="text-align: center; margin-top: 30px;">
-            <a href="https://www.universidadsigloxxi.com/login" style="background-color: #a72a34; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold;">Iniciar Sesión</a>
+            <a href="https://www.universidadsigloxxi.com/plataforma/login" style="background-color: #a72a34; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold;">Iniciar Sesión</a>
           </p>
         </div>
       </div>
