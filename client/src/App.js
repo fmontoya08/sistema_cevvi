@@ -10436,22 +10436,13 @@ const DetalleCursoDocentePage = () => {
 
   const handleGuardarTodo = async () => {
     setIsSaving(true);
-
-    // Filtramos para asegurar que mandamos los datos correctamente estructurados
     const calificacionesArray = Object.keys(calificaciones).map((alumnoId) => ({
       alumno_id: parseInt(alumnoId),
       calificacion: calificaciones[alumnoId],
     }));
 
-    if (calificacionesArray.length === 0) {
-      alert("No hay calificaciones para guardar.");
-      setIsSaving(false);
-      return;
-    }
-
     try {
-      // 1. CAMBIO CLAVE: Usamos 'api.post' (tu instancia configurada)
-      // 2. Apuntamos a la ruta universal de calificaciones que permite a Docentes
+      // AQUÍ ESTÁ LA CORRECCIÓN. Usamos "api.post" y la ruta "/calificar-grupo-completo"
       await api.post("/calificar-grupo-completo", {
         grupo_id: grupoId,
         asignatura_id: asignaturaId,
@@ -10459,7 +10450,7 @@ const DetalleCursoDocentePage = () => {
       });
 
       alert("¡Acta Final guardada correctamente!");
-      fetchData(); // Recargamos para reflejar los cambios
+      fetchData();
     } catch (error) {
       console.error("Error al guardar el acta:", error);
       alert(
