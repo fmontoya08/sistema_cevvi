@@ -10436,27 +10436,36 @@ const DetalleCursoDocentePage = () => {
 
   const handleGuardarTodo = async () => {
     setIsSaving(true);
+
+    // Filtramos para asegurar que mandamos los datos correctamente estructurados
     const calificacionesArray = Object.keys(calificaciones).map((alumnoId) => ({
       alumno_id: parseInt(alumnoId),
       calificacion: calificaciones[alumnoId],
     }));
 
+    if (calificacionesArray.length === 0) {
+      alert("No hay calificaciones para guardar.");
+      setIsSaving(false);
+      return;
+    }
+
     try {
-      const token = localStorage.getItem("token");
-      await axios.post(
-        "https://api-universidad-c5o8.onrender.com/api/calificaciones/guardar-lote",
-        {
-          grupo_id: grupoId,
-          asignatura_id: asignaturaId,
-          calificaciones: calificacionesArray,
-        },
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
+      // 1. CAMBIO CLAVE: Usamos 'api.post' (tu instancia configurada)
+      // 2. Apuntamos a la ruta universal de calificaciones que permite a Docentes
+      await api.post("/calificar-grupo-completo", {
+        grupo_id: grupoId,
+        asignatura_id: asignaturaId,
+        calificaciones: calificacionesArray,
+      });
+
       alert("¡Acta Final guardada correctamente!");
-      fetchData();
+      fetchData(); // Recargamos para reflejar los cambios
     } catch (error) {
-      console.error(error);
-      alert("Error al guardar el acta.");
+      console.error("Error al guardar el acta:", error);
+      alert(
+        "Error al guardar el acta: " +
+          (error.response?.data?.message || "Error desconocido"),
+      );
     } finally {
       setIsSaving(false);
     }
