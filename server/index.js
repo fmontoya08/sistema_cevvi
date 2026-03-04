@@ -9008,6 +9008,35 @@ alumnoRouter.get(
   },
 );
 
+// --- INICIO: RUTA HISTORIAL DE CALIFICACIONES (ALUMNO) ---
+alumnoRouter.get("/mis-calificaciones", async (req, res) => {
+  const alumno_id = req.user.id;
+  try {
+    const sql = `
+      SELECT 
+        c.calificacion,
+        a.nombre_asignatura,
+        a.clave_asignatura,
+        g.nombre_grupo,
+        ci.nombre_ciclo
+      FROM calificaciones c
+      JOIN asignaturas a ON c.asignatura_id = a.id
+      JOIN grupos g ON c.grupo_id = g.id
+      LEFT JOIN ciclos ci ON g.ciclo_id = ci.id
+      WHERE c.alumno_id = ? AND c.calificacion IS NOT NULL
+      ORDER BY ci.id DESC, a.nombre_asignatura ASC
+    `;
+    const [calificaciones] = await db.query(sql, [alumno_id]);
+    res.json(calificaciones);
+  } catch (error) {
+    console.error("Error al obtener historial de calificaciones:", error);
+    res
+      .status(500)
+      .send({ message: "Error en el servidor al obtener calificaciones" });
+  }
+});
+// --- FIN: RUTA HISTORIAL DE CALIFICACIONES (ALUMNO) ---
+
 app.listen(PORT, () => {
   console.log(`Servidor corriendo en http://localhost:${PORT}`);
 });

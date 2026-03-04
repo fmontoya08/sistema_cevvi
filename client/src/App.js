@@ -1144,6 +1144,11 @@ const AlumnoLayout = () => {
     { icon: Home, label: "Inicio", path: "/alumno/dashboard" },
     { icon: DollarSign, label: "Mis Pagos", path: "/alumno/mis-pagos" },
     { icon: ClipboardEdit, label: "Trámites", path: "/alumno/mis-solicitudes" },
+    {
+      icon: Award,
+      label: "Mis Calificaciones",
+      path: "/alumno/mis-calificaciones",
+    },
     { icon: Calendar, label: "Calendario", path: "/alumno/calendario" },
     { icon: User, label: "Mi Perfil", path: "/alumno/mi-perfil" },
     { icon: Mail, label: "Correo Institucional", path: "/alumno/correo" },
@@ -12290,12 +12295,14 @@ const AulaVirtualPage = () => {
             >
               <Users size={18} /> Equipos
             </button>
-            <button
-              onClick={() => setActiveTab("analiticas")}
-              className={`pb-3 px-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all whitespace-nowrap ${activeTab === "analiticas" ? "border-[#a72a34] text-[#a72a34]" : "border-transparent text-gray-400 hover:text-gray-600"}`}
-            >
-              <TrendingUp size={18} /> Analíticas
-            </button>
+            {user.rol === "docente" && (
+              <button
+                onClick={() => setActiveTab("analiticas")}
+                className={`pb-3 px-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all whitespace-nowrap ${activeTab === "analiticas" ? "border-[#a72a34] text-[#a72a34]" : "border-transparent text-gray-400 hover:text-gray-600"}`}
+              >
+                <TrendingUp size={18} /> Analíticas
+              </button>
+            )}
           </nav>
         </div>
 
@@ -12565,7 +12572,7 @@ const AulaVirtualPage = () => {
             </div>
           )}
 
-          {activeTab === "analiticas" && (
+          {activeTab === "analiticas" && user.rol === "docente" && (
             <div className="mt-6">
               <AnaliticasGrupoPage />
             </div>
@@ -14729,6 +14736,112 @@ const EquiposAlumnoView = ({ grupoId, asignaturaId }) => {
   );
 };
 
+// --- NUEVO COMPONENTE: HISTORIAL DE CALIFICACIONES (ALUMNO) ---
+const MisCalificacionesPage = () => {
+  const [calificaciones, setCalificaciones] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchCalificaciones = async () => {
+      try {
+        const { data } = await api.get("/alumno/mis-calificaciones");
+        setCalificaciones(data);
+      } catch (error) {
+        console.error("Error al obtener calificaciones:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchCalificaciones();
+  }, []);
+
+  return (
+    <div className="space-y-8 animate-in fade-in duration-300 max-w-7xl mx-auto p-4 md:p-0">
+      {/* HEADER */}
+      <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
+        <h1 className="text-3xl font-bold text-gray-800 tracking-tight flex items-center gap-3">
+          <div className="p-3 bg-[#a72a34] text-white rounded-xl shadow-lg shadow-red-900/20">
+            <Award size={28} />
+          </div>
+          Historial Académico
+        </h1>
+        <p className="text-gray-500 mt-2 text-lg ml-16">
+          Consulta tus calificaciones finales por asignatura y ciclo escolar.
+        </p>
+      </div>
+
+      {/* TABLA DE CALIFICACIONES */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        {loading ? (
+          <div className="p-10 text-center text-gray-400">
+            Cargando tu historial...
+          </div>
+        ) : calificaciones.length === 0 ? (
+          <div className="p-16 text-center">
+            <BookOpen size={48} className="mx-auto text-gray-300 mb-4" />
+            <p className="text-gray-500 text-lg">
+              Aún no tienes calificaciones finales registradas.
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead className="bg-gray-50 text-gray-500 uppercase text-xs font-bold border-b border-gray-100">
+                <tr>
+                  <th className="p-5">Asignatura</th>
+                  <th className="p-5">Grupo</th>
+                  <th className="p-5">Ciclo Escolar</th>
+                  <th className="p-5 text-center">Calificación Final</th>
+                  <th className="p-5 text-center">Estatus</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {calificaciones.map((item, index) => (
+                  <tr
+                    key={index}
+                    className="hover:bg-gray-50 transition-colors"
+                  >
+                    <td className="p-5">
+                      <p className="font-bold text-gray-800">
+                        {item.nombre_asignatura}
+                      </p>
+                      <p className="text-xs text-gray-400 font-mono mt-1">
+                        Clave: {item.clave_asignatura}
+                      </p>
+                    </td>
+                    <td className="p-5 text-gray-600 font-medium">
+                      {item.nombre_grupo}
+                    </td>
+                    <td className="p-5 text-gray-600">
+                      {item.nombre_ciclo || "Sin ciclo"}
+                    </td>
+                    <td className="p-5 text-center">
+                      <span className="text-2xl font-black text-gray-800">
+                        {item.calificacion}
+                      </span>
+                    </td>
+                    <td className="p-5 text-center">
+                      <span
+                        className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
+                          item.calificacion >= 70
+                            ? "bg-green-100 text-green-700"
+                            : "bg-red-100 text-red-700"
+                        }`}
+                      >
+                        {item.calificacion >= 70 ? "Aprobado" : "Reprobado"}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 // --- COMPONENTE PRINCIPAL DE LA APP ---
 function App() {
   // Función para transformar la letra de la BD en una palabra completa
@@ -14902,6 +15015,10 @@ function App() {
               <Route
                 path="/alumno/dashboard"
                 element={<AlumnoDashboardPage />}
+              />
+              <Route
+                path="/alumno/mis-calificaciones"
+                element={<MisCalificacionesPage />}
               />
               <Route path="/alumno/mi-nube" element={<MiDrivePage />} />
               <Route
