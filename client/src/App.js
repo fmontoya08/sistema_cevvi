@@ -569,12 +569,15 @@ const NotificationBell = () => {
   // Al hacer clic en una notificación
   const handleNotificationClick = async (notif) => {
     try {
-      // 'api' (el global) se usa aquí
       await api.put(`/notificaciones/${notif.id}/marcar-leida`);
       fetchNotifications();
       setIsOpen(false);
-      if (notif.url_destino) {
-        navigate(notif.url_destino);
+
+      // CORRECCIÓN: El backend lo envía como 'link' gracias al alias (url_destino as link)
+      const rutaDestino = notif.link || notif.url_destino;
+
+      if (rutaDestino) {
+        navigate(rutaDestino);
       }
     } catch (error) {
       console.error("Error al marcar como leída", error);
@@ -13013,6 +13016,8 @@ const EntregarTareaModal = ({ show, onClose, tarea, onEntregaExitosa }) => {
 
   const isEntregada = !!tarea.entrega_id;
   const isCalificada = tarea.calificacion !== null;
+  const isVencida =
+    tarea.fecha_limite && new Date() > new Date(tarea.fecha_limite);
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -13030,7 +13035,7 @@ const EntregarTareaModal = ({ show, onClose, tarea, onEntregaExitosa }) => {
 
         {/* --- INICIO MOSTRAR RÚBRICA --- */}
         {tarea.rubrica && (
-          <div className="mb-6 border border-[#bb9a5a] rounded-xl overflow-hidden">
+          <div className="mb-6 border border-[#bb9a5a] rounded-xl overflow-hidden shadow-sm">
             <div className="bg-[#bb9a5a]/10 px-4 py-2 border-b border-[#bb9a5a] flex justify-between items-center">
               <span className="font-bold text-[#a72a34] flex items-center gap-2">
                 <FileCheck size={16} /> Rúbrica de Evaluación
@@ -13039,7 +13044,21 @@ const EntregarTareaModal = ({ show, onClose, tarea, onEntregaExitosa }) => {
             <div className="p-4 bg-white space-y-3">
               {(() => {
                 try {
-                  const rubricasParsed = JSON.parse(tarea.rubrica);
+                  // Parseo seguro: Verifica si ya es objeto, si no, lo parsea. Maneja doble stringificación.
+                  let rubricasParsed =
+                    typeof tarea.rubrica === "string"
+                      ? JSON.parse(tarea.rubrica)
+                      : tarea.rubrica;
+                  if (typeof rubricasParsed === "string")
+                    rubricasParsed = JSON.parse(rubricasParsed);
+
+                  if (!Array.isArray(rubricasParsed))
+                    return (
+                      <span className="text-xs text-gray-400">
+                        Sin criterios definidos.
+                      </span>
+                    );
+
                   return rubricasParsed.map((r, i) => (
                     <div
                       key={i}
@@ -13059,9 +13078,10 @@ const EntregarTareaModal = ({ show, onClose, tarea, onEntregaExitosa }) => {
                     </div>
                   ));
                 } catch (e) {
+                  console.error("Error parseando rúbrica:", e);
                   return (
-                    <span className="text-xs text-gray-400">
-                      Error al cargar rúbrica.
+                    <span className="text-xs text-gray-400 text-red-500">
+                      No se pudo cargar la rúbrica.
                     </span>
                   );
                 }
@@ -13153,18 +13173,24 @@ const EntregarTareaModal = ({ show, onClose, tarea, onEntregaExitosa }) => {
               >
                 Cancelar
               </button>
-              <button
-                type="submit"
-                disabled={isUploading}
-                className="flex items-center px-4 py-2 bg-principal text-white rounded-md hover:opacity-90 disabled:bg-gray-400"
-              >
-                <UploadCloud size={18} className="mr-2" />
-                {isUploading
-                  ? "Subiendo..."
-                  : isEntregada
-                    ? "Actualizar Entrega"
-                    : "Entregar Tarea"}
-              </button>
+              {isVencida && !isEntregada ? (
+                <div className="w-full text-center p-3 bg-red-100 text-red-700 rounded-lg font-bold">
+                  La fecha límite ha expirado. Ya no puedes enviar esta tarea.
+                </div>
+              ) : (
+                <button
+                  type="submit"
+                  disabled={isUploading || isVencida}
+                  className="flex items-center px-4 py-2 bg-principal text-white rounded-md hover:opacity-90 disabled:bg-gray-400"
+                >
+                  <UploadCloud size={18} className="mr-2" />
+                  {isUploading
+                    ? "Subiendo..."
+                    : isEntregada
+                      ? "Actualizar Entrega"
+                      : "Entregar Tarea"}
+                </button>
+              )}
             </div>
           </form>
         ) : (

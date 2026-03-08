@@ -15,6 +15,22 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Middleware global para auto-vencer pagos que ya pasaron su fecha
+app.use(async (req, res, next) => {
+  try {
+    if (db) {
+      await db.query(`
+        UPDATE adeudos_alumnos 
+        SET estatus_pago = 'vencido' 
+        WHERE estatus_pago = 'pendiente' AND fecha_vencimiento < CURDATE()
+      `);
+    }
+  } catch (e) {
+    console.error("Error actualizando pagos vencidos:", e.message);
+  }
+  next();
+});
+
 let db;
 
 async function connectToDatabase() {
@@ -7064,16 +7080,18 @@ alumnoRouter.post("/solicitudes", async (req, res) => {
   }
 });
 
-// GET (Alumno): Obtener la config del aula virtual
+// GET (Alumno): Obtener la config del aula virtual (CON BLOQUEO DE PAGO)
 alumnoRouter.get(
   "/aula-virtual/:grupoId/:asignaturaId/config",
   async (req, res) => {
     try {
       const { grupoId, asignaturaId } = req.params;
-      // Validar que el alumno está inscrito en este grupo
+      const alumnoId = req.user.id;
+
+      // 1. Validar que el alumno está inscrito en este grupo
       const [[inscripcion]] = await db.query(
         "SELECT * FROM grupo_alumnos WHERE grupo_id = ? AND alumno_id = ?",
-        [grupoId, req.user.id],
+        [grupoId, alumnoId],
       );
       if (!inscripcion) {
         return res
@@ -7081,8 +7099,19 @@ alumnoRouter.get(
           .send({ message: "No estás inscrito en este curso." });
       }
 
-      // Usamos la misma función helper para obtener o crear la config
+      // 2. COMPROBACIÓN FINANCIERA (¿Tiene pagos vencidos?)
+      const [[deuda]] = await db.query(
+        "SELECT COUNT(*) as total_vencidos FROM adeudos_alumnos WHERE alumno_id = ? AND estatus_pago = 'vencido'",
+        [alumnoId],
+      );
+      const tieneAdeudosVencidos = deuda.total_vencidos > 0;
+
+      // 3. Obtener Config
       const config = await getOrCreateAulaConfig(grupoId, asignaturaId);
+
+      // Inyectamos el estado de bloqueo al frontend
+      config.bloqueado_por_pago = tieneAdeudosVencidos;
+
       res.json(config);
     } catch (error) {
       console.error("Error al obtener config de aula (alumno):", error);
@@ -7149,6 +7178,19 @@ alumnoRouter.post(
         "SELECT id FROM tareas_entregas WHERE tarea_id = ? AND alumno_id = ?",
         [tareaId, alumno_id],
       );
+      // 1. VALIDAR FECHA LÍMITE (Seguridad en Backend)
+      const [[tareaOriginal]] = await db.query(
+        "SELECT fecha_limite FROM tareas WHERE id = ?",
+        [tareaId],
+      );
+      if (tareaOriginal && tareaOriginal.fecha_limite) {
+        if (new Date() > new Date(tareaOriginal.fecha_limite)) {
+          return res.status(403).send({
+            message:
+              "La fecha límite para esta tarea ha expirado. Envío bloqueado.",
+          });
+        }
+      }
 
       const esActualizacion = !!entregaPrevia; // True si ya existía, False si es nueva
 
