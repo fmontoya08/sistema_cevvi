@@ -5448,13 +5448,35 @@ const GrupoAdminModal = ({ grupo, onClose }) => {
     }
   };
   const handleCerrarCiclo = async () => {
-    if (window.confirm("¿Cerrar grupo?")) {
-      try {
-        await api.put(`/admin/grupos/${grupo.id}/finalizar`);
-        alert("Cerrado");
-        fetchData();
-      } catch (e) {
-        alert(e.response?.data?.message);
+    try {
+      // 1. Intentamos cerrarlo normal
+      await api.put(`/admin/grupos/${grupo.id}/finalizar`);
+      alert("Grupo cerrado exitosamente");
+      fetchData();
+    } catch (e) {
+      // 2. Si el backend nos avisa que faltan calificaciones, mostramos la alerta
+      if (
+        e.response?.status === 400 &&
+        e.response?.data?.requiresConfirmation
+      ) {
+        const confirmMsg =
+          e.response.data.message +
+          "\n\n¿Deseas FORZAR el cierre del grupo de todos modos? (Los alumnos sin nota quedarán así en el acta).";
+
+        if (window.confirm(confirmMsg)) {
+          try {
+            // 3. Enviamos la orden de forzar el cierre
+            await api.put(`/admin/grupos/${grupo.id}/finalizar`, {
+              force: true,
+            });
+            alert("Grupo cerrado de forma forzada.");
+            fetchData();
+          } catch (err) {
+            alert(err.response?.data?.message || "Error al forzar el cierre.");
+          }
+        }
+      } else {
+        alert(e.response?.data?.message || "Error al cerrar grupo");
       }
     }
   };

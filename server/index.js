@@ -4766,34 +4766,32 @@ adminRouter.put("/grupos/:id/reactivar", async (req, res) => {
   }
 });
 // PUT Cerrar Grupo (Con validación estricta de calificaciones)
+// PUT Cerrar Grupo (Con validación inteligente y forzado)
 adminRouter.put("/grupos/:id/finalizar", async (req, res) => {
   const { id } = req.params;
+  const { force } = req.body; // <-- Capturamos si el admin decidió forzar el cierre
 
   try {
-    // 1. Obtener datos del grupo para saber plan y grado
     const [grupo] = await db.query("SELECT * FROM grupos WHERE id = ?", [id]);
     if (grupo.length === 0)
       return res.status(404).send({ message: "Grupo no encontrado" });
 
     const { plan_estudio_id, grado_id } = grupo[0];
 
-    // 2. LA CONSULTA MAESTRA: Buscar qué falta
-    // Busca: Alumnos del grupo + Materias del plan/grado - Calificaciones existentes
+    // Busca qué alumnos no tienen calificación en las materias activas
     const sqlFaltantes = `
       SELECT 
         u.nombre, u.apellido_paterno, 
         a.nombre_asignatura
       FROM grupo_alumnos ga
-      -- Cruzamos con las materias que DEBERÍAN tener
       JOIN asignaturas a 
         ON a.plan_estudio_id = ? AND a.grado_id = ? AND a.activo = 1
       JOIN usuarios u 
         ON ga.alumno_id = u.id
-      -- Buscamos si existe la calificación
       LEFT JOIN calificaciones c 
         ON c.alumno_id = ga.alumno_id 
-        AND c.asignatura_id = a.id
-      -- FILTRO: Donde NO hay calificación (IS NULL) y el alumno pertenece al grupo
+        AND c.asignatura_id = a.id 
+        AND c.grupo_id = ga.grupo_id
       WHERE ga.grupo_id = ? 
         AND c.id IS NULL
     `;
@@ -4804,28 +4802,25 @@ adminRouter.put("/grupos/:id/finalizar", async (req, res) => {
       id,
     ]);
 
-    // 3. Si hay faltantes, NO dejamos cerrar
-    if (faltantes.length > 0) {
-      // Preparamos un mensaje bonito con los primeros 3 ejemplos
+    // Si hay faltantes Y NO NOS DIERON LA ORDEN DE FORZAR, detenemos y avisamos
+    if (faltantes.length > 0 && !force) {
       const ejemplos = faltantes
         .slice(0, 3)
         .map((f) => `${f.nombre} en ${f.nombre_asignatura}`)
         .join(", ");
       const total = faltantes.length;
       return res.status(400).send({
-        message: `No se puede cerrar. Faltan ${total} calificaciones. Ej: ${ejemplos}...`,
+        requiresConfirmation: true, // <-- Esta bandera le dice a React que pregunte
+        message: `Faltan ${total} calificaciones por subir.\nEjemplo: ${ejemplos}...`,
       });
     }
 
-    // 4. Si todo está perfecto, cerramos el grupo
+    // Si todo está perfecto, o si el admin decidió FORZAR (force: true), cerramos.
     await db.query("UPDATE grupos SET estatus = 'finalizado' WHERE id = ?", [
       id,
     ]);
 
-    res.send({
-      message:
-        "Ciclo cerrado correctamente. El grupo ahora está finalizado y listo para migrar.",
-    });
+    res.send({ message: "El grupo ha sido finalizado y listo para migrar." });
   } catch (error) {
     console.error(error);
     res.status(500).send({ message: "Error al intentar cerrar el grupo" });
@@ -8054,78 +8049,112 @@ apiRouter.get(
         [grupoId, asignaturaId],
       );
 
-      // --- CONSTRUIR FILAS ---
+      // --- CONSTRUIR FILAS MATEMÁTICAMENTE JUSTAS ---
       const filas = alumnos.map((alum) => {
         let fila = {
           id: alum.id,
-          // Mantenemos este para no romper nada que ya tengas:
           nombre: `${alum.apellido_paterno} ${alum.nombre}`,
-          // Agregamos las propiedades individuales que pide tu diseño de frontend:
           nombre_pila: alum.nombre,
           apellido_paterno: alum.apellido_paterno,
           apellido_materno: alum.apellido_materno,
           matricula: alum.matricula,
-          foto_perfil: alum.foto_perfil, // <--- AQUÍ ESTABA EL PROBLEMA
+          foto_perfil: alum.foto_perfil,
           notas: {},
         };
 
         let sumaPonderada = 0;
-        let porcentajeTotalConfigurado = 0;
+        let pesoTotalAplicable = 0; // Ponderación dinámica
 
         // CALCULAR PROMEDIOS POR CATEGORÍA
         criterios.forEach((crit) => {
           let promedioCategoria = 0;
-          porcentajeTotalConfigurado += crit.porcentaje;
+          let aplicaCategoria = false; // Solo aplica si hay datos reales para evaluar
 
           if (crit.tipo_origen === "sistema_tareas") {
             if (colsTareas.length > 0) {
+              aplicaCategoria = true;
               let sum = 0;
               colsTareas.forEach((t) => {
                 const entrega = notasTareas.find(
                   (n) => n.alumno_id === alum.id && n.tarea_id === t.id,
                 );
-                const val = entrega ? parseFloat(entrega.calificacion) : 0;
-                fila.notas[`tarea_${t.id}`] = val; // Guardar para mostrar en tabla
+                // Si entregó, toma la calificación. Si no entregó, toma 0.
+                const val =
+                  entrega && entrega.calificacion !== null
+                    ? parseFloat(entrega.calificacion)
+                    : 0;
+                fila.notas[`tarea_${t.id}`] = val;
                 sum += val;
               });
               promedioCategoria = sum / colsTareas.length;
             }
           } else if (crit.tipo_origen === "sistema_examenes") {
             if (colsExamenes.length > 0) {
+              aplicaCategoria = true;
               let sum = 0;
               colsExamenes.forEach((ex) => {
                 const intento = notasExamenes.find(
                   (n) => n.alumno_id === alum.id && n.examen_id === ex.id,
                 );
-                const raw = intento ? parseFloat(intento.calificacion) : 0;
-                const max = parseFloat(ex.max_puntos);
-                const base100 = (raw / max) * 100; // Normalizar a 100
-                fila.notas[`examen_${ex.id}`] = Math.round(base100); // Guardar para tabla
+                const raw =
+                  intento && intento.calificacion !== null
+                    ? parseFloat(intento.calificacion)
+                    : 0;
+                const max = parseFloat(ex.max_puntos) || 1; // Evitar división por 0
+                const base100 = (raw / max) * 100;
+                fila.notas[`examen_${ex.id}`] = Math.round(base100);
                 sum += base100;
               });
               promedioCategoria = sum / colsExamenes.length;
             }
           } else if (crit.tipo_origen === "sistema_asistencia") {
-            const asis = asistencias.find((a) => a.alumno_id === alum.id);
-            const presentes = asis ? asis.presentes : 0;
-            promedioCategoria = (presentes / totalSesiones) * 100;
-            fila.notas[`asistencia_sys`] = Math.round(promedioCategoria);
+            if (totalSesiones > 0) {
+              aplicaCategoria = true;
+              const asis = asistencias.find((a) => a.alumno_id === alum.id);
+              const presentes = asis ? asis.presentes : 0;
+              promedioCategoria = (presentes / totalSesiones) * 100;
+              fila.notas[`asistencia_sys`] = Math.round(promedioCategoria);
+            }
           } else if (crit.tipo_origen === "manual") {
-            // Para criterios manuales, buscamos su nota específica
+            aplicaCategoria = true;
             const nota = notasManuales.find(
               (n) => n.criterio_id === crit.id && n.alumno_id === alum.id,
             );
-            const val = nota ? parseFloat(nota.calificacion) : 0;
+            const val =
+              nota && nota.calificacion !== null
+                ? parseFloat(nota.calificacion)
+                : 0;
             promedioCategoria = val;
-            fila.notas[`manual_${crit.id}`] = val; // Guardar para tabla
+            fila.notas[`manual_${crit.id}`] = val;
           }
 
-          // Sumar al promedio final según el peso del criterio
-          sumaPonderada += promedioCategoria * (crit.porcentaje / 100);
+          // Si esta categoría tiene actividades, la sumamos al peso total
+          if (aplicaCategoria) {
+            pesoTotalAplicable += crit.porcentaje;
+            sumaPonderada += promedioCategoria * (crit.porcentaje / 100);
+          }
         });
 
-        fila.promedioFinal = Math.round(sumaPonderada);
+        // NORMALIZACIÓN: Si el profesor solo ha creado tareas (40%), sacamos la nota sobre ese 40%.
+        if (pesoTotalAplicable > 0) {
+          fila.promedioFinal = Math.round(
+            sumaPonderada / (pesoTotalAplicable / 100),
+          );
+        } else {
+          // Si no hay tareas, ni exámenes, ni clases tomadas, el promedio por defecto es 100
+          fila.promedioFinal = 100;
+        }
+
         return fila;
+      });
+
+      res.json({
+        columnas: {
+          tareas: colsTareas,
+          examenes: colsExamenes,
+          criterios: criterios,
+        },
+        filas,
       });
 
       res.json({
