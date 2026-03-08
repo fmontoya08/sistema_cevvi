@@ -5701,19 +5701,17 @@ docenteRouter.get(
   },
 );
 
-// POST (Docente): Crear tarea + Notificaciones (Versión "Asistencia" Confirmada)
-// POST (Docente): Crear tarea (Versión Depuración + Corrección de Fecha)
-// POST (Docente): Crear tarea + Notificaciones (Versión CORREGIDA: usuario_id)
+// POST (Docente): Crear tarea + Notificaciones (Con Rúbricas)
 docenteRouter.post(
   "/aula-virtual/:grupoId/:asignaturaId/tareas",
   async (req, res) => {
     console.log("➡️ INICIO: Creando tarea...");
     try {
       const { grupoId, asignaturaId } = req.params;
-      const { titulo, descripcion, fecha_limite } = req.body;
+      const { titulo, descripcion, fecha_limite, rubricas } = req.body; // <-- SE AGREGÓ 'rubricas'
       const docente_id = req.user.id;
 
-      // 1. Corrección de fecha (para evitar error si viene vacía)
+      // 1. Corrección de fecha
       const fechaFinal =
         fecha_limite && fecha_limite !== "" ? fecha_limite : null;
 
@@ -5726,9 +5724,13 @@ docenteRouter.post(
         return res.status(403).send({ message: "No tienes permiso." });
       }
 
-      // 3. Insertar Tarea
+      // Convertir rúbricas a JSON string si existen y tienen datos
+      const rubricaJson =
+        rubricas && rubricas.length > 0 ? JSON.stringify(rubricas) : null;
+
+      // 3. Insertar Tarea (AHORA INCLUYE LA COLUMNA 'rubrica')
       const [result] = await db.query(
-        "INSERT INTO tareas (grupo_id, asignatura_id, docente_id, titulo, descripcion, fecha_limite, fecha_creacion) VALUES (?, ?, ?, ?, ?, ?, NOW())",
+        "INSERT INTO tareas (grupo_id, asignatura_id, docente_id, titulo, descripcion, fecha_limite, rubrica, fecha_creacion) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())",
         [
           grupoId,
           asignaturaId,
@@ -5736,14 +5738,14 @@ docenteRouter.post(
           titulo,
           descripcion || null,
           fechaFinal,
+          rubricaJson, // <-- SE INSERTA EL JSON
         ],
       );
       const newTaskId = result.insertId;
       console.log(`✅ Tarea creada con ID: ${newTaskId}`);
 
-      // 4. NOTIFICACIONES (Bloque Blindado)
+      // 4. NOTIFICACIONES (Se mantiene tu código exacto)
       try {
-        // A) Datos para el mensaje
         const [[materia]] = await db.query(
           "SELECT nombre_asignatura FROM asignaturas WHERE id = ?",
           [asignaturaId],
@@ -5753,23 +5755,18 @@ docenteRouter.post(
         const mensaje = `Nueva tarea en ${nombreMateria}: "${titulo}"`;
         const urlDestino = `/alumno/grupo/${grupoId}/asignatura/${asignaturaId}/aula`;
 
-        // B) Obtener alumnos
         const [alumnos] = await db.query(
           "SELECT alumno_id FROM grupo_alumnos WHERE grupo_id = ?",
           [grupoId],
         );
 
-        // C) BUCLE DE ENVÍO (Usando 'usuario_id')
         for (const alumno of alumnos) {
           const idAlumno = alumno.alumno_id;
-
-          // 1. Insertar en Campanita (CORREGIDO: usuario_id)
           await db.query(
             "INSERT INTO notificaciones (usuario_id, mensaje, url_destino, leido, fecha, tipo) VALUES (?, ?, ?, 0, NOW(), 'tarea')",
             [idAlumno, mensaje, urlDestino],
           );
 
-          // 2. Enviar Push a Android
           const [tokens] = await db.query(
             "SELECT token FROM push_tokens WHERE user_id = ?",
             [idAlumno],
@@ -5806,7 +5803,6 @@ docenteRouter.post(
     }
   },
 );
-// --- INICIA NUEVO CÓDIGO (AGREGAR) ---
 
 // POST (Docente): Calificar o Re-Calificar una entrega
 docenteRouter.post(

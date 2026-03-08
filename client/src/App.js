@@ -12671,10 +12671,48 @@ const CrearTareaModal = ({
   const [titulo, setTitulo] = useState("");
   const [descripcion, setDescripcion] = useState("");
   const [fechaLimite, setFechaLimite] = useState("");
+
+  // --- ESTADO NUEVO PARA RÚBRICAS ---
+  const [usarRubrica, setUsarRubrica] = useState(false);
+  const [rubricas, setRubricas] = useState([]);
+
   const [isSaving, setIsSaving] = useState(false);
+
+  // Funciones para manejar rúbricas dinámicas
+  const agregarCriterio = () => {
+    setRubricas([...rubricas, { criterio: "", descripcion: "", puntos: 0 }]);
+  };
+
+  const eliminarCriterio = (index) => {
+    const nuevas = [...rubricas];
+    nuevas.splice(index, 1);
+    setRubricas(nuevas);
+  };
+
+  const actualizarCriterio = (index, campo, valor) => {
+    const nuevas = [...rubricas];
+    nuevas[index][campo] = valor;
+    setRubricas(nuevas);
+  };
+
+  const totalPuntosRubrica = rubricas.reduce(
+    (acc, curr) => acc + (parseFloat(curr.puntos) || 0),
+    0,
+  );
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    if (usarRubrica && totalPuntosRubrica !== 100) {
+      if (
+        !window.confirm(
+          `La rúbrica suma ${totalPuntosRubrica} puntos (se recomiendan 100). ¿Deseas continuar?`,
+        )
+      ) {
+        return;
+      }
+    }
+
     setIsSaving(true);
     try {
       await api.post(
@@ -12683,14 +12721,16 @@ const CrearTareaModal = ({
           titulo,
           descripcion,
           fecha_limite: fechaLimite || null,
+          rubricas: usarRubrica ? rubricas : null, // <-- ENVIAMOS LAS RÚBRICAS
         },
       );
-      onTareaCreada(); // Llama a la función para recargar tareas
-      onClose(); // Cierra el modal
-      // Limpiamos el formulario
+      onTareaCreada();
+      onClose();
       setTitulo("");
       setDescripcion("");
       setFechaLimite("");
+      setRubricas([]);
+      setUsarRubrica(false);
     } catch (error) {
       console.error("Error al crear tarea", error);
       alert("Error al crear la tarea.");
@@ -12702,86 +12742,217 @@ const CrearTareaModal = ({
   if (!show) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6 relative">
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-gray-500 hover:text-gray-800"
-        >
-          <X size={24} />
-        </button>
-        <h3 className="text-2xl font-bold mb-6">Crear Nueva Tarea</h3>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label
-              htmlFor="titulo"
-              className="block text-sm font-medium text-gray-700"
-            >
-              Título de la Tarea
-            </label>
-            <input
-              type="text"
-              id="titulo"
-              value={titulo}
-              onChange={(e) => setTitulo(e.target.value)}
-              required
-              className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-principal focus:border-principal"
-            />
-          </div>
-          <div>
-            <label
-              htmlFor="descripcion"
-              className="block text-sm font-medium text-gray-700"
-            >
-              Descripción / Instrucciones
-            </label>
-            <textarea
-              id="descripcion"
-              rows="5"
-              value={descripcion}
-              onChange={(e) => setDescripcion(e.target.value)}
-              className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-principal focus:border-principal"
-            ></textarea>
-          </div>
-          <div>
-            <label
-              htmlFor="fechaLimite"
-              className="block text-sm font-medium text-gray-700"
-            >
-              Fecha Límite de Entrega (Opcional)
-            </label>
-            <input
-              type="datetime-local"
-              id="fechaLimite"
-              value={fechaLimite}
-              onChange={(e) => setFechaLimite(e.target.value)}
-              className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-principal focus:border-principal"
-            />
-          </div>
-          <div className="flex justify-end space-x-4 mt-8">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={isSaving}
-              className="px-4 py-2 bg-principal text-white rounded-md hover:opacity-90 disabled:bg-gray-400"
-            >
-              {isSaving ? "Creando..." : "Crear Tarea"}
-            </button>
-          </div>
-        </form>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col relative">
+        {/* Encabezado del Modal */}
+        <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-2xl shrink-0">
+          <h3 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+            <FilePlus size={24} className="text-[#a72a34]" /> Crear Tarea /
+            Actividad
+          </h3>
+          <button
+            onClick={onClose}
+            className="p-2 text-gray-400 hover:text-red-500 rounded-full transition-colors"
+          >
+            <X size={24} />
+          </button>
+        </div>
+
+        {/* Cuerpo con Scroll */}
+        <div className="p-6 overflow-y-auto custom-scrollbar flex-1 space-y-6">
+          <form
+            id="crear-tarea-form"
+            onSubmit={handleSubmit}
+            className="space-y-5"
+          >
+            <div>
+              <label
+                htmlFor="titulo"
+                className="block text-sm font-bold text-gray-700 mb-1"
+              >
+                Título de la Tarea *
+              </label>
+              <input
+                type="text"
+                id="titulo"
+                value={titulo}
+                onChange={(e) => setTitulo(e.target.value)}
+                required
+                placeholder="Ej. Ensayo sobre la Revolución"
+                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#a72a34] outline-none"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="descripcion"
+                className="block text-sm font-bold text-gray-700 mb-1"
+              >
+                Instrucciones
+              </label>
+              <textarea
+                id="descripcion"
+                rows="4"
+                value={descripcion}
+                onChange={(e) => setDescripcion(e.target.value)}
+                placeholder="Describe detalladamente qué deben hacer los alumnos..."
+                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#a72a34] outline-none resize-none"
+              ></textarea>
+            </div>
+
+            <div>
+              <label
+                htmlFor="fechaLimite"
+                className="block text-sm font-bold text-gray-700 mb-1"
+              >
+                Fecha y Hora Límite (Opcional)
+              </label>
+              <input
+                type="datetime-local"
+                id="fechaLimite"
+                value={fechaLimite}
+                onChange={(e) => setFechaLimite(e.target.value)}
+                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#a72a34] outline-none"
+              />
+            </div>
+
+            {/* --- SECCIÓN DE RÚBRICAS ESTILO CLASSROOM --- */}
+            <div className="pt-4 border-t border-gray-100">
+              <label className="flex items-center gap-3 cursor-pointer mb-4 bg-gray-50 p-4 rounded-xl border border-gray-200 hover:border-[#a72a34] transition-colors">
+                <input
+                  type="checkbox"
+                  checked={usarRubrica}
+                  onChange={(e) => {
+                    setUsarRubrica(e.target.checked);
+                    if (e.target.checked && rubricas.length === 0)
+                      agregarCriterio();
+                  }}
+                  className="w-5 h-5 text-[#a72a34] rounded focus:ring-[#a72a34]"
+                />
+                <div>
+                  <span className="font-bold text-gray-800 block">
+                    Agregar Rúbrica de Evaluación
+                  </span>
+                  <span className="text-xs text-gray-500">
+                    Define los criterios exactos para calificar esta tarea.
+                  </span>
+                </div>
+              </label>
+
+              {usarRubrica && (
+                <div className="space-y-4 bg-blue-50/50 p-5 rounded-xl border border-blue-100">
+                  <div className="flex justify-between items-center mb-2">
+                    <h4 className="font-bold text-blue-900">
+                      Criterios de Calificación
+                    </h4>
+                    <span
+                      className={`text-sm font-bold px-3 py-1 rounded-full ${totalPuntosRubrica === 100 ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}`}
+                    >
+                      Total: {totalPuntosRubrica} / 100 pts
+                    </span>
+                  </div>
+
+                  {rubricas.map((r, idx) => (
+                    <div
+                      key={idx}
+                      className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm relative group"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => eliminarCriterio(idx)}
+                        className="absolute -top-3 -right-3 bg-red-100 text-red-600 p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500 hover:text-white shadow-sm"
+                        title="Eliminar criterio"
+                      >
+                        <X size={16} />
+                      </button>
+
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div className="md:col-span-3">
+                          <input
+                            type="text"
+                            placeholder="Nombre del criterio (Ej. Ortografía)"
+                            className="w-full font-bold text-gray-800 border-b border-gray-200 focus:border-[#a72a34] outline-none pb-1 mb-3"
+                            value={r.criterio}
+                            onChange={(e) =>
+                              actualizarCriterio(
+                                idx,
+                                "criterio",
+                                e.target.value,
+                              )
+                            }
+                            required
+                          />
+                          <textarea
+                            rows="2"
+                            placeholder="Descripción (Ej. El texto no debe contener errores ortográficos ni gramaticales...)"
+                            className="w-full text-sm text-gray-600 outline-none resize-none bg-gray-50 p-2 rounded-lg"
+                            value={r.descripcion}
+                            onChange={(e) =>
+                              actualizarCriterio(
+                                idx,
+                                "descripcion",
+                                e.target.value,
+                              )
+                            }
+                          />
+                        </div>
+                        <div className="flex flex-col justify-center items-center bg-gray-50 rounded-lg p-3">
+                          <label className="text-xs font-bold text-gray-500 uppercase mb-1">
+                            Puntos
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            className="w-full text-center text-xl font-black text-[#a72a34] bg-transparent outline-none border-b-2 border-gray-300 focus:border-[#a72a34]"
+                            value={r.puntos}
+                            onChange={(e) =>
+                              actualizarCriterio(idx, "puntos", e.target.value)
+                            }
+                            required
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+
+                  <button
+                    type="button"
+                    onClick={agregarCriterio}
+                    className="w-full py-3 border-2 border-dashed border-blue-300 text-blue-600 font-bold rounded-xl hover:bg-blue-100 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Plus size={18} /> Agregar Criterio
+                  </button>
+                </div>
+              )}
+            </div>
+            {/* --- FIN RÚBRICAS --- */}
+          </form>
+        </div>
+
+        {/* Footer con Botones */}
+        <div className="p-6 border-t border-gray-100 flex justify-end space-x-4 bg-white rounded-b-2xl shrink-0">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-6 py-3 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            form="crear-tarea-form"
+            disabled={isSaving}
+            className="px-6 py-3 bg-[#a72a34] text-white font-bold rounded-xl hover:bg-[#802028] shadow-lg disabled:opacity-50 flex items-center gap-2"
+          >
+            <CheckCircle size={20} />
+            {isSaving ? "Creando..." : "Publicar Tarea"}
+          </button>
+        </div>
       </div>
     </div>
   );
 };
-
-// --- TERMINA CÓDIGO FALTANTE ---
-// --- INICIA NUEVO CÓDIGO (AGREGAR) ---
 
 // Modal para entregar una tarea (solo Alumno)
 const EntregarTareaModal = ({ show, onClose, tarea, onEntregaExitosa }) => {
@@ -12856,6 +13027,50 @@ const EntregarTareaModal = ({ show, onClose, tarea, onEntregaExitosa }) => {
         <p className="text-sm text-gray-600 mb-4 whitespace-pre-wrap">
           {tarea.descripcion}
         </p>
+
+        {/* --- INICIO MOSTRAR RÚBRICA --- */}
+        {tarea.rubrica && (
+          <div className="mb-6 border border-[#bb9a5a] rounded-xl overflow-hidden">
+            <div className="bg-[#bb9a5a]/10 px-4 py-2 border-b border-[#bb9a5a] flex justify-between items-center">
+              <span className="font-bold text-[#a72a34] flex items-center gap-2">
+                <FileCheck size={16} /> Rúbrica de Evaluación
+              </span>
+            </div>
+            <div className="p-4 bg-white space-y-3">
+              {(() => {
+                try {
+                  const rubricasParsed = JSON.parse(tarea.rubrica);
+                  return rubricasParsed.map((r, i) => (
+                    <div
+                      key={i}
+                      className="flex justify-between items-start pb-3 border-b border-gray-100 last:border-0 last:pb-0"
+                    >
+                      <div>
+                        <p className="font-bold text-gray-800 text-sm">
+                          {r.criterio}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {r.descripcion}
+                        </p>
+                      </div>
+                      <span className="font-black text-[#a72a34] bg-red-50 px-2 py-1 rounded text-sm shrink-0 ml-4">
+                        {r.puntos} pts
+                      </span>
+                    </div>
+                  ));
+                } catch (e) {
+                  return (
+                    <span className="text-xs text-gray-400">
+                      Error al cargar rúbrica.
+                    </span>
+                  );
+                }
+              })()}
+            </div>
+          </div>
+        )}
+        {/* --- FIN MOSTRAR RÚBRICA --- */}
+
         {tarea.fecha_limite && (
           <p className="text-sm font-semibold text-red-600 mb-6">
             Fecha límite: {new Date(tarea.fecha_limite).toLocaleString()}
@@ -13033,6 +13248,32 @@ const CalificarEntregaModal = ({
           <X size={24} />
         </button>
         <h3 className="text-2xl font-bold mb-4">Calificar Entrega</h3>
+        {entrega.rubrica && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 my-4">
+            <h4 className="text-sm font-bold text-blue-800 mb-2 flex items-center gap-1">
+              <FileCheck size={16} /> Recordatorio de Rúbrica:
+            </h4>
+            <div className="space-y-2">
+              {(() => {
+                try {
+                  const rubricasParsed = JSON.parse(entrega.rubrica);
+                  return rubricasParsed.map((r, i) => (
+                    <div key={i} className="flex justify-between text-xs">
+                      <span className="font-medium text-gray-700 w-3/4">
+                        {r.criterio}
+                      </span>
+                      <span className="font-bold text-blue-700">
+                        {r.puntos} pts
+                      </span>
+                    </div>
+                  ));
+                } catch (e) {
+                  return null;
+                }
+              })()}
+            </div>
+          </div>
+        )}
         <p className="text-lg font-semibold text-gray-800">
           {entrega.nombre} {entrega.apellido_paterno}
         </p>
