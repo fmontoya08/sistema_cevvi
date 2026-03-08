@@ -4632,42 +4632,6 @@ adminRouter.get("/grupos/:id/materias-disponibles", async (req, res) => {
   }
 });
 
-// 2. PUT CERRAR GRUPO (VALIDANDO CALIFICACIONES)
-adminRouter.put("/grupos/:id/finalizar", async (req, res) => {
-  const { id } = req.params;
-  try {
-    // Buscamos si falta alguna calificación
-    // (Alumno del grupo + Materia del plan) QUE NO TENGA registro en 'calificaciones'
-    const sqlFaltantes = `
-      SELECT u.nombre, u.apellido_paterno, a.nombre_asignatura
-      FROM grupo_alumnos ga
-      JOIN grupos g ON ga.grupo_id = g.id
-      JOIN asignaturas a ON a.plan_estudio_id = g.plan_estudio_id AND a.grado_id = g.grado_id AND a.activo = 1
-      JOIN usuarios u ON ga.alumno_id = u.id
-      LEFT JOIN calificaciones c ON c.alumno_id = ga.alumno_id AND c.asignatura_id = a.id AND c.grupo_id = ga.grupo_id
-      WHERE ga.grupo_id = ? AND c.id IS NULL
-    `;
-
-    const [faltantes] = await db.query(sqlFaltantes, [id]);
-
-    if (faltantes.length > 0) {
-      const total = faltantes.length;
-      const ejemplo = `${faltantes[0].nombre} en ${faltantes[0].nombre_asignatura}`;
-      return res.status(400).send({
-        message: `No se puede cerrar: Faltan ${total} calificaciones. (Ej: ${ejemplo})`,
-      });
-    }
-
-    // Si todo ok, cerramos
-    await db.query("UPDATE grupos SET estatus = 'finalizado' WHERE id = ?", [
-      id,
-    ]);
-    res.send({ message: "Grupo cerrado exitosamente." });
-  } catch (error) {
-    console.error(error);
-    res.status(500).send({ message: "Error al cerrar grupo" });
-  }
-});
 adminRouter.post("/grupos", async (req, res) => {
   const {
     nombre_grupo,
@@ -4765,67 +4729,51 @@ adminRouter.put("/grupos/:id/reactivar", async (req, res) => {
     res.status(500).send({ message: "Error al reactivar grupo" });
   }
 });
-// PUT Cerrar Grupo (Con validación estricta de calificaciones)
-// PUT Cerrar Grupo (Con validación inteligente y forzado)
+
+// PUT Cerrar Grupo (Validación Inteligente y Cierre Forzado)
 adminRouter.put("/grupos/:id/finalizar", async (req, res) => {
   const { id } = req.params;
-  const { force } = req.body; // <-- Capturamos si el admin decidió forzar el cierre
+  const { force } = req.body; // <-- Detecta si el Admin dio click en "Forzar"
 
   try {
-    const [grupo] = await db.query("SELECT * FROM grupos WHERE id = ?", [id]);
-    if (grupo.length === 0)
-      return res.status(404).send({ message: "Grupo no encontrado" });
-
-    const { plan_estudio_id, grado_id } = grupo[0];
-
-    // Busca qué alumnos no tienen calificación en las materias activas
+    // 1. Buscamos a los alumnos y las materias REALES del grupo
     const sqlFaltantes = `
-      SELECT 
-        u.nombre, u.apellido_paterno, 
-        a.nombre_asignatura
+      SELECT u.nombre, u.apellido_paterno, a.nombre_asignatura
       FROM grupo_alumnos ga
-      JOIN asignaturas a 
-        ON a.plan_estudio_id = ? AND a.grado_id = ? AND a.activo = 1
-      JOIN usuarios u 
-        ON ga.alumno_id = u.id
-      LEFT JOIN calificaciones c 
-        ON c.alumno_id = ga.alumno_id 
-        AND c.asignatura_id = a.id 
-        AND c.grupo_id = ga.grupo_id
-      WHERE ga.grupo_id = ? 
-        AND c.id IS NULL
+      JOIN grupo_asignaturas_docentes gad ON gad.grupo_id = ga.grupo_id
+      JOIN asignaturas a ON a.id = gad.asignatura_id
+      JOIN usuarios u ON u.id = ga.alumno_id
+      LEFT JOIN calificaciones c ON c.alumno_id = ga.alumno_id AND c.asignatura_id = a.id AND c.grupo_id = ga.grupo_id
+      WHERE ga.grupo_id = ? AND c.id IS NULL
     `;
 
-    const [faltantes] = await db.query(sqlFaltantes, [
-      plan_estudio_id,
-      grado_id,
-      id,
-    ]);
+    const [faltantes] = await db.query(sqlFaltantes, [id]);
 
-    // Si hay faltantes Y NO NOS DIERON LA ORDEN DE FORZAR, detenemos y avisamos
+    // 2. Si faltan notas Y el admin NO ha confirmado forzarlo, detenemos y avisamos:
     if (faltantes.length > 0 && !force) {
       const ejemplos = faltantes
         .slice(0, 3)
         .map((f) => `${f.nombre} en ${f.nombre_asignatura}`)
         .join(", ");
-      const total = faltantes.length;
       return res.status(400).send({
-        requiresConfirmation: true, // <-- Esta bandera le dice a React que pregunte
-        message: `Faltan ${total} calificaciones por subir.\nEjemplo: ${ejemplos}...`,
+        requiresConfirmation: true, // <-- Esta bandera activa la pregunta en React
+        message: `Faltan ${faltantes.length} calificaciones por subir en este grupo.\n\nEjemplo: ${ejemplos}...`,
       });
     }
 
-    // Si todo está perfecto, o si el admin decidió FORZAR (force: true), cerramos.
+    // 3. Si todo está perfecto, o si el admin decidió FORZAR, cerramos el grupo.
     await db.query("UPDATE grupos SET estatus = 'finalizado' WHERE id = ?", [
       id,
     ]);
-
-    res.send({ message: "El grupo ha sido finalizado y listo para migrar." });
+    res.send({ message: "Grupo cerrado exitosamente." });
   } catch (error) {
-    console.error(error);
-    res.status(500).send({ message: "Error al intentar cerrar el grupo" });
+    console.error("Error al cerrar grupo:", error);
+    res
+      .status(500)
+      .send({ message: "Error interno al intentar cerrar el grupo." });
   }
 });
+
 // --- FIN RUTAS NUEVAS ---
 adminRouter.post("/grupos/:id/asignar-docente", async (req, res) => {
   const { asignatura_id, docente_id } = req.body;

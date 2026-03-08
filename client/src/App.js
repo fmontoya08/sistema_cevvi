@@ -5448,35 +5448,42 @@ const GrupoAdminModal = ({ grupo, onClose }) => {
     }
   };
   const handleCerrarCiclo = async () => {
+    // 1. Pregunta inicial por seguridad
+    if (!window.confirm("¿Estás seguro de que deseas cerrar este grupo?"))
+      return;
+
     try {
-      // 1. Intentamos cerrarlo normal
+      // 2. Intentamos cerrarlo normalmente
       await api.put(`/admin/grupos/${grupo.id}/finalizar`);
-      alert("Grupo cerrado exitosamente");
-      fetchData();
+      alert("✅ Grupo cerrado exitosamente.");
+      onClose(); // Cierra el modal automáticamente
     } catch (e) {
-      // 2. Si el backend nos avisa que faltan calificaciones, mostramos la alerta
+      // 3. Si el backend avisa que faltan notas, lanzamos la alerta de forzado
       if (
         e.response?.status === 400 &&
         e.response?.data?.requiresConfirmation
       ) {
         const confirmMsg =
           e.response.data.message +
-          "\n\n¿Deseas FORZAR el cierre del grupo de todos modos? (Los alumnos sin nota quedarán así en el acta).";
+          "\n\n⚠️ ¿Deseas FORZAR el cierre del grupo? Los alumnos sin nota quedarán sin calificación.";
 
         if (window.confirm(confirmMsg)) {
           try {
-            // 3. Enviamos la orden de forzar el cierre
+            // Enviamos { force: true } para saltarnos la validación
             await api.put(`/admin/grupos/${grupo.id}/finalizar`, {
               force: true,
             });
-            alert("Grupo cerrado de forma forzada.");
-            fetchData();
+            alert("✅ Grupo cerrado de forma forzada.");
+            onClose(); // Cierra el modal automáticamente
           } catch (err) {
             alert(err.response?.data?.message || "Error al forzar el cierre.");
           }
         }
       } else {
-        alert(e.response?.data?.message || "Error al cerrar grupo");
+        // Si es otro error (ej. se cayó el internet)
+        alert(
+          e.response?.data?.message || "Error al intentar cerrar el grupo.",
+        );
       }
     }
   };
