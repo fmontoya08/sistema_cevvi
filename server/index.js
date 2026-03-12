@@ -3756,14 +3756,14 @@ adminRouter.get("/usuarios", async (req, res) => {
     const sql = `
       SELECT 
         u.id, u.nombre, u.apellido_paterno, u.apellido_materno, 
-        u.email, u.rol, u.matricula, u.foto_perfil, u.activo,
-        u.telefono, u.curp, u.genero,
-        u.carrera_id, u.sede_id,
+        u.email, u.email_personal, u.rol, u.matricula, u.foto_perfil, u.activo,
+        u.telefono, u.curp, u.genero, u.edad, u.modalidad,
+        u.domicilio, u.colonia, u.contacto_emergencia_nombre, u.contacto_emergencia_telefono,
+        u.escuela_procedencia, u.carrera_id, u.sede_id,
         DATE_FORMAT(u.fecha_nacimiento, '%Y-%m-%d') as fecha_nacimiento,
         c.nombre_carrera, 
         s.nombre_sede
       FROM usuarios u
-      -- El JOIN revisa ambas columnas por si acaso usas una u otra
       LEFT JOIN carreras c ON (u.carrera_id = c.id OR u.carrera_interes_id = c.id)
       LEFT JOIN sedes s ON (u.sede_id = s.id OR u.sede_interes_id = s.id)
       WHERE u.activo = 1
@@ -3990,13 +3990,24 @@ adminRouter.put("/usuarios/:id", async (req, res) => {
     apellido_paterno,
     apellido_materno,
     email,
+    email_personal,
     password,
     rol,
     genero,
     telefono,
     curp,
     fecha_nacimiento,
+    edad,
+    domicilio,
+    colonia,
+    contacto_emergencia_nombre,
+    contacto_emergencia_telefono,
+    escuela_procedencia,
+    carrera_id,
+    sede_id,
+    modalidad,
   } = req.body;
+
   if (curp && !CURP_REGEX.test(curp)) {
     return res
       .status(400)
@@ -4004,39 +4015,44 @@ adminRouter.put("/usuarios/:id", async (req, res) => {
   }
 
   let sql, params;
+
+  // Campos base a actualizar
+  const baseQuery = `nombre=?, apellido_paterno=?, apellido_materno=?, email=?, email_personal=?, 
+                     rol=?, genero=?, telefono=?, curp=?, fecha_nacimiento=?, edad=?, 
+                     domicilio=?, colonia=?, contacto_emergencia_nombre=?, contacto_emergencia_telefono=?, 
+                     escuela_procedencia=?, carrera_id=?, sede_id=?, modalidad=?`;
+
+  const baseParams = [
+    nombre,
+    apellido_paterno || null,
+    apellido_materno || null,
+    email,
+    email_personal || null,
+    rol,
+    genero || null,
+    telefono || null,
+    curp || null,
+    fecha_nacimiento || null,
+    edad || null,
+    domicilio || null,
+    colonia || null,
+    contacto_emergencia_nombre || null,
+    contacto_emergencia_telefono || null,
+    escuela_procedencia || null,
+    carrera_id || null,
+    sede_id || null,
+    modalidad || null,
+  ];
+
   if (password) {
     const hashedPassword = await bcrypt.hash(password, 10);
-    sql =
-      "UPDATE usuarios SET nombre=?, apellido_paterno=?, apellido_materno=?, email=?, password=?, rol=?, genero=?, telefono=?, curp=?, fecha_nacimiento=?, carrera_id=?, sede_id=? WHERE id=?";
-    params = [
-      nombre,
-      apellido_paterno || null,
-      apellido_materno || null,
-      email,
-      hashedPassword,
-      rol,
-      genero || null,
-      telefono || null,
-      curp || null,
-      fecha_nacimiento || null,
-      req.params.id,
-    ];
+    sql = `UPDATE usuarios SET ${baseQuery}, password=? WHERE id=?`;
+    params = [...baseParams, hashedPassword, req.params.id];
   } else {
-    sql =
-      "UPDATE usuarios SET nombre=?, apellido_paterno=?, apellido_materno=?, email=?, rol=?, genero=?, telefono=?, curp=?, fecha_nacimiento=? WHERE id=?";
-    params = [
-      nombre,
-      apellido_paterno || null,
-      apellido_materno || null,
-      email,
-      rol,
-      genero || null,
-      telefono || null,
-      curp || null,
-      fecha_nacimiento || null,
-      req.params.id,
-    ];
+    sql = `UPDATE usuarios SET ${baseQuery} WHERE id=?`;
+    params = [...baseParams, req.params.id];
   }
+
   try {
     await db.query(sql, params);
     res.send({ message: "Usuario actualizado" });

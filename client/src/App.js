@@ -1786,7 +1786,7 @@ const DashboardPage = () => {
   );
 };
 
-// --- MODAL EDITAR USUARIO (COMPLETO) ---
+// --- MODAL EDITAR USUARIO (COMPLETO CON TODOS LOS CAMPOS) ---
 const UserModal = ({
   isOpen,
   onClose,
@@ -1804,15 +1804,22 @@ const UserModal = ({
         apellido_paterno: userToEdit.apellido_paterno || "",
         apellido_materno: userToEdit.apellido_materno || "",
         email: userToEdit.email || "",
+        email_personal: userToEdit.email_personal || "",
         telefono: userToEdit.telefono || "",
         genero: userToEdit.genero || "",
         curp: userToEdit.curp || "",
-        // Formato seguro para input date: YYYY-MM-DD
         fecha_nacimiento: userToEdit.fecha_nacimiento
           ? new Date(userToEdit.fecha_nacimiento).toISOString().split("T")[0]
           : "",
+        edad: userToEdit.edad || "",
+        domicilio: userToEdit.domicilio || "",
+        colonia: userToEdit.colonia || "",
+        contacto_emergencia_nombre: userToEdit.contacto_emergencia_nombre || "",
+        contacto_emergencia_telefono:
+          userToEdit.contacto_emergencia_telefono || "",
+        escuela_procedencia: userToEdit.escuela_procedencia || "",
+        modalidad: userToEdit.modalidad || "",
         rol: userToEdit.rol,
-        // Manejamos ambas posibles llaves que usa tu backend
         carrera_id:
           userToEdit.carrera_id || userToEdit.carrera_interes_id || "",
         sede_id: userToEdit.sede_id || userToEdit.sede_interes_id || "",
@@ -1838,12 +1845,14 @@ const UserModal = ({
 
   return (
     <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-50 p-4 backdrop-blur-sm animate-in fade-in">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl overflow-hidden flex flex-col">
-        <div className="bg-white p-6 border-b flex justify-between items-center">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl flex flex-col max-h-[95vh]">
+        <div className="bg-white p-6 border-b flex justify-between items-center shrink-0">
           <div>
-            <h3 className="font-bold text-xl text-gray-800">Editar Usuario</h3>
+            <h3 className="font-bold text-xl text-gray-800">
+              Editar Expediente del Usuario
+            </h3>
             <p className="text-xs text-gray-400">
-              Actualiza la información del expediente.
+              Actualiza la información completa.
             </p>
           </div>
           <button
@@ -1854,170 +1863,323 @@ const UserModal = ({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-8">
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {/* IDENTIDAD */}
-            <div className="lg:col-span-1">
-              <label className="block text-xs font-bold text-gray-400 uppercase mb-1">
-                Nombre
-              </label>
-              <input
-                className="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#a72a34] outline-none font-bold"
-                value={form.nombre}
-                onChange={(e) => setForm({ ...form, nombre: e.target.value })}
-                required
-              />
-            </div>
-            <div className="lg:col-span-1">
-              <label className="block text-xs font-bold text-gray-400 uppercase mb-1">
-                Apellido Paterno
-              </label>
-              <input
-                className="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#a72a34] outline-none"
-                value={form.apellido_paterno}
-                onChange={(e) =>
-                  setForm({ ...form, apellido_paterno: e.target.value })
-                }
-                required
-              />
-            </div>
-            <div className="lg:col-span-1">
-              <label className="block text-xs font-bold text-gray-400 uppercase mb-1">
-                Apellido Materno
-              </label>
-              <input
-                className="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#a72a34] outline-none"
-                value={form.apellido_materno}
-                onChange={(e) =>
-                  setForm({ ...form, apellido_materno: e.target.value })
-                }
-              />
-            </div>
-            <div className="lg:col-span-1">
-              <label className="block text-xs font-bold text-gray-400 uppercase mb-1">
-                CURP
-              </label>
-              <input
-                className="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#a72a34] outline-none uppercase font-mono"
-                value={form.curp}
-                onChange={(e) =>
-                  setForm({ ...form, curp: e.target.value.toUpperCase() })
-                }
-                maxLength={18}
-              />
-            </div>
-
-            {/* DEMOGRÁFICOS */}
-            <div className="lg:col-span-1">
-              <label className="block text-xs font-bold text-gray-400 uppercase mb-1">
-                Género
-              </label>
-              <select
-                className="w-full p-3 border border-gray-200 rounded-xl bg-white focus:ring-2 focus:ring-[#a72a34] outline-none"
-                value={form.genero}
-                onChange={(e) => setForm({ ...form, genero: e.target.value })}
-              >
-                <option value="">Seleccione...</option>
-                <option value="M">Masculino</option>
-                <option value="F">Femenino</option>
-              </select>
-            </div>
-            <div className="lg:col-span-1">
-              <label className="block text-xs font-bold text-gray-400 uppercase mb-1">
-                Fecha Nacimiento
-              </label>
-              <input
-                type="date"
-                className="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#a72a34] outline-none"
-                value={form.fecha_nacimiento}
-                onChange={(e) =>
-                  setForm({ ...form, fecha_nacimiento: e.target.value })
-                }
-              />
-            </div>
-            <div className="lg:col-span-2">
-              <label className="block text-xs font-bold text-gray-400 uppercase mb-1">
-                Correo Electrónico
-              </label>
-              <input
-                type="email"
-                className="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#a72a34] outline-none bg-gray-50"
-                value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
-              />
-            </div>
-
-            {/* ACADÉMICO / CONTACTO */}
-            <div className="lg:col-span-1">
-              <label className="block text-xs font-bold text-gray-400 uppercase mb-1">
-                Teléfono
-              </label>
-              <input
-                type="tel"
-                className="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#a72a34] outline-none"
-                value={form.telefono}
-                onChange={(e) => setForm({ ...form, telefono: e.target.value })}
-              />
-            </div>
-
-            {(userToEdit.rol === "alumno" ||
-              userToEdit.rol === "aspirante") && (
-              <>
-                <div className="lg:col-span-2">
-                  <label className="block text-xs font-bold text-gray-400 uppercase mb-1">
-                    Carrera
+        <form onSubmit={handleSubmit} className="flex flex-col overflow-hidden">
+          <div className="p-8 overflow-y-auto flex-1 space-y-8 bg-gray-50/30">
+            {/* SECCIÓN: DATOS PERSONALES */}
+            <div>
+              <h4 className="text-[#a72a34] font-bold border-b border-gray-200 pb-2 mb-4 flex items-center gap-2">
+                <User size={18} /> Datos Personales
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
+                    Nombre
+                  </label>
+                  <input
+                    required
+                    className="w-full p-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#a72a34] outline-none"
+                    value={form.nombre}
+                    onChange={(e) =>
+                      setForm({ ...form, nombre: e.target.value })
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
+                    Apellido Paterno
+                  </label>
+                  <input
+                    required
+                    className="w-full p-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#a72a34] outline-none"
+                    value={form.apellido_paterno}
+                    onChange={(e) =>
+                      setForm({ ...form, apellido_paterno: e.target.value })
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
+                    Apellido Materno
+                  </label>
+                  <input
+                    className="w-full p-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#a72a34] outline-none"
+                    value={form.apellido_materno}
+                    onChange={(e) =>
+                      setForm({ ...form, apellido_materno: e.target.value })
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
+                    CURP
+                  </label>
+                  <input
+                    className="w-full p-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#a72a34] outline-none uppercase font-mono"
+                    value={form.curp}
+                    onChange={(e) =>
+                      setForm({ ...form, curp: e.target.value.toUpperCase() })
+                    }
+                    maxLength={18}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
+                    Género
                   </label>
                   <select
-                    className="w-full p-3 border border-gray-200 rounded-xl bg-white focus:ring-2 focus:ring-[#a72a34] outline-none"
-                    value={form.carrera_id}
+                    className="w-full p-2.5 border border-gray-200 rounded-lg bg-white focus:ring-2 focus:ring-[#a72a34] outline-none"
+                    value={form.genero}
                     onChange={(e) =>
-                      setForm({ ...form, carrera_id: e.target.value })
+                      setForm({ ...form, genero: e.target.value })
                     }
                   >
-                    <option value="">Sin Asignar</option>
-                    {carreras.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.nombre_carrera}
-                      </option>
-                    ))}
+                    <option value="">Seleccione...</option>
+                    <option value="M">Masculino</option>
+                    <option value="F">Femenino</option>
                   </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
+                    Nacimiento
+                  </label>
+                  <input
+                    type="date"
+                    className="w-full p-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#a72a34] outline-none"
+                    value={form.fecha_nacimiento}
+                    onChange={(e) =>
+                      setForm({ ...form, fecha_nacimiento: e.target.value })
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
+                    Edad
+                  </label>
+                  <input
+                    type="number"
+                    className="w-full p-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#a72a34] outline-none"
+                    value={form.edad}
+                    onChange={(e) => setForm({ ...form, edad: e.target.value })}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* SECCIÓN: CONTACTO Y DOMICILIO */}
+            <div>
+              <h4 className="text-[#a72a34] font-bold border-b border-gray-200 pb-2 mb-4 flex items-center gap-2">
+                <Phone size={18} /> Contacto y Domicilio
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="lg:col-span-2">
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
+                    Correo Institucional
+                  </label>
+                  <input
+                    type="email"
+                    disabled
+                    className="w-full p-2.5 border border-gray-200 rounded-lg bg-gray-100 text-gray-500"
+                    value={form.email}
+                  />
+                </div>
+                <div className="lg:col-span-2">
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
+                    Correo Personal
+                  </label>
+                  <input
+                    type="email"
+                    className="w-full p-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#a72a34] outline-none"
+                    value={form.email_personal}
+                    onChange={(e) =>
+                      setForm({ ...form, email_personal: e.target.value })
+                    }
+                  />
                 </div>
                 <div className="lg:col-span-1">
-                  <label className="block text-xs font-bold text-gray-400 uppercase mb-1">
-                    Sede
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
+                    Teléfono
                   </label>
-                  <select
-                    className="w-full p-3 border border-gray-200 rounded-xl bg-white focus:ring-2 focus:ring-[#a72a34] outline-none"
-                    value={form.sede_id}
+                  <input
+                    type="tel"
+                    className="w-full p-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#a72a34] outline-none"
+                    value={form.telefono}
                     onChange={(e) =>
-                      setForm({ ...form, sede_id: e.target.value })
+                      setForm({ ...form, telefono: e.target.value })
                     }
-                  >
-                    <option value="">Sin Asignar</option>
-                    {sedes.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.nombre_sede}
-                      </option>
-                    ))}
-                  </select>
+                  />
                 </div>
-              </>
-            )}
+                <div className="lg:col-span-2">
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
+                    Domicilio (Calle y Num)
+                  </label>
+                  <input
+                    type="text"
+                    className="w-full p-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#a72a34] outline-none"
+                    value={form.domicilio}
+                    onChange={(e) =>
+                      setForm({ ...form, domicilio: e.target.value })
+                    }
+                  />
+                </div>
+                <div className="lg:col-span-1">
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
+                    Colonia
+                  </label>
+                  <input
+                    type="text"
+                    className="w-full p-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#a72a34] outline-none"
+                    value={form.colonia}
+                    onChange={(e) =>
+                      setForm({ ...form, colonia: e.target.value })
+                    }
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* SECCIÓN: ACADÉMICA Y EMERGENCIA */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <div>
+                <h4 className="text-[#a72a34] font-bold border-b border-gray-200 pb-2 mb-4 flex items-center gap-2">
+                  <GraduationCap size={18} /> Académico
+                </h4>
+                <div className="space-y-4">
+                  {(userToEdit.rol === "alumno" ||
+                    userToEdit.rol === "aspirante") && (
+                    <>
+                      <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
+                          Carrera
+                        </label>
+                        <select
+                          className="w-full p-2.5 border border-gray-200 rounded-lg bg-white focus:ring-2 focus:ring-[#a72a34] outline-none"
+                          value={form.carrera_id}
+                          onChange={(e) =>
+                            setForm({ ...form, carrera_id: e.target.value })
+                          }
+                        >
+                          <option value="">Sin Asignar</option>
+                          {carreras.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.nombre_carrera}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
+                            Sede
+                          </label>
+                          <select
+                            className="w-full p-2.5 border border-gray-200 rounded-lg bg-white focus:ring-2 focus:ring-[#a72a34] outline-none"
+                            value={form.sede_id}
+                            onChange={(e) =>
+                              setForm({ ...form, sede_id: e.target.value })
+                            }
+                          >
+                            <option value="">Sin Asignar</option>
+                            {sedes.map((s) => (
+                              <option key={s.id} value={s.id}>
+                                {s.nombre_sede}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
+                            Modalidad
+                          </label>
+                          <select
+                            className="w-full p-2.5 border border-gray-200 rounded-lg bg-white focus:ring-2 focus:ring-[#a72a34] outline-none"
+                            value={form.modalidad}
+                            onChange={(e) =>
+                              setForm({ ...form, modalidad: e.target.value })
+                            }
+                          >
+                            <option value="">Seleccione...</option>
+                            <option value="Escolarizada">Escolarizada</option>
+                            <option value="Semiescolarizada">
+                              Semiescolarizada
+                            </option>
+                            <option value="Virtual">Virtual</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
+                          Escuela de Procedencia
+                        </label>
+                        <input
+                          className="w-full p-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#a72a34] outline-none"
+                          value={form.escuela_procedencia}
+                          onChange={(e) =>
+                            setForm({
+                              ...form,
+                              escuela_procedencia: e.target.value,
+                            })
+                          }
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <h4 className="text-red-600 font-bold border-b border-red-200 pb-2 mb-4 flex items-center gap-2">
+                  <AlertCircle size={18} /> Emergencia
+                </h4>
+                <div className="space-y-4 bg-red-50/50 p-4 rounded-xl border border-red-100">
+                  <div>
+                    <label className="block text-xs font-bold text-red-500 uppercase mb-1">
+                      Nombre del Contacto
+                    </label>
+                    <input
+                      className="w-full p-2.5 border border-red-200 rounded-lg focus:ring-2 focus:ring-red-400 outline-none"
+                      value={form.contacto_emergencia_nombre}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          contacto_emergencia_nombre: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-red-500 uppercase mb-1">
+                      Teléfono del Contacto
+                    </label>
+                    <input
+                      type="tel"
+                      className="w-full p-2.5 border border-red-200 rounded-lg focus:ring-2 focus:ring-red-400 outline-none"
+                      value={form.contacto_emergencia_telefono}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          contacto_emergencia_telefono: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
-          <div className="flex gap-4 mt-8 justify-end border-t border-gray-100 pt-6">
+          <div className="flex gap-4 p-6 justify-end border-t border-gray-200 bg-white shrink-0">
             <button
               type="button"
               onClick={onClose}
-              className="px-6 py-3 text-gray-500 hover:text-gray-700 font-bold hover:bg-gray-100 rounded-xl transition-colors"
+              className="px-6 py-2.5 text-gray-600 font-bold hover:bg-gray-100 rounded-xl transition-colors"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="px-8 py-3 bg-[#a72a34] text-white rounded-xl font-bold hover:bg-[#802028] shadow-lg shadow-red-900/20 transition-transform active:scale-95 flex items-center gap-2"
+              className="px-8 py-2.5 bg-[#a72a34] text-white rounded-xl font-bold hover:bg-[#802028] shadow-lg transition-transform active:scale-95 flex items-center gap-2"
             >
-              <Save size={20} /> Guardar Cambios
+              <Save size={18} /> Guardar Cambios
             </button>
           </div>
         </form>
@@ -2867,7 +3029,7 @@ const UsuariosPage = () => {
   );
 };
 
-// --- MODAL VER DETALLES (FICHA TÉCNICA CORREGIDA) ---
+// --- MODAL VER DETALLES (FICHA TÉCNICA COMPLETA) ---
 const UserDetailModal = ({ user, onClose }) => {
   if (!user) return null;
 
@@ -2887,9 +3049,9 @@ const UserDetailModal = ({ user, onClose }) => {
 
   return (
     <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-50 p-4 backdrop-blur-sm animate-in fade-in">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl overflow-hidden flex flex-col">
         {/* HEADER */}
-        <div className="bg-[#a72a34] p-8 flex items-center justify-between relative overflow-hidden">
+        <div className="bg-[#a72a34] p-8 flex items-center justify-between relative overflow-hidden shrink-0">
           <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-16 -mt-16 pointer-events-none"></div>
 
           <div className="flex items-center gap-6 z-10">
@@ -2928,99 +3090,181 @@ const UserDetailModal = ({ user, onClose }) => {
           </button>
         </div>
 
-        {/* CONTENIDO */}
-        <div className="p-8 grid grid-cols-1 md:grid-cols-3 gap-8 bg-gray-50/50 max-h-[60vh] overflow-y-auto">
-          {/* 1. INFORMACIÓN PERSONAL */}
-          <div className="space-y-5">
-            <h3 className="text-[#a72a34] font-bold uppercase tracking-wider text-xs border-b border-gray-200 pb-2 mb-4">
-              Personal
-            </h3>
-
-            <div>
-              <label className="block text-xs text-gray-400 font-bold uppercase mb-1">
-                CURP
-              </label>
-              <p className="text-lg font-bold text-gray-800 font-mono tracking-wide">
-                {dato(user.curp)}
-              </p>
+        {/* CONTENIDO SCROLLABLE */}
+        <div
+          className="p-8 bg-gray-50/50 overflow-y-auto"
+          style={{ maxHeight: "calc(100vh - 200px)" }}
+        >
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {/* 1. INFORMACIÓN PERSONAL */}
+            <div className="space-y-4">
+              <h3 className="text-[#a72a34] font-bold uppercase tracking-wider text-xs border-b border-gray-200 pb-2 mb-4">
+                Datos Personales
+              </h3>
+              <div>
+                <label className="block text-xs text-gray-400 font-bold uppercase mb-1">
+                  CURP
+                </label>
+                <p className="text-sm font-bold text-gray-800 font-mono">
+                  {dato(user.curp)}
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs text-gray-400 font-bold uppercase mb-1">
+                    Género
+                  </label>
+                  <p className="text-sm font-medium text-gray-800">
+                    {user.genero === "M"
+                      ? "Masculino"
+                      : user.genero === "F"
+                        ? "Femenino"
+                        : dato(user.genero)}
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-400 font-bold uppercase mb-1">
+                    Edad
+                  </label>
+                  <p className="text-sm font-medium text-gray-800">
+                    {dato(user.edad)}
+                  </p>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 font-bold uppercase mb-1">
+                  Nacimiento
+                </label>
+                <p className="text-sm font-medium text-gray-800">
+                  {fecha(user.fecha_nacimiento)}
+                </p>
+              </div>
             </div>
 
-            <div>
-              <label className="block text-xs text-gray-400 font-bold uppercase mb-1">
-                Género
-              </label>
-              <p className="text-lg font-medium text-gray-800">
-                {user.genero === "M"
-                  ? "Masculino"
-                  : user.genero === "F"
-                    ? "Femenino"
-                    : dato(user.genero)}
-              </p>
+            {/* 2. CONTACTO */}
+            <div className="space-y-4">
+              <h3 className="text-[#a72a34] font-bold uppercase tracking-wider text-xs border-b border-gray-200 pb-2 mb-4">
+                Contacto
+              </h3>
+              <div>
+                <label className="block text-xs text-gray-400 font-bold uppercase mb-1">
+                  Correo Institucional
+                </label>
+                <p className="text-sm font-medium text-gray-800 break-words">
+                  {dato(user.email)}
+                </p>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 font-bold uppercase mb-1">
+                  Correo Personal
+                </label>
+                <p className="text-sm font-medium text-gray-800 break-words">
+                  {dato(user.email_personal)}
+                </p>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 font-bold uppercase mb-1">
+                  Teléfono Móvil
+                </label>
+                <p className="text-sm font-medium text-gray-800 font-mono">
+                  {dato(user.telefono)}
+                </p>
+              </div>
             </div>
 
-            <div>
-              <label className="block text-xs text-gray-400 font-bold uppercase mb-1">
-                Fecha de Nacimiento
-              </label>
-              <p className="text-lg font-medium text-gray-800">
-                {fecha(user.fecha_nacimiento)}
-              </p>
-            </div>
-          </div>
-
-          {/* 2. CONTACTO */}
-          <div className="space-y-5">
-            <h3 className="text-[#a72a34] font-bold uppercase tracking-wider text-xs border-b border-gray-200 pb-2 mb-4">
-              Contacto
-            </h3>
-
-            <div>
-              <label className="block text-xs text-gray-400 font-bold uppercase mb-1">
-                Correo Electrónico
-              </label>
-              <p className="text-lg font-medium text-gray-800 break-words">
-                {dato(user.email)}
-              </p>
+            {/* 3. DOMICILIO */}
+            <div className="space-y-4">
+              <h3 className="text-[#a72a34] font-bold uppercase tracking-wider text-xs border-b border-gray-200 pb-2 mb-4">
+                Domicilio
+              </h3>
+              <div>
+                <label className="block text-xs text-gray-400 font-bold uppercase mb-1">
+                  Dirección
+                </label>
+                <p className="text-sm font-medium text-gray-800">
+                  {dato(user.domicilio)}
+                </p>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 font-bold uppercase mb-1">
+                  Colonia
+                </label>
+                <p className="text-sm font-medium text-gray-800">
+                  {dato(user.colonia)}
+                </p>
+              </div>
             </div>
 
-            <div>
-              <label className="block text-xs text-gray-400 font-bold uppercase mb-1">
-                Teléfono
-              </label>
-              <p className="text-lg font-medium text-gray-800 font-mono">
-                {dato(user.telefono)}
-              </p>
+            {/* 4. ACADÉMICO / PROCEDENCIA */}
+            <div className="space-y-4">
+              <h3 className="text-[#a72a34] font-bold uppercase tracking-wider text-xs border-b border-gray-200 pb-2 mb-4">
+                Perfil Académico
+              </h3>
+              <div>
+                <label className="block text-xs text-gray-400 font-bold uppercase mb-1">
+                  Carrera
+                </label>
+                <p className="text-sm font-medium text-gray-800">
+                  {dato(user.nombre_carrera)}
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs text-gray-400 font-bold uppercase mb-1">
+                    Sede
+                  </label>
+                  <p className="text-sm font-medium text-gray-800">
+                    {dato(user.nombre_sede)}
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-400 font-bold uppercase mb-1">
+                    Modalidad
+                  </label>
+                  <p className="text-sm font-medium text-gray-800">
+                    {dato(user.modalidad)}
+                  </p>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 font-bold uppercase mb-1">
+                  Escuela de Procedencia
+                </label>
+                <p className="text-sm font-medium text-gray-800">
+                  {dato(user.escuela_procedencia)}
+                </p>
+              </div>
             </div>
-          </div>
 
-          {/* 3. ACADÉMICO */}
-          <div className="space-y-5">
-            <h3 className="text-[#a72a34] font-bold uppercase tracking-wider text-xs border-b border-gray-200 pb-2 mb-4">
-              Académico
-            </h3>
-
-            <div>
-              <label className="block text-xs text-gray-400 font-bold uppercase mb-1">
-                Carrera
-              </label>
-              <p className="text-lg font-medium text-gray-800 leading-tight">
-                {dato(user.nombre_carrera)}
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-xs text-gray-400 font-bold uppercase mb-1">
-                Sede
-              </label>
-              <p className="text-lg font-medium text-gray-800">
-                {dato(user.nombre_sede)}
-              </p>
+            {/* 5. EMERGENCIA */}
+            <div className="space-y-4 md:col-span-2 lg:col-span-1">
+              <h3 className="text-red-600 font-bold uppercase tracking-wider text-xs border-b border-gray-200 pb-2 mb-4">
+                En Caso de Emergencia
+              </h3>
+              <div className="bg-red-50 p-4 rounded-xl border border-red-100">
+                <div className="mb-3">
+                  <label className="block text-xs text-red-400 font-bold uppercase mb-1">
+                    Nombre del Contacto
+                  </label>
+                  <p className="text-sm font-bold text-red-900">
+                    {dato(user.contacto_emergencia_nombre)}
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-xs text-red-400 font-bold uppercase mb-1">
+                    Teléfono de Emergencia
+                  </label>
+                  <p className="text-sm font-bold text-red-900 font-mono">
+                    {dato(user.contacto_emergencia_telefono)}
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
         {/* FOOTER */}
-        <div className="bg-white p-4 flex justify-end border-t border-gray-100">
+        <div className="bg-white p-4 flex justify-end border-t border-gray-100 shrink-0">
           <button
             onClick={onClose}
             className="px-8 py-3 bg-gray-100 text-gray-600 font-bold rounded-xl hover:bg-gray-200 transition-colors"
