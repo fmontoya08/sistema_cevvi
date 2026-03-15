@@ -20,6 +20,7 @@
     "mailparser": "^3.9.3",
     "multer": "^2.0.2",
     "mysql2": "^3.15.2",
+    "node-cron": "^4.2.1",
     "nodemailer": "^7.0.13"
   }
 }
