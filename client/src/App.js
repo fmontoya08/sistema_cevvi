@@ -2466,11 +2466,24 @@ const UsuariosPage = () => {
             onClick={() => setVerEliminados(!verEliminados)}
             className={`px-5 py-3 rounded-xl font-bold flex items-center gap-2 border-2 ${verEliminados ? "bg-gray-100 border-gray-200 text-gray-600" : "bg-red-50 border-red-50 text-[#a72a34]"}`}
           >
-            {verEliminados ? <ArrowLeft size={18} /> : <Trash2 size={18} />}{" "}
+            {verEliminados ? <ArrowLeft size={18} /> : <Trash2 size={18} />}
             {verEliminados ? "Volver" : "Papelera"}
           </button>
           {!verEliminados && (
             <>
+              {/* BOTÓN DESCARGAR ZIP */}
+              <button
+                onClick={() =>
+                  window.open(
+                    "https://api-universidad-c5o8.onrender.com/api/admin/exportar-credenciales",
+                    "_blank",
+                  )
+                }
+                className="bg-blue-50 border-2 border-blue-200 text-blue-700 px-5 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-blue-100 transition-colors"
+              >
+                <Download size={18} /> Exportar ZIP
+              </button>
+
               <button
                 onClick={() => setModalAspirante(true)}
                 className="bg-white border-2 border-[#a72a34] text-[#a72a34] px-5 py-3 rounded-xl font-bold flex items-center gap-2 transition-transform active:scale-95"

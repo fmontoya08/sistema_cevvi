@@ -886,12 +886,11 @@ const apiRouter = express.Router();
 app.use("/api", apiRouter); // Montamos el router principal en /api
 
 // --- RUTA PÚBLICA DE LOGIN ---
-// Esta ruta no usa 'verifyToken' porque es para obtener el token
 apiRouter.post("/login", async (req, res) => {
   const { email, password } = req.body;
   try {
     const [results] = await db.query(
-      "SELECT id, email, password, nombre, apellido_paterno, rol, foto_perfil, activo, matricula, genero FROM usuarios WHERE email = ?",
+      "SELECT id, email, password, nombre, apellido_paterno, rol, foto_perfil, activo, matricula, genero, estado_academico FROM usuarios WHERE email = ?",
       [email],
     );
 
@@ -903,8 +902,6 @@ apiRouter.post("/login", async (req, res) => {
 
     const user = results[0];
 
-    // 2. AGREGAMOS ESTA VALIDACIÓN DE SEGURIDAD
-    // Si activo es 0 (false), no dejamos pasar
     // VALIDACIÓN DE ESTADO ACADÉMICO (PUNTO 2)
     if (
       user.activo === 0 ||
@@ -923,68 +920,6 @@ apiRouter.post("/login", async (req, res) => {
       });
     }
 
-    // --- RECUPERAR CONTRASEÑA (PUNTO 5) ---
-    apiRouter.post("/recuperar-password", async (req, res) => {
-      const { email } = req.body;
-      try {
-        // Buscamos si existe el correo institucional o personal
-        const [users] = await db.query(
-          "SELECT id, nombre, email_personal, matricula FROM usuarios WHERE email = ? OR email_personal = ?",
-          [email, email],
-        );
-
-        if (users.length === 0) {
-          return res.status(404).send({
-            message: "No se encontró ningún usuario con este correo.",
-          });
-        }
-
-        const user = users[0];
-
-        // Generar contraseña aleatoria (Ej: Siglo2024#Ax8)
-        const randomPass = "Siglo" + Math.floor(1000 + Math.random() * 9000);
-        const hashedPass = await bcrypt.hash(randomPass, 10);
-
-        // Actualizar en BD
-        await db.query("UPDATE usuarios SET password = ? WHERE id = ?", [
-          hashedPass,
-          user.id,
-        ]);
-
-        // Enviar correo (usando el correo personal preferentemente)
-        const correoDestino = user.email_personal || email;
-
-        const htmlContent = `
-      <div style="font-family: Arial; padding: 20px;">
-        <h2 style="color: #a72a34;">Recuperación de Contraseña</h2>
-        <p>Hola ${user.nombre}, se ha restablecido tu contraseña para la Plataforma Universitaria.</p>
-        <p>Tus nuevas credenciales de acceso son:</p>
-        <div style="background: #f9f9f9; padding: 15px; border-left: 5px solid #a72a34; margin: 20px 0;">
-          <p><strong>Usuario / Matrícula:</strong> ${user.matricula || "Tu correo"}</p>
-          <p><strong>Nueva Contraseña:</strong> ${randomPass}</p>
-        </div>
-        <p>Te recomendamos cambiar esta contraseña desde tu perfil una vez que ingreses.</p>
-      </div>
-    `;
-
-        await transporter.sendMail({
-          from: '"Control Escolar Siglo XXI" <contacto@puntocerodigital.com.mx>',
-          to: correoDestino,
-          subject: "🔑 Recuperación de Contraseña - Universidad Siglo XXI",
-          html: htmlContent,
-        });
-
-        res.send({
-          message:
-            "Si el correo existe, hemos enviado las instrucciones de recuperación.",
-        });
-      } catch (error) {
-        console.error("Error al recuperar password:", error);
-        res
-          .status(500)
-          .send({ message: "Error interno al restablecer contraseña." });
-      }
-    });
     const isPasswordCorrect = await bcrypt.compare(password, user.password);
     if (!isPasswordCorrect) {
       return res
@@ -997,7 +932,7 @@ apiRouter.post("/login", async (req, res) => {
       rol: user.rol,
       nombre: user.nombre,
       apellido_paterno: user.apellido_paterno,
-      foto_perfil: user.foto_perfil, // <-- Agrega foto_perfil
+      foto_perfil: user.foto_perfil,
       matricula: user.matricula,
       genero: user.genero,
     };
@@ -1006,6 +941,61 @@ apiRouter.post("/login", async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).send({ message: "Error en el servidor durante el login." });
+  }
+});
+
+// --- RUTA PÚBLICA: RECUPERAR CONTRASEÑA ---
+apiRouter.post("/recuperar-password", async (req, res) => {
+  const { email } = req.body;
+  try {
+    const [users] = await db.query(
+      "SELECT id, nombre, email_personal, matricula FROM usuarios WHERE email = ? OR email_personal = ?",
+      [email, email],
+    );
+
+    if (users.length === 0) {
+      return res
+        .status(404)
+        .send({ message: "No se encontró ningún usuario con este correo." });
+    }
+
+    const user = users[0];
+    const randomPass = "Siglo" + Math.floor(1000 + Math.random() * 9000);
+    const hashedPass = await bcrypt.hash(randomPass, 10);
+
+    await db.query("UPDATE usuarios SET password = ? WHERE id = ?", [
+      hashedPass,
+      user.id,
+    ]);
+
+    const correoDestino = user.email_personal || email;
+
+    const htmlContent = `
+      <div style="font-family: Arial; padding: 20px;">
+        <h2 style="color: #a72a34;">Recuperación de Contraseña</h2>
+        <p>Hola ${user.nombre}, se ha restablecido tu contraseña para la Plataforma Universitaria.</p>
+        <p>Tus nuevas credenciales de acceso son:</p>
+        <div style="background: #f9f9f9; padding: 15px; border-left: 5px solid #a72a34; margin: 20px 0;">
+          <p><strong>Usuario / Matrícula:</strong> ${user.matricula || "Tu correo"}</p>
+          <p><strong>Nueva Contraseña:</strong> ${randomPass}</p>
+        </div>
+        <p>Te recomendamos cambiar esta contraseña desde tu perfil una vez que ingreses.</p>
+      </div>
+    `;
+
+    await transporter.sendMail({
+      from: '"Control Escolar Siglo XXI" <contacto@puntocerodigital.com.mx>',
+      to: correoDestino,
+      subject: "🔑 Recuperación de Contraseña - Universidad Siglo XXI",
+      html: htmlContent,
+    });
+
+    res.send({ message: "Se han enviado las instrucciones a tu correo." });
+  } catch (error) {
+    console.error("Error al recuperar password:", error);
+    res
+      .status(500)
+      .send({ message: "Error interno al restablecer contraseña." });
   }
 });
 
@@ -4925,6 +4915,14 @@ adminRouter.post("/grupos/:id/asignar-docente", async (req, res) => {
     "INSERT INTO grupo_asignaturas_docentes (grupo_id, asignatura_id, docente_id) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE docente_id = ?",
     [grupo_id, asignatura_id, docente_id || null, docente_id || null], // Permite desasignar con null
   );
+  if (docente_id) {
+    enviarAlertaCorreo(
+      docente_id,
+      "📚 Nueva Materia Asignada",
+      "Asignación de Grupo",
+      `<p>Se te ha asignado una nueva materia en el sistema. Ingresa a tu Portal Docente para ver los detalles y alumnos inscritos.</p>`,
+    );
+  }
   res.send({ message: "Docente asignado/actualizado" });
 });
 
@@ -5998,6 +5996,13 @@ docenteRouter.post(
           ? "Calificación actualizada."
           : "Calificación guardada.",
       });
+      enviarAlertaCorreo(
+        entrega.alumno_id,
+        "📝 Tarea Calificada",
+        "Calificación Recibida",
+        `<p>El docente ha calificado tu entrega para la tarea: <strong>${entrega.titulo}</strong>.</p>
+         <p>Obtuviste: <strong>${calNum} / 100</strong>.</p>`,
+      );
     } catch (error) {
       console.error("Error al calificar:", error);
       res.status(500).send({ message: "Error en el servidor." });
@@ -8963,6 +8968,14 @@ adminRouter.post("/anuncios", async (req, res) => {
             body: JSON.stringify(expoMessages),
           }).catch((e) => console.error("Error push anuncio:", e));
         }
+        for (const usuario of usuariosDestino) {
+          enviarAlertaCorreo(
+            usuario.id,
+            "📢 Nuevo Aviso Institucional",
+            titulo,
+            `<p>${mensaje}</p>`,
+          );
+        }
       }
     }
 
@@ -9194,6 +9207,125 @@ alumnoRouter.get("/mis-calificaciones", async (req, res) => {
   }
 });
 // --- FIN: RUTA HISTORIAL DE CALIFICACIONES (ALUMNO) ---
+
+// ==========================================
+// FUNCIÓN GLOBAL: ENVIAR ALERTAS POR CORREO
+// ==========================================
+async function enviarAlertaCorreo(usuarioId, asunto, titulo, mensajeHtml) {
+  try {
+    const [user] = await db.query(
+      "SELECT email_personal, email, nombre FROM usuarios WHERE id = ?",
+      [usuarioId],
+    );
+    if (user.length === 0) return;
+
+    const correoDestino = user[0].email_personal || user[0].email;
+    if (!correoDestino) return;
+
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 10px; overflow: hidden;">
+        <div style="background-color: #a72a34; padding: 20px; text-align: center;">
+          <h2 style="color: white; margin: 0;">${titulo}</h2>
+        </div>
+        <div style="padding: 30px; color: #333;">
+          <p>Hola <strong>${user[0].nombre}</strong>,</p>
+          ${mensajeHtml}
+          <p style="text-align: center; margin-top: 30px;">
+            <a href="https://universidadsigloxxi.com/plataforma" style="background-color: #a72a34; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold;">Ir a la Plataforma</a>
+          </p>
+        </div>
+      </div>
+    `;
+
+    await transporter.sendMail({
+      from: '"Universidad Siglo XXI" <contacto@puntocerodigital.com.mx>',
+      to: correoDestino,
+      subject: asunto,
+      html: htmlContent,
+    });
+  } catch (error) {
+    console.error("Error enviando alerta correo:", error);
+  }
+}
+
+// ==========================================
+// CRON JOB: MENSUALIDADES AUTOMÁTICAS
+// ==========================================
+// Se ejecuta el DÍA 1 de CADA MES a las 00:01 AM ("1 0 1 * *")
+cron.schedule("1 0 1 * *", async () => {
+  console.log("⏳ [CRON] Iniciando generación automática de mensualidades...");
+
+  try {
+    const connection = await db.getConnection();
+    await connection.beginTransaction();
+
+    // 1. Obtener el concepto de mensualidad
+    const [concepto] = await connection.query(
+      "SELECT id, monto_default FROM conceptos_pago WHERE nombre_concepto LIKE '%Mensualidad%' LIMIT 1",
+    );
+    if (concepto.length === 0) {
+      console.log("❌ [CRON] No se encontró el concepto de 'Mensualidad'.");
+      connection.release();
+      return;
+    }
+    const idMensualidad = concepto[0].id;
+    const monto = concepto[0].monto_default;
+
+    // 2. Obtener a TODOS los alumnos activos
+    const [alumnos] = await connection.query(
+      "SELECT id, modalidad, nombre FROM usuarios WHERE rol = 'alumno' AND activo = 1 AND estado_academico = 'activo'",
+    );
+
+    // 3. Función para encontrar el próximo Viernes o Sábado de este mes
+    const getNextDate = (dayOfWeek) => {
+      let d = new Date();
+      d.setDate(1); // Empezamos el día 1 del mes actual
+      while (d.getDay() !== dayOfWeek) {
+        d.setDate(d.getDate() + 1);
+      }
+      return d.toISOString().split("T")[0]; // YYYY-MM-DD
+    };
+
+    // 5 = Viernes (Virtual), 6 = Sábado (Presencial)
+    const fechaVencimientoVirtual = getNextDate(5);
+    const fechaVencimientoPresencial = getNextDate(6);
+
+    let cargosGenerados = 0;
+
+    // 4. Asignar cargos
+    for (const alumno of alumnos) {
+      const fechaVencimiento =
+        alumno.modalidad === "Virtual"
+          ? fechaVencimientoVirtual
+          : fechaVencimientoPresencial;
+
+      // Insertamos el adeudo
+      await connection.query(
+        "INSERT INTO adeudos_alumnos (alumno_id, concepto_id, monto_a_pagar, estatus_pago, fecha_vencimiento) VALUES (?, ?, ?, 'pendiente', ?)",
+        [alumno.id, idMensualidad, monto, fechaVencimiento],
+      );
+
+      // Notificamos por correo
+      enviarAlertaCorreo(
+        alumno.id,
+        "💳 Nueva Mensualidad Generada",
+        "Aviso de Pago",
+        `<p>Se ha generado tu colegiatura de este mes por la cantidad de <strong>$${monto}</strong>.</p>
+         <p>Tu fecha límite de pago (sin recargos) es el <strong>${fechaVencimiento}</strong>.</p>`,
+      );
+
+      cargosGenerados++;
+    }
+
+    await connection.commit();
+    console.log(
+      `✅ [CRON] Éxito. Se generaron ${cargosGenerados} mensualidades.`,
+    );
+    connection.release();
+  } catch (error) {
+    console.error("❌ [CRON] Error:", error);
+  }
+});
 
 app.listen(PORT, () => {
   console.log(`Servidor corriendo en http://localhost:${PORT}`);
