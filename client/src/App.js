@@ -168,31 +168,28 @@ api.interceptors.request.use(
 );
 
 // Interceptor de RESPUESTA (para manejar errores)
+// Interceptor de RESPUESTA (para manejar errores)
 api.interceptors.response.use(
   (response) => {
-    // Si la respuesta es exitosa, solo la retornamos
     return response;
   },
   (error) => {
-    // Si el error es un 401 (No Autorizado) o 403 (Prohibido)
+    // CORRECCIÓN PUNTO 4: Si el error viene del intento de Login, NO recargamos la página.
+    if (error.config && error.config.url.includes("/login")) {
+      return Promise.reject(error);
+    }
+
     if (
       error.response &&
       (error.response.status === 401 || error.response.status === 403)
     ) {
       console.warn("Token no válido o sesión expirada. Redirigiendo al login.");
-
-      // Limpiamos el localStorage para forzar el logout
       localStorage.removeItem("user");
       localStorage.removeItem("token");
-
-      // Redirigimos al login
-      // Usamos window.location.href para forzar una recarga completa
-      // y limpiar el estado de React.
       if (window.location.pathname !== "/login") {
         window.location.href = "plataforma/login";
       }
     }
-    // Retornamos el error para que otras partes (como el login) puedan manejarlo
     return Promise.reject(error);
   },
 );
@@ -1548,7 +1545,47 @@ const LoginPage = () => {
           >
             {loading ? "Cargando..." : "Entrar"}
           </button>
+
+          {/* Botón */}
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-bold text-white bg-[#a72a34] hover:bg-[#8f242d] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#a72a34] transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
+          >
+            {loading ? "Cargando..." : "Entrar"}
+          </button>
         </form>
+
+        <div className="text-center mt-6 space-y-2">
+          <button
+            onClick={() => {
+              const emailRec = prompt(
+                "Ingresa tu correo personal o institucional registrado:",
+              );
+              if (emailRec) {
+                api
+                  .post("/recuperar-password", { email: emailRec })
+                  .then((res) =>
+                    alert(
+                      "¡Revisa tu bandeja de entrada! Se ha enviado una contraseña nueva.",
+                    ),
+                  )
+                  .catch((err) =>
+                    alert(
+                      "Error: " +
+                        (err.response?.data?.message || "Hubo un problema"),
+                    ),
+                  );
+              }
+            }}
+            className="text-sm text-[#a72a34] font-bold hover:underline"
+          >
+            ¿Olvidaste tu contraseña?
+          </button>
+          <p className="text-xs text-gray-400">
+            © {new Date().getFullYear()} Centro Universitario Siglo XXI
+          </p>
+        </div>
 
         <div className="text-center mt-4">
           <p className="text-xs text-gray-400">
@@ -1677,6 +1714,17 @@ const DashboardPage = () => {
                     Nuevo Aspirante
                   </span>
                 </Link>
+                <button
+                  onClick={() =>
+                    window.open(
+                      "https://api-universidad-c5o8.onrender.com/api/admin/exportar-credenciales",
+                      "_blank",
+                    )
+                  }
+                  className="bg-blue-50 text-blue-600 px-5 py-3 rounded-xl font-bold flex items-center gap-2 border border-blue-100 hover:bg-blue-100 transition-colors"
+                >
+                  <Download size={18} /> Exportar Fotos (ZIP)
+                </button>
                 <Link
                   to="/grupos"
                   className="p-4 border rounded-xl hover:bg-gray-50 hover:border-purple-300 transition-all text-center group"

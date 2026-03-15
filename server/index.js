@@ -10,6 +10,7 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 const MailComposer = require("nodemailer/lib/mail-composer");
+const archiver = require("archiver");
 
 const app = express();
 app.use(cors());
@@ -904,11 +905,86 @@ apiRouter.post("/login", async (req, res) => {
 
     // 2. AGREGAMOS ESTA VALIDACIÓN DE SEGURIDAD
     // Si activo es 0 (false), no dejamos pasar
-    if (user.activo === 0) {
+    // VALIDACIÓN DE ESTADO ACADÉMICO (PUNTO 2)
+    if (
+      user.activo === 0 ||
+      ["baja_temporal", "baja_definitiva", "suspendido"].includes(
+        user.estado_academico,
+      )
+    ) {
+      let razon = "desactivada";
+      if (user.estado_academico === "baja_temporal") razon = "en Baja Temporal";
+      if (user.estado_academico === "baja_definitiva")
+        razon = "dada de Baja Definitiva";
+      if (user.estado_academico === "suspendido") razon = "Suspendida";
+
       return res.status(403).send({
-        message: "Tu cuenta ha sido desactivada. Contacta al administrador.",
+        message: `Tu cuenta está ${razon}. Por favor, contacta a Control Escolar.`,
       });
     }
+
+    // --- RECUPERAR CONTRASEÑA (PUNTO 5) ---
+    apiRouter.post("/recuperar-password", async (req, res) => {
+      const { email } = req.body;
+      try {
+        // Buscamos si existe el correo institucional o personal
+        const [users] = await db.query(
+          "SELECT id, nombre, email_personal, matricula FROM usuarios WHERE email = ? OR email_personal = ?",
+          [email, email],
+        );
+
+        if (users.length === 0) {
+          return res.status(404).send({
+            message: "No se encontró ningún usuario con este correo.",
+          });
+        }
+
+        const user = users[0];
+
+        // Generar contraseña aleatoria (Ej: Siglo2024#Ax8)
+        const randomPass = "Siglo" + Math.floor(1000 + Math.random() * 9000);
+        const hashedPass = await bcrypt.hash(randomPass, 10);
+
+        // Actualizar en BD
+        await db.query("UPDATE usuarios SET password = ? WHERE id = ?", [
+          hashedPass,
+          user.id,
+        ]);
+
+        // Enviar correo (usando el correo personal preferentemente)
+        const correoDestino = user.email_personal || email;
+
+        const htmlContent = `
+      <div style="font-family: Arial; padding: 20px;">
+        <h2 style="color: #a72a34;">Recuperación de Contraseña</h2>
+        <p>Hola ${user.nombre}, se ha restablecido tu contraseña para la Plataforma Universitaria.</p>
+        <p>Tus nuevas credenciales de acceso son:</p>
+        <div style="background: #f9f9f9; padding: 15px; border-left: 5px solid #a72a34; margin: 20px 0;">
+          <p><strong>Usuario / Matrícula:</strong> ${user.matricula || "Tu correo"}</p>
+          <p><strong>Nueva Contraseña:</strong> ${randomPass}</p>
+        </div>
+        <p>Te recomendamos cambiar esta contraseña desde tu perfil una vez que ingreses.</p>
+      </div>
+    `;
+
+        await transporter.sendMail({
+          from: '"Control Escolar Siglo XXI" <contacto@puntocerodigital.com.mx>',
+          to: correoDestino,
+          subject: "🔑 Recuperación de Contraseña - Universidad Siglo XXI",
+          html: htmlContent,
+        });
+
+        res.send({
+          message:
+            "Si el correo existe, hemos enviado las instrucciones de recuperación.",
+        });
+      } catch (error) {
+        console.error("Error al recuperar password:", error);
+        res
+          .status(500)
+          .send({ message: "Error interno al restablecer contraseña." });
+      }
+    });
     const isPasswordCorrect = await bcrypt.compare(password, user.password);
     if (!isPasswordCorrect) {
       return res
@@ -1719,6 +1795,57 @@ async function getUserEmailCredentials(userId) {
     tls: true,
   };
 }
+
+// --- DESCARGAR ZIP DE CREDENCIALES (PUNTO 7) ---
+adminRouter.get("/exportar-credenciales", async (req, res) => {
+  try {
+    const [alumnos] = await db.query(
+      "SELECT id, nombre, apellido_paterno, matricula, foto_perfil FROM usuarios WHERE rol IN ('alumno', 'aspirante') AND activo = 1",
+    );
+
+    // Configuramos la respuesta HTTP como un archivo ZIP descargable
+    res.attachment("Fotos_Credenciales_Alumnos.zip");
+    const archive = archiver("zip", { zlib: { level: 9 } });
+
+    archive.on("error", (err) => {
+      throw err;
+    });
+    archive.pipe(res);
+
+    // Creamos un CSV con los datos de todos
+    let csvData = "Matricula,Nombre,Apellido,Foto_Archivo\n";
+
+    alumnos.forEach((alumno) => {
+      const nombreCarpeta =
+        `${alumno.matricula || "SIN_MATRICULA"}_${alumno.apellido_paterno}_${alumno.nombre}`.replace(
+          /[^a-zA-Z0-9_]/g,
+          "_",
+        );
+
+      // Si tiene foto, la metemos a su carpeta
+      if (alumno.foto_perfil) {
+        const fotoPath = path.join(perfilesDir, alumno.foto_perfil);
+        if (fs.existsSync(fotoPath)) {
+          const extension = path.extname(alumno.foto_perfil);
+          archive.file(fotoPath, {
+            name: `Alumnos/${nombreCarpeta}/foto_perfil${extension}`,
+          });
+          csvData += `${alumno.matricula},${alumno.nombre},${alumno.apellido_paterno},foto_perfil${extension}\n`;
+        }
+      } else {
+        csvData += `${alumno.matricula},${alumno.nombre},${alumno.apellido_paterno},SIN FOTO\n`;
+      }
+    });
+
+    // Guardamos el excel/csv en la raíz del ZIP
+    archive.append(csvData, { name: "Directorio_Alumnos.csv" });
+
+    await archive.finalize();
+  } catch (error) {
+    console.error("Error al exportar ZIP:", error);
+    res.status(500).send("Error generando el archivo ZIP.");
+  }
+});
 
 // 1. LEER BANDEJA (Dinámico)
 adminRouter.get("/email/inbox", async (req, res) => {
