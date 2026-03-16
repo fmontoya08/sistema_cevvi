@@ -1803,7 +1803,8 @@ const DashboardPage = () => {
                       </div>
                       <div className="flex-1 overflow-hidden">
                         <p className="text-sm font-bold text-gray-700 truncate">
-                          {asp.nombre} {asp.apellido_paterno}
+                          {asp.nombre} {asp.apellido_paterno}{" "}
+                          {asp.apellido_materno || ""}
                         </p>
                         <p className="text-xs text-gray-400 truncate">
                           {asp.email}
@@ -5024,7 +5025,7 @@ const DetalleFinanzasAlumnoPage = () => {
       setMovimientos(data);
       if (data.length > 0) {
         setAlumno({
-          nombre: `${data[0].nombre} ${data[0].apellido_paterno}`,
+          nombre: `${data[0].nombre} ${data[0].apellido_paterno} ${data[0].apellido_materno || ""}`,
           matricula: data[0].matricula,
         });
       }
@@ -6333,7 +6334,8 @@ const SubirCalificacionesPage = () => {
                 >
                   <td className="px-6 py-4">
                     <div className="font-bold text-gray-800">
-                      {alum.nombre} {alum.apellido_paterno}
+                      {alum.nombre} {alum.apellido_paterno}{" "}
+                      {alum.apellido_materno || ""}
                     </div>
                     <div className="text-xs text-gray-500">{alum.email}</div>
                   </td>
@@ -9054,7 +9056,8 @@ const CajaPage = () => {
                 className="hover:bg-green-50/30 transition-colors"
               >
                 <td className="p-5 font-bold text-gray-800">
-                  {user.nombre} {user.apellido_paterno}
+                  {user.nombre} {user.apellido_paterno}{" "}
+                  {user.apellido_materno || ""}
                 </td>
                 <td className="p-5 font-mono text-gray-500">
                   {user.matricula || "---"}
@@ -9214,7 +9217,8 @@ const DetalleFinancieroAlumnoPage = () => {
         Volver a Caja
       </Link>
       <h2 className="text-3xl font-bold text-gray-800 mb-2">
-        {alumno.nombre} {alumno.apellido_paterno}
+        {alumno.nombre} {alumno.apellido_paterno}{" "}
+        {alumno.apellido_materno || ""}
       </h2>
       <p className="text-lg text-secundario mb-6">
         Matrícula: {alumno.matricula || "N/A"}

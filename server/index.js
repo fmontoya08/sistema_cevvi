@@ -2042,7 +2042,7 @@ adminRouter.get("/alumnos/:id/finanzas", async (req, res) => {
         a.estatus_pago,
         a.fecha_vencimiento,
         a.fecha_pago,
-        u.nombre, u.apellido_paterno, u.matricula -- Datos del alumno
+        u.nombre, u.apellido_paterno, u.apellido_materno, u.matricula -- Datos del alumno
       FROM adeudos_alumnos a
       INNER JOIN conceptos_pago c ON a.concepto_id = c.id
       INNER JOIN usuarios u ON a.alumno_id = u.id
@@ -2346,7 +2346,7 @@ adminRouter.get("/dashboard-stats", async (req, res) => {
 
     // CORRECCIÓN AQUÍ: Usamos 'fecha_creacion' en vez de 'created_at'
     const [ultimosAspirantes] = await db.query(`
-        SELECT nombre, apellido_paterno, email, fecha_creacion 
+        SELECT nombre, apellido_paterno, apellido_materno, email, fecha_creacion 
         FROM usuarios WHERE rol = 'aspirante' AND activo = 1
         ORDER BY id DESC LIMIT 5
     `);
@@ -2936,6 +2936,15 @@ adminRouter.post("/calificaciones/guardar-lote", async (req, res) => {
           body: mensaje,
           data: { url: "/alumno/mis-calificaciones" },
         }));
+
+        // CORREO DE CALIFICACIÓN FINAL
+        enviarAlertaCorreo(
+          item.alumno_id,
+          "🎓 Calificación Final Publicada",
+          "Acta de Calificaciones",
+          `<p>Tu calificación final para la materia <strong>${nombreMateria}</strong> ha sido publicada.</p>
+             <p>Calificación obtenida: <strong style="font-size:18px; color:#a72a34;">${item.calificacion} / 100</strong>.</p>`,
+        );
 
         // Enviamos a Expo
         await fetch("https://exp.host/--/api/v2/push/send", {
@@ -9418,6 +9427,114 @@ cron.schedule("1 0 1 * *", async () => {
       cargosGenerados++;
     }
 
+    await connection.commit();
+    console.log(
+      `✅ [CRON] Éxito. Se generaron ${cargosGenerados} mensualidades.`,
+    );
+    connection.release();
+  } catch (error) {
+    console.error("❌ [CRON] Error:", error);
+  }
+});
+
+// ==========================================
+// FUNCIÓN GLOBAL: ENVIAR ALERTAS POR CORREO
+// ==========================================
+async function enviarAlertaCorreo(usuarioId, asunto, titulo, mensajeHtml) {
+  try {
+    const [user] = await db.query(
+      "SELECT email_personal, email, nombre FROM usuarios WHERE id = ?",
+      [usuarioId],
+    );
+    if (user.length === 0) return;
+
+    const correoDestino = user[0].email_personal || user[0].email;
+    if (!correoDestino) return;
+
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 10px; overflow: hidden;">
+        <div style="background-color: #a72a34; padding: 20px; text-align: center;">
+          <h2 style="color: white; margin: 0;">${titulo}</h2>
+        </div>
+        <div style="padding: 30px; color: #333;">
+          <p>Hola <strong>${user[0].nombre}</strong>,</p>
+          ${mensajeHtml}
+          <p style="text-align: center; margin-top: 30px;">
+            <a href="https://universidadsigloxxi.com/plataforma" style="background-color: #a72a34; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold;">Ir a la Plataforma</a>
+          </p>
+        </div>
+      </div>
+    `;
+
+    await transporter.sendMail({
+      from: '"Universidad Siglo XXI" <contacto@puntocerodigital.com.mx>',
+      to: correoDestino,
+      subject: asunto,
+      html: htmlContent,
+    });
+  } catch (error) {
+    console.error("Error enviando alerta correo:", error);
+  }
+}
+
+// ==========================================
+// CRON JOB: MENSUALIDADES AUTOMÁTICAS
+// ==========================================
+// Se ejecuta el DÍA 1 de CADA MES a las 00:01 AM ("1 0 1 * *")
+cron.schedule("1 0 1 * *", async () => {
+  console.log("⏳ [CRON] Iniciando generación automática de mensualidades...");
+  try {
+    const connection = await db.getConnection();
+    await connection.beginTransaction();
+
+    const [concepto] = await connection.query(
+      "SELECT id, monto_default FROM conceptos_pago WHERE nombre_concepto LIKE '%Mensualidad%' LIMIT 1",
+    );
+    if (concepto.length === 0) {
+      console.log("❌ [CRON] No se encontró el concepto de 'Mensualidad'.");
+      connection.release();
+      return;
+    }
+    const idMensualidad = concepto[0].id;
+    const monto = concepto[0].monto_default;
+
+    const [alumnos] = await connection.query(
+      "SELECT id, modalidad, nombre FROM usuarios WHERE rol = 'alumno' AND activo = 1 AND estado_academico = 'activo'",
+    );
+
+    const getNextDate = (dayOfWeek) => {
+      let d = new Date();
+      d.setDate(1); // Día 1 del mes actual
+      while (d.getDay() !== dayOfWeek) {
+        d.setDate(d.getDate() + 1);
+      }
+      return d.toISOString().split("T")[0];
+    };
+
+    const fechaVencimientoVirtual = getNextDate(5); // 5 = Viernes
+    const fechaVencimientoPresencial = getNextDate(6); // 6 = Sábado
+    let cargosGenerados = 0;
+
+    for (const alumno of alumnos) {
+      const fechaVencimiento =
+        alumno.modalidad === "Virtual"
+          ? fechaVencimientoVirtual
+          : fechaVencimientoPresencial;
+      await connection.query(
+        "INSERT INTO adeudos_alumnos (alumno_id, concepto_id, monto_a_pagar, estatus_pago, fecha_vencimiento) VALUES (?, ?, ?, 'pendiente', ?)",
+        [alumno.id, idMensualidad, monto, fechaVencimiento],
+      );
+
+      // Notificación de Cobro
+      enviarAlertaCorreo(
+        alumno.id,
+        "💳 Nueva Mensualidad Generada",
+        "Aviso de Pago",
+        `<p>Se ha generado tu colegiatura de este mes por la cantidad de <strong>$${monto}</strong>.</p>
+         <p>Tu fecha límite de pago (sin recargos) es el <strong>${fechaVencimiento}</strong>.</p>`,
+      );
+      cargosGenerados++;
+    }
     await connection.commit();
     console.log(
       `✅ [CRON] Éxito. Se generaron ${cargosGenerados} mensualidades.`,
