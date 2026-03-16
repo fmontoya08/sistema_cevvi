@@ -4973,13 +4973,15 @@ adminRouter.put("/grupos/:id/reactivar", async (req, res) => {
   }
 });
 
-// PUT Cerrar Grupo (Validación Inteligente y Cierre Forzado)
+// ==========================================
+// CERRAR GRUPO (VALIDACIÓN INTELIGENTE Y FORZADO)
+// ==========================================
 adminRouter.put("/grupos/:id/finalizar", async (req, res) => {
   const { id } = req.params;
-  const { force } = req.body; // <-- Detecta si el Admin dio click en "Forzar"
+  const { force } = req.body; // Detecta si el Admin dio click en "Forzar"
 
   try {
-    // 1. Buscamos a los alumnos y las materias REALES del grupo
+    // 1. Buscamos a los alumnos y las materias REALES asignadas a este grupo
     const sqlFaltantes = `
       SELECT u.nombre, u.apellido_paterno, a.nombre_asignatura
       FROM grupo_alumnos ga
@@ -4987,7 +4989,7 @@ adminRouter.put("/grupos/:id/finalizar", async (req, res) => {
       JOIN asignaturas a ON a.id = gad.asignatura_id
       JOIN usuarios u ON u.id = ga.alumno_id
       LEFT JOIN calificaciones c ON c.alumno_id = ga.alumno_id AND c.asignatura_id = a.id AND c.grupo_id = ga.grupo_id
-      WHERE ga.grupo_id = ? AND c.id IS NULL
+      WHERE ga.grupo_id = ? AND (c.id IS NULL OR c.calificacion IS NULL)
     `;
 
     const [faltantes] = await db.query(sqlFaltantes, [id]);
@@ -4999,18 +5001,18 @@ adminRouter.put("/grupos/:id/finalizar", async (req, res) => {
         .map((f) => `${f.nombre} en ${f.nombre_asignatura}`)
         .join(", ");
       return res.status(400).send({
-        requiresConfirmation: true, // <-- Esta bandera activa la pregunta en React
+        requiresConfirmation: true, // <-- Esta bandera activa la pregunta en tu App.js
         message: `Faltan ${faltantes.length} calificaciones por subir en este grupo.\n\nEjemplo: ${ejemplos}...`,
       });
     }
 
-    // 3. Si todo está perfecto, o si el admin decidió FORZAR, cerramos el grupo.
+    // 3. Si no faltan notas, o si el admin decidió FORZAR, cerramos el grupo.
     await db.query("UPDATE grupos SET estatus = 'finalizado' WHERE id = ?", [
       id,
     ]);
     res.send({ message: "Grupo cerrado exitosamente." });
   } catch (error) {
-    console.error("Error al cerrar grupo:", error);
+    console.error("Error crítico al cerrar grupo:", error);
     res
       .status(500)
       .send({ message: "Error interno al intentar cerrar el grupo." });
