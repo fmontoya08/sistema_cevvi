@@ -2352,6 +2352,27 @@ const UsuariosPage = () => {
   });
   const [formDocente, setFormDocente] = useState({ ...formInicial });
 
+  // --- FUNCIÓN PARA DESCARGAR ZIP CON TOKEN DE SEGURIDAD ---
+  const handleDownloadZip = async () => {
+    try {
+      // Usamos api.get para que automáticamente envíe tu Token de Admin
+      const response = await api.get("/admin/exportar-credenciales", {
+        responseType: "blob", // CLAVE: Le decimos a Axios que es un archivo, no texto
+      });
+      // Creamos un link temporal en el navegador y lo "clicamos"
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", "Fotos_Credenciales_Alumnos.zip");
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode.removeChild(link);
+    } catch (error) {
+      console.error("Error descargando ZIP:", error);
+      alert("Hubo un error al descargar el archivo. Verifica tu conexión.");
+    }
+  };
+
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
@@ -2471,14 +2492,9 @@ const UsuariosPage = () => {
           </button>
           {!verEliminados && (
             <>
-              {/* BOTÓN DESCARGAR ZIP */}
+              {/* BOTÓN DESCARGAR ZIP CORREGIDO */}
               <button
-                onClick={() =>
-                  window.open(
-                    "https://api-universidad-c5o8.onrender.com/api/admin/exportar-credenciales",
-                    "_blank",
-                  )
-                }
+                onClick={handleDownloadZip}
                 className="bg-blue-50 border-2 border-blue-200 text-blue-700 px-5 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-blue-100 transition-colors"
               >
                 <Download size={18} /> Exportar ZIP

@@ -949,38 +949,58 @@ apiRouter.post("/login", async (req, res) => {
 apiRouter.post("/recuperar-password", async (req, res) => {
   const { email } = req.body;
   try {
+    // 1. Extraemos TODOS los datos necesarios, incluyendo el correo institucional (email)
     const [users] = await db.query(
-      "SELECT id, nombre, email_personal, matricula FROM usuarios WHERE email = ? OR email_personal = ?",
+      "SELECT id, nombre, email, email_personal, matricula FROM usuarios WHERE email = ? OR email_personal = ? LIMIT 1",
       [email, email],
     );
 
     if (users.length === 0) {
       return res
         .status(404)
-        .send({ message: "No se encontró ningún usuario con este correo." });
+        .send({
+          message: "No se encontró ningún usuario registrado con este correo.",
+        });
     }
 
     const user = users[0];
+
+    // 2. Generar contraseña aleatoria
     const randomPass = "Siglo" + Math.floor(1000 + Math.random() * 9000);
     const hashedPass = await bcrypt.hash(randomPass, 10);
 
-    await db.query("UPDATE usuarios SET password = ? WHERE id = ?", [
-      hashedPass,
-      user.id,
-    ]);
+    // 3. Forzar actualización en la Base de Datos
+    const [updateResult] = await db.query(
+      "UPDATE usuarios SET password = ? WHERE id = ?",
+      [hashedPass, user.id],
+    );
 
-    const correoDestino = user.email_personal || email;
+    if (updateResult.affectedRows === 0) {
+      throw new Error("No se pudo actualizar la base de datos");
+    }
 
+    // 4. Determinar a dónde enviar el correo (preferimos el personal, si no, al institucional)
+    const correoDestino = user.email_personal || user.email;
+
+    // 5. Correo con diseño que SÍ muestra su usuario real
     const htmlContent = `
-      <div style="font-family: Arial; padding: 20px;">
+      <div style="font-family: Arial; padding: 20px; max-width: 600px; margin: 0 auto;">
         <h2 style="color: #a72a34;">Recuperación de Contraseña</h2>
-        <p>Hola ${user.nombre}, se ha restablecido tu contraseña para la Plataforma Universitaria.</p>
-        <p>Tus nuevas credenciales de acceso son:</p>
+        <p>Hola <strong>${user.nombre}</strong>,</p>
+        <p>Se ha restablecido exitosamente tu contraseña para la Plataforma Universitaria.</p>
+        <p>Para ingresar, debes usar estrictamente los siguientes datos:</p>
+        
         <div style="background: #f9f9f9; padding: 15px; border-left: 5px solid #a72a34; margin: 20px 0;">
-          <p><strong>Usuario / Matrícula:</strong> ${user.matricula || "Tu correo"}</p>
-          <p><strong>Nueva Contraseña:</strong> ${randomPass}</p>
+          <p style="margin: 5px 0;"><strong>Usuario (Correo Institucional):</strong> <span style="color: #a72a34;">${user.email}</span></p>
+          <p style="margin: 5px 0;"><strong>Matrícula:</strong> ${user.matricula || "N/A"}</p>
+          <p style="margin: 5px 0;"><strong>Nueva Contraseña:</strong> <span style="font-size: 18px; font-weight: bold;">${randomPass}</span></p>
         </div>
-        <p>Te recomendamos cambiar esta contraseña desde tu perfil una vez que ingreses.</p>
+        
+        <p style="color: #555; font-size: 14px;"><em>* Nota: Asegúrate de iniciar sesión con el correo institucional mostrado arriba, no con tu correo personal. Te recomendamos cambiar tu contraseña desde la pestaña "Mi Perfil" al ingresar.</em></p>
+        
+        <p style="text-align: center; margin-top: 30px;">
+          <a href="https://universidadsigloxxi.com/plataforma/login" style="background-color: #a72a34; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold;">Ir a Iniciar Sesión</a>
+        </p>
       </div>
     `;
 
@@ -991,7 +1011,9 @@ apiRouter.post("/recuperar-password", async (req, res) => {
       html: htmlContent,
     });
 
-    res.send({ message: "Se han enviado las instrucciones a tu correo." });
+    res.send({
+      message: "Se ha restablecido la contraseña y enviado a tu correo.",
+    });
   } catch (error) {
     console.error("Error al recuperar password:", error);
     res
