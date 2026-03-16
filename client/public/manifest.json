@@ -1,6 +1,6 @@
 {
-  "short_name": "Centro Universitário Mexico Siglo XXI",
-  "name": "Portal alumnos - Centro Universitário Mexico Siglo XXI",
+  "short_name": "México Siglo XXI",
+  "name": "Portal Educativo - Centro Universitario México Siglo XXI",
   "icons": [
     {
       "src": "favicon.ico",
@@ -20,6 +20,6 @@
   ],
   "start_url": ".",
   "display": "standalone",
-  "theme_color": "#000000",
+  "theme_color": "#a72a34",
   "background_color": "#ffffff"
 }

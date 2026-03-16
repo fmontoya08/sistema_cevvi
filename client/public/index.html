@@ -1,27 +1,61 @@
 <!doctype html>
-<html lang="en">
+<html lang="es">
   <head>
     <meta charset="utf-8" />
-    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#000000" />
+
+    <!-- Color de la barra del navegador en celulares -->
+    <meta name="theme-color" content="#a72a34" />
+
+    <!-- Iconos -->
+    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
+    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo.png" />
+    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+
+    <!-- ========================================== -->
+    <!-- SEO BÁSICO                                 -->
+    <!-- ========================================== -->
+    <title>Plataforma Educativa | Centro Universitario México Siglo XXI</title>
     <meta
       name="description"
-      content="Web site created using create-react-app"
+      content="Plataforma educativa y de gestión escolar del Centro Universitario México Siglo XXI. Acceso exclusivo para alumnos, docentes y administrativos."
     />
-    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
-    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
-    <title>Sistema Universitario</title>
+    <meta
+      name="keywords"
+      content="universidad siglo xxi, centro universitario mexico siglo xxi, portal alumnos, plataforma educativa, escuela, clases en linea"
+    />
+    <meta name="author" content="Centro Universitario México Siglo XXI" />
+
+    <!-- ========================================== -->
+    <!-- OPEN GRAPH (Facebook, WhatsApp, LinkedIn)  -->
+    <!-- ========================================== -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Portal Educativo | Siglo XXI" />
+    <meta
+      property="og:description"
+      content="Plataforma de gestión académica y aula virtual."
+    />
+    <meta property="og:image" content="%PUBLIC_URL%/logo.png" />
+    <meta
+      property="og:url"
+      content="https://universidadsigloxxi.com/plataforma"
+    />
+    <meta
+      property="og:site_name"
+      content="Centro Universitario México Siglo XXI"
+    />
+
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+
     <!-- Configuración personalizada de Tailwind -->
     <script>
       tailwind.config = {
         theme: {
           extend: {
             colors: {
-              principal: "#f46633" /* Naranja principal */,
-              secundario: "#90868e" /* Gris secundario */,
+              principal: "#a72a34" /* Rojo Vino Institucional */,
+              secundario: "#bb9a5a" /* Dorado Institucional */,
             },
           },
         },
@@ -29,7 +63,10 @@
     </script>
   </head>
   <body>
-    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <noscript
+      >Necesitas activar JavaScript para poder usar la plataforma de la
+      universidad.</noscript
+    >
     <div id="root"></div>
   </body>
 </html>
