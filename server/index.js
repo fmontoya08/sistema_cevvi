@@ -956,11 +956,9 @@ apiRouter.post("/recuperar-password", async (req, res) => {
     );
 
     if (users.length === 0) {
-      return res
-        .status(404)
-        .send({
-          message: "No se encontró ningún usuario registrado con este correo.",
-        });
+      return res.status(404).send({
+        message: "No se encontró ningún usuario registrado con este correo.",
+      });
     }
 
     const user = users[0];
@@ -3885,18 +3883,13 @@ adminRouter.post("/adeudos/:id/marcar-pagado", async (req, res) => {
 
 // --- FIN: RUTAS DE GESTIÓN FINANCIERA ---
 
-// ... (Ahora sí, la ruta adminRouter.get("/usuarios", ...)
-
-// --- RUTAS DE USUARIOS (CON SOFT DELETE) ---
-
-// 1. GET: Lista de Usuarios (SOLO ACTIVOS)
-// --- RUTA: OBTENER USUARIOS (CORREGIDA PARA VER TODOS LOS DATOS) ---
+// --- RUTA: OBTENER USUARIOS (CORREGIDA PARA VER TODOS LOS DATOS Y EL ESTADO ACADÉMICO) ---
 adminRouter.get("/usuarios", async (req, res) => {
   try {
     const sql = `
       SELECT 
         u.id, u.nombre, u.apellido_paterno, u.apellido_materno, 
-        u.email, u.email_personal, u.rol, u.matricula, u.foto_perfil, u.activo,
+        u.email, u.email_personal, u.rol, u.matricula, u.foto_perfil, u.activo, u.estado_academico,
         u.telefono, u.curp, u.genero, u.edad, u.modalidad,
         u.domicilio, u.colonia, u.contacto_emergencia_nombre, u.contacto_emergencia_telefono,
         u.escuela_procedencia, u.carrera_id, u.sede_id,
@@ -3914,6 +3907,91 @@ adminRouter.get("/usuarios", async (req, res) => {
   } catch (error) {
     console.error("Error al cargar usuarios:", error);
     res.status(500).send({ message: "Error al obtener usuarios" });
+  }
+});
+
+// --- RUTA: ACTUALIZAR USUARIO (AHORA GUARDA EL ESTADO ACADÉMICO) ---
+adminRouter.put("/usuarios/:id", async (req, res) => {
+  const {
+    nombre,
+    apellido_paterno,
+    apellido_materno,
+    email,
+    email_personal,
+    password,
+    rol,
+    genero,
+    telefono,
+    curp,
+    fecha_nacimiento,
+    edad,
+    domicilio,
+    colonia,
+    contacto_emergencia_nombre,
+    contacto_emergencia_telefono,
+    escuela_procedencia,
+    carrera_id,
+    sede_id,
+    modalidad,
+    estado_academico,
+  } = req.body;
+
+  if (curp && !CURP_REGEX.test(curp)) {
+    return res
+      .status(400)
+      .send({ message: "El formato de la CURP no es válido." });
+  }
+
+  let sql, params;
+
+  // Campos base a actualizar
+  const baseQuery = `nombre=?, apellido_paterno=?, apellido_materno=?, email=?, email_personal=?, 
+                     rol=?, genero=?, telefono=?, curp=?, fecha_nacimiento=?, edad=?, 
+                     domicilio=?, colonia=?, contacto_emergencia_nombre=?, contacto_emergencia_telefono=?, 
+                     escuela_procedencia=?, carrera_id=?, sede_id=?, modalidad=?, estado_academico=?`;
+
+  const baseParams = [
+    nombre,
+    apellido_paterno || null,
+    apellido_materno || null,
+    email,
+    email_personal || null,
+    rol,
+    genero || null,
+    telefono || null,
+    curp || null,
+    fecha_nacimiento || null,
+    edad || null,
+    domicilio || null,
+    colonia || null,
+    contacto_emergencia_nombre || null,
+    contacto_emergencia_telefono || null,
+    escuela_procedencia || null,
+    carrera_id || null,
+    sede_id || null,
+    modalidad || null,
+    estado_academico || "activo",
+  ];
+
+  if (password) {
+    const hashedPassword = await bcrypt.hash(password, 10);
+    sql = `UPDATE usuarios SET ${baseQuery}, password=? WHERE id=?`;
+    params = [...baseParams, hashedPassword, req.params.id];
+  } else {
+    sql = `UPDATE usuarios SET ${baseQuery} WHERE id=?`;
+    params = [...baseParams, req.params.id];
+  }
+
+  try {
+    await db.query(sql, params);
+    res.send({ message: "Usuario actualizado" });
+  } catch (error) {
+    if (error.code === "ER_DUP_ENTRY")
+      return res
+        .status(409)
+        .send({ message: "El email o la CURP ya están en uso." });
+    console.error("Error al actualizar usuario:", error);
+    res.status(500).send({ message: "Error al actualizar usuario" });
   }
 });
 

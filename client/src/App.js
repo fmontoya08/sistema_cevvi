@@ -1545,15 +1545,6 @@ const LoginPage = () => {
           >
             {loading ? "Cargando..." : "Entrar"}
           </button>
-
-          {/* Botón */}
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-bold text-white bg-[#a72a34] hover:bg-[#8f242d] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#a72a34] transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
-          >
-            {loading ? "Cargando..." : "Entrar"}
-          </button>
         </form>
 
         <div className="text-center mt-6 space-y-2">
@@ -1586,12 +1577,6 @@ const LoginPage = () => {
             © {new Date().getFullYear()} Centro Universitario Siglo XXI
           </p>
         </div>
-
-        <div className="text-center mt-4">
-          <p className="text-xs text-gray-400">
-            © {new Date().getFullYear()} Centro Universitario Siglo XXI
-          </p>
-        </div>
       </div>
     </div>
   );
@@ -1610,6 +1595,25 @@ const DashboardPage = () => {
     recientes: [],
   });
   const [loading, setLoading] = useState(true);
+
+  // --- FUNCIÓN PARA DESCARGAR ZIP CON TOKEN DE SEGURIDAD ---
+  const handleDownloadZip = async () => {
+    try {
+      const response = await api.get("/admin/exportar-credenciales", {
+        responseType: "blob", // Le decimos que vamos a recibir un archivo
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", "Fotos_Credenciales_Alumnos.zip");
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode.removeChild(link);
+    } catch (error) {
+      console.error("Error descargando ZIP:", error);
+      alert("Hubo un error al descargar el archivo. Verifica tu conexión.");
+    }
+  };
 
   useEffect(() => {
     const cargarStats = async () => {
@@ -1715,12 +1719,7 @@ const DashboardPage = () => {
                   </span>
                 </Link>
                 <button
-                  onClick={() =>
-                    window.open(
-                      "https://api-universidad-c5o8.onrender.com/api/admin/exportar-credenciales",
-                      "_blank",
-                    )
-                  }
+                  onClick={handleDownloadZip}
                   className="bg-blue-50 text-blue-600 px-5 py-3 rounded-xl font-bold flex items-center gap-2 border border-blue-100 hover:bg-blue-100 transition-colors"
                 >
                   <Download size={18} /> Exportar Fotos (ZIP)
@@ -1867,6 +1866,7 @@ const UserModal = ({
           userToEdit.contacto_emergencia_telefono || "",
         escuela_procedencia: userToEdit.escuela_procedencia || "",
         modalidad: userToEdit.modalidad || "",
+        estado_academico: userToEdit.estado_academico || "activo", // <--- NUEVO
         rol: userToEdit.rol,
         carrera_id:
           userToEdit.carrera_id || userToEdit.carrera_interes_id || "",
@@ -1900,7 +1900,7 @@ const UserModal = ({
               Editar Expediente del Usuario
             </h3>
             <p className="text-xs text-gray-400">
-              Actualiza la información completa.
+              Actualiza la información completa y estatus académico.
             </p>
           </div>
           <button
@@ -2095,6 +2095,37 @@ const UserModal = ({
                   {(userToEdit.rol === "alumno" ||
                     userToEdit.rol === "aspirante") && (
                     <>
+                      {/* --- NUEVO SELECTOR DE ESTADO ACADÉMICO --- */}
+                      <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-200">
+                        <label className="block text-xs font-black text-yellow-800 uppercase mb-1">
+                          Estatus del Alumno en el Sistema
+                        </label>
+                        <select
+                          className="w-full p-2 border border-yellow-300 rounded-lg bg-white font-bold focus:ring-2 focus:ring-yellow-500 outline-none"
+                          value={form.estado_academico}
+                          onChange={(e) =>
+                            setForm({
+                              ...form,
+                              estado_academico: e.target.value,
+                            })
+                          }
+                        >
+                          <option value="activo">✅ Activo (Normal)</option>
+                          <option value="baja_temporal">
+                            ⏸️ Baja Temporal (Bloqueado)
+                          </option>
+                          <option value="baja_definitiva">
+                            ❌ Baja Definitiva (Bloqueado)
+                          </option>
+                          <option value="suspendido">
+                            ⛔ Suspendido (Bloqueado)
+                          </option>
+                          <option value="egresado">
+                            🎓 Egresado (Puede entrar)
+                          </option>
+                        </select>
+                      </div>
+
                       <div>
                         <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
                           Carrera
@@ -3156,6 +3187,23 @@ const UserDetailModal = ({ user, onClose }) => {
                 <span className="bg-white/20 px-3 py-1 rounded-lg text-sm font-medium backdrop-blur-sm font-mono border border-white/10">
                   {user.matricula || "S/N"}
                 </span>
+
+                {/* --- NUEVO: ETIQUETA DE ESTADO ACADÉMICO --- */}
+                <span
+                  className={`px-3 py-1 rounded-lg text-sm font-bold uppercase tracking-wide border 
+                  ${
+                    user.estado_academico === "activo"
+                      ? "bg-green-500/20 border-green-400/50 text-green-100"
+                      : user.estado_academico === "egresado"
+                        ? "bg-blue-500/20 border-blue-400/50 text-blue-100"
+                        : "bg-red-500/80 border-red-400 text-white shadow-lg"
+                  }`}
+                >
+                  {user.estado_academico
+                    ? user.estado_academico.replace("_", " ")
+                    : "ACTIVO"}
+                </span>
+                {/* --- FIN NUEVO --- */}
               </div>
             </div>
           </div>
