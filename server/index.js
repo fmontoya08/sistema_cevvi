@@ -9575,7 +9575,6 @@ cron.schedule("1 0 1 * *", async () => {
   }
 });
 
-const PORT = process.env.PORT || 3001; // <-- ESTO ES VITAL PARA RENDER
 app.listen(PORT, () => {
-  console.log(`Servidor corriendo en el puerto ${PORT}`);
+  console.log(`Servidor corriendo en http://localhost:${PORT}`);
 });
