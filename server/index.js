@@ -1325,7 +1325,7 @@ apiRouter.post(
   },
 );
 
-// --- RUTA: CALIFICAR GRUPO COMPLETO (CON CORREOS) ---
+// --- RUTA: CALIFICAR GRUPO COMPLETO (CON CORREOS INTELIGENTES) ---
 apiRouter.post("/calificar-grupo-completo", async (req, res) => {
   if (
     req.user.rol !== "admin" &&
@@ -1358,23 +1358,41 @@ apiRouter.post("/calificar-grupo-completo", async (req, res) => {
 
     for (const cal of calificaciones) {
       const alumnoId = cal.alumno_id;
-      let calificacionGuardada = null;
       const calNum = parseFloat(cal.calificacion);
 
+      // 1. Buscamos si el alumno ya tenía una calificación guardada
+      const [notaAnteriorQuery] = await connection.query(
+        "SELECT calificacion FROM calificaciones WHERE alumno_id = ? AND asignatura_id = ? AND grupo_id = ?",
+        [alumnoId, asignatura_id, grupo_id],
+      );
+
+      // La calificación anterior, si existía
+      const notaAnterior =
+        notaAnteriorQuery.length > 0
+          ? parseFloat(notaAnteriorQuery[0].calificacion)
+          : null;
+      let calificacionGuardada = null;
+
+      // 2. Guardamos o actualizamos en BD
       if (isNaN(calNum) || calNum < 0 || calNum > 100) {
         await connection.query(
           "INSERT INTO calificaciones (alumno_id, asignatura_id, grupo_id, calificacion) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE calificacion = ?",
-          [cal.alumno_id, asignatura_id, grupo_id, null, null],
+          [alumnoId, asignatura_id, grupo_id, null, null],
         );
       } else {
         await connection.query(
           "INSERT INTO calificaciones (alumno_id, asignatura_id, grupo_id, calificacion) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE calificacion = ?",
-          [cal.alumno_id, asignatura_id, grupo_id, calNum, calNum],
+          [alumnoId, asignatura_id, grupo_id, calNum, calNum],
         );
         calificacionGuardada = calNum;
       }
 
-      if (calificacionGuardada !== null) {
+      // 3. SOLO ENVIAMOS CORREO/NOTIFICACIÓN SI HUBO UN CAMBIO REAL
+      // Si es un número válido y es diferente a lo que ya estaba en la base de datos
+      if (
+        calificacionGuardada !== null &&
+        calificacionGuardada !== notaAnterior
+      ) {
         try {
           const mensaje = `Nueva calificación en ${nombreMateria}: ${calificacionGuardada}`;
           const linkDestino = "/alumno/dashboard";
@@ -1405,12 +1423,12 @@ apiRouter.post("/calificar-grupo-completo", async (req, res) => {
             }).catch((e) => console.error(e));
           }
 
-          // C) CORREO ELECTRÓNICO (¡AQUÍ ESTÁ LA MAGIA!)
+          // C) CORREO ELECTRÓNICO
           enviarAlertaCorreo(
             alumnoId,
             "🎓 Calificación Final Publicada",
             "Acta de Calificaciones",
-            `<p>Tu calificación final para la materia <strong>${nombreMateria}</strong> ha sido publicada en el sistema.</p>
+            `<p>Tu calificación final para la materia <strong>${nombreMateria}</strong> ha sido publicada o actualizada en el sistema.</p>
              <p>Calificación obtenida: <strong style="font-size:18px; color:#a72a34;">${calificacionGuardada} / 100</strong>.</p>`,
           );
         } catch (e) {
@@ -2892,6 +2910,7 @@ adminRouter.get("/calificaciones/:grupoId/:asignaturaId", async (req, res) => {
 });
 
 // --- RUTA: GUARDAR LOTE (MÉTODO CLÁSICO CON CORREOS) ---
+// --- RUTA: GUARDAR LOTE (MÉTODO CLÁSICO CON CORREOS INTELIGENTES) ---
 adminRouter.post("/calificaciones/guardar-lote", async (req, res) => {
   const { grupo_id, asignatura_id, calificaciones } = req.body;
 
@@ -2906,50 +2925,65 @@ adminRouter.post("/calificaciones/guardar-lote", async (req, res) => {
     const nombreMateria = materiaRows[0]?.nombre_asignatura || "Materia";
 
     for (const item of calificaciones) {
+      // 1. Buscamos si el alumno ya tenía una calificación guardada
+      const [notaAnteriorQuery] = await connection.query(
+        "SELECT calificacion FROM calificaciones WHERE alumno_id = ? AND asignatura_id = ? AND grupo_id = ?",
+        [item.alumno_id, asignatura_id, grupo_id],
+      );
+      const notaAnterior =
+        notaAnteriorQuery.length > 0
+          ? parseFloat(notaAnteriorQuery[0].calificacion)
+          : null;
+      const notaNueva = parseFloat(item.calificacion);
+
+      // 2. Guardamos en BD
       await connection.query(
         `INSERT INTO calificaciones (alumno_id, asignatura_id, grupo_id, calificacion) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE calificacion = VALUES(calificacion)`,
         [item.alumno_id, asignatura_id, grupo_id, item.calificacion],
       );
 
-      const mensaje = `Tu calificación en ${nombreMateria} ha sido actualizada: ${item.calificacion}`;
+      // 3. SOLO NOTIFICAMOS SI LA CALIFICACIÓN ES DIFERENTE O NUEVA
+      if (!isNaN(notaNueva) && notaNueva !== notaAnterior) {
+        const mensaje = `Tu calificación en ${nombreMateria} ha sido actualizada: ${item.calificacion}`;
 
-      // A) Campanita
-      await connection.query(
-        "INSERT INTO notificaciones (usuario_id, mensaje, leido, fecha, tipo) VALUES (?, ?, 0, NOW(), 'calificacion')",
-        [item.alumno_id, mensaje],
-      );
+        // A) Campanita
+        await connection.query(
+          "INSERT INTO notificaciones (usuario_id, mensaje, leido, fecha, tipo) VALUES (?, ?, 0, NOW(), 'calificacion')",
+          [item.alumno_id, mensaje],
+        );
 
-      // B) Push Android
-      const [tokens] = await connection.query(
-        "SELECT token FROM push_tokens WHERE user_id = ?",
-        [item.alumno_id],
-      );
-      if (tokens.length > 0) {
-        const expoMessages = tokens.map((t) => ({
-          to: t.token,
-          sound: "default",
-          title: "Nueva Calificación",
-          body: mensaje,
-          data: { url: "/alumno/mis-calificaciones" },
-        }));
-        await fetch("https://exp.host/--/api/v2/push/send", {
-          method: "POST",
-          headers: {
-            Accept: "application/json",
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(expoMessages),
-        });
+        // B) Push Android
+        const [tokens] = await connection.query(
+          "SELECT token FROM push_tokens WHERE user_id = ?",
+          [item.alumno_id],
+        );
+        if (tokens.length > 0) {
+          const expoMessages = tokens.map((t) => ({
+            to: t.token,
+            sound: "default",
+            title: "Nueva Calificación",
+            body: mensaje,
+            data: { url: "/alumno/mis-calificaciones" },
+          }));
+          await fetch("https://exp.host/--/api/v2/push/send", {
+            method: "POST",
+            headers: {
+              Accept: "application/json",
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(expoMessages),
+          });
+        }
+
+        // C) CORREO ELECTRÓNICO
+        enviarAlertaCorreo(
+          item.alumno_id,
+          "🎓 Calificación Final Publicada",
+          "Acta de Calificaciones",
+          `<p>Tu calificación final para la materia <strong>${nombreMateria}</strong> ha sido publicada en el sistema.</p>
+           <p>Calificación obtenida: <strong style="font-size:18px; color:#a72a34;">${item.calificacion} / 100</strong>.</p>`,
+        );
       }
-
-      // C) CORREO ELECTRÓNICO
-      enviarAlertaCorreo(
-        item.alumno_id,
-        "🎓 Calificación Final Publicada",
-        "Acta de Calificaciones",
-        `<p>Tu calificación final para la materia <strong>${nombreMateria}</strong> ha sido publicada en el sistema.</p>
-         <p>Calificación obtenida: <strong style="font-size:18px; color:#a72a34;">${item.calificacion} / 100</strong>.</p>`,
-      );
     }
 
     await connection.commit();
