@@ -46,6 +46,12 @@ type User = {
   nombre: string;
   apellido_paterno: string;
   rol: "alumno" | "docente" | "admin" | "aspirante";
+  foto_perfil?: string;
+  matricula?: string;
+  telefono?: string;
+  fecha_nacimiento?: string;
+  nombre_carrera?: string;
+  nombre_sede?: string;
 };
 
 type AuthContextType = {

@@ -1325,10 +1325,13 @@ apiRouter.post(
   },
 );
 
-// --- RUTA CORREGIDA: CALIFICAR GRUPO (CON NOMBRE DE MATERIA) ---
+// --- RUTA: CALIFICAR GRUPO COMPLETO (CON CORREOS) ---
 apiRouter.post("/calificar-grupo-completo", async (req, res) => {
-  // 1. Verificación de permisos
-  if (req.user.rol !== "admin" && req.user.rol !== "docente") {
+  if (
+    req.user.rol !== "admin" &&
+    req.user.rol !== "docente" &&
+    req.user.rol !== "control_escolar"
+  ) {
     return res.status(403).send({ message: "Acceso denegado." });
   }
 
@@ -1347,20 +1350,17 @@ apiRouter.post("/calificar-grupo-completo", async (req, res) => {
   try {
     await connection.beginTransaction();
 
-    // A) OBTENER NOMBRE DE LA MATERIA (Para el mensaje bonito)
     const [materia] = await connection.query(
       "SELECT nombre_asignatura FROM asignaturas WHERE id = ?",
       [asignatura_id],
     );
     const nombreMateria = materia[0]?.nombre_asignatura || "una materia";
 
-    // 2. Iterar y guardar
     for (const cal of calificaciones) {
       const alumnoId = cal.alumno_id;
       let calificacionGuardada = null;
       const calNum = parseFloat(cal.calificacion);
 
-      // Guardar en BD (Tu lógica original)
       if (isNaN(calNum) || calNum < 0 || calNum > 100) {
         await connection.query(
           "INSERT INTO calificaciones (alumno_id, asignatura_id, grupo_id, calificacion) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE calificacion = ?",
@@ -1374,10 +1374,8 @@ apiRouter.post("/calificar-grupo-completo", async (req, res) => {
         calificacionGuardada = calNum;
       }
 
-      // --- 3. NOTIFICACIONES PERSONALIZADAS ---
       if (calificacionGuardada !== null) {
         try {
-          // MENSAJE MEJORADO: Incluye el nombre de la materia
           const mensaje = `Nueva calificación en ${nombreMateria}: ${calificacionGuardada}`;
           const linkDestino = "/alumno/dashboard";
 
@@ -1392,7 +1390,6 @@ apiRouter.post("/calificar-grupo-completo", async (req, res) => {
             "SELECT token FROM push_tokens WHERE user_id = ?",
             [alumnoId],
           );
-
           if (tokens.length > 0) {
             const expoMessages = tokens.map((t) => ({
               to: t.token,
@@ -1401,13 +1398,21 @@ apiRouter.post("/calificar-grupo-completo", async (req, res) => {
               body: mensaje,
               data: { url: linkDestino },
             }));
-
             fetch("https://exp.host/--/api/v2/push/send", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(expoMessages),
             }).catch((e) => console.error(e));
           }
+
+          // C) CORREO ELECTRÓNICO (¡AQUÍ ESTÁ LA MAGIA!)
+          enviarAlertaCorreo(
+            alumnoId,
+            "🎓 Calificación Final Publicada",
+            "Acta de Calificaciones",
+            `<p>Tu calificación final para la materia <strong>${nombreMateria}</strong> ha sido publicada en el sistema.</p>
+             <p>Calificación obtenida: <strong style="font-size:18px; color:#a72a34;">${calificacionGuardada} / 100</strong>.</p>`,
+          );
         } catch (e) {
           console.error(e);
         }
@@ -2886,7 +2891,7 @@ adminRouter.get("/calificaciones/:grupoId/:asignaturaId", async (req, res) => {
   }
 });
 
-// --- RUTA ACTUALIZADA: Guardar Calificaciones + Push Android ---
+// --- RUTA: GUARDAR LOTE (MÉTODO CLÁSICO CON CORREOS) ---
 adminRouter.post("/calificaciones/guardar-lote", async (req, res) => {
   const { grupo_id, asignatura_id, calificaciones } = req.body;
 
@@ -2894,41 +2899,32 @@ adminRouter.post("/calificaciones/guardar-lote", async (req, res) => {
   try {
     await connection.beginTransaction();
 
-    // 1. Nombre de materia
     const [materiaRows] = await connection.query(
       "SELECT nombre_asignatura FROM asignaturas WHERE id = ?",
       [asignatura_id],
     );
     const nombreMateria = materiaRows[0]?.nombre_asignatura || "Materia";
 
-    // 2. Procesar cada alumno
     for (const item of calificaciones) {
-      // A) Guardar en BD (Calificaciones)
       await connection.query(
-        `
-        INSERT INTO calificaciones (alumno_id, asignatura_id, grupo_id, calificacion)
-        VALUES (?, ?, ?, ?)
-        ON DUPLICATE KEY UPDATE calificacion = VALUES(calificacion)
-      `,
+        `INSERT INTO calificaciones (alumno_id, asignatura_id, grupo_id, calificacion) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE calificacion = VALUES(calificacion)`,
         [item.alumno_id, asignatura_id, grupo_id, item.calificacion],
       );
 
-      // B) Guardar en BD (Notificaciones - Campanita)
       const mensaje = `Tu calificación en ${nombreMateria} ha sido actualizada: ${item.calificacion}`;
+
+      // A) Campanita
       await connection.query(
         "INSERT INTO notificaciones (usuario_id, mensaje, leido, fecha, tipo) VALUES (?, ?, 0, NOW(), 'calificacion')",
         [item.alumno_id, mensaje],
       );
 
-      // C) --- ENVIAR PUSH (ANDROID/EXPO) ---
-      // 1. Buscamos si el alumno tiene celular registrado
+      // B) Push Android
       const [tokens] = await connection.query(
         "SELECT token FROM push_tokens WHERE user_id = ?",
         [item.alumno_id],
       );
-
       if (tokens.length > 0) {
-        // Preparamos los mensajes para Expo
         const expoMessages = tokens.map((t) => ({
           to: t.token,
           sound: "default",
@@ -2936,17 +2932,6 @@ adminRouter.post("/calificaciones/guardar-lote", async (req, res) => {
           body: mensaje,
           data: { url: "/alumno/mis-calificaciones" },
         }));
-
-        // CORREO DE CALIFICACIÓN FINAL
-        enviarAlertaCorreo(
-          item.alumno_id,
-          "🎓 Calificación Final Publicada",
-          "Acta de Calificaciones",
-          `<p>Tu calificación final para la materia <strong>${nombreMateria}</strong> ha sido publicada.</p>
-             <p>Calificación obtenida: <strong style="font-size:18px; color:#a72a34;">${item.calificacion} / 100</strong>.</p>`,
-        );
-
-        // Enviamos a Expo
         await fetch("https://exp.host/--/api/v2/push/send", {
           method: "POST",
           headers: {
@@ -2956,6 +2941,15 @@ adminRouter.post("/calificaciones/guardar-lote", async (req, res) => {
           body: JSON.stringify(expoMessages),
         });
       }
+
+      // C) CORREO ELECTRÓNICO
+      enviarAlertaCorreo(
+        item.alumno_id,
+        "🎓 Calificación Final Publicada",
+        "Acta de Calificaciones",
+        `<p>Tu calificación final para la materia <strong>${nombreMateria}</strong> ha sido publicada en el sistema.</p>
+         <p>Calificación obtenida: <strong style="font-size:18px; color:#a72a34;">${item.calificacion} / 100</strong>.</p>`,
+      );
     }
 
     await connection.commit();

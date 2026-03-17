@@ -11,13 +11,12 @@ import { useAuth } from "../../context/AuthContext"; // Ajusta ruta
 import { Ionicons } from "@expo/vector-icons";
 
 export default function PerfilScreen() {
-  const { user, logout } = useAuth();
+  const { user, logout, API_URL } = useAuth();
 
   if (!user) return null;
 
-  // URL base para imágenes (ajústala a tu IP o dominio real)
-  // Nota: En AuthContext.tsx tienes http://192.168.100.87:3001/api, usa la base para uploads
-  const BASE_URL_UPLOADS = "http://192.168.100.87:3001/uploads/perfiles/";
+  // URL base para imágenes (usar API_URL para producción)
+  const BASE_URL_UPLOADS = API_URL.replace("/api", "/uploads") + "perfiles/";
 
   const fotoUrl = user.foto_perfil
     ? `${BASE_URL_UPLOADS}${user.foto_perfil}`
