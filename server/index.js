@@ -778,16 +778,6 @@ const recursosStorage = multer.diskStorage({
 
 const uploadRecurso = multer({ storage: recursosStorage });
 
-// Multer para Biblioteca
-const bibliotecaStorage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, bibliotecaDir),
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    cb(null, "biblio_" + uniqueSuffix + path.extname(file.originalname));
-  },
-});
-const uploadBiblioteca = multer({ storage: bibliotecaStorage });
-
 // --- INICIA NUEVO CÓDIGO (AGREGAR) ---
 // Configuración de Multer para FOTOS DE PERFIL
 const perfilesStorage = multer.diskStorage({
@@ -9523,46 +9513,6 @@ alumnoRouter.get("/mis-calificaciones", async (req, res) => {
   }
 });
 // --- FIN: RUTA HISTORIAL DE CALIFICACIONES (ALUMNO) ---
-
-// ==========================================
-// FUNCIÓN GLOBAL: ENVIAR ALERTAS POR CORREO
-// ==========================================
-async function enviarAlertaCorreo(usuarioId, asunto, titulo, mensajeHtml) {
-  try {
-    const [user] = await db.query(
-      "SELECT email_personal, email, nombre FROM usuarios WHERE id = ?",
-      [usuarioId],
-    );
-    if (user.length === 0) return;
-
-    const correoDestino = user[0].email_personal || user[0].email;
-    if (!correoDestino) return;
-
-    const htmlContent = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 10px; overflow: hidden;">
-        <div style="background-color: #a72a34; padding: 20px; text-align: center;">
-          <h2 style="color: white; margin: 0;">${titulo}</h2>
-        </div>
-        <div style="padding: 30px; color: #333;">
-          <p>Hola <strong>${user[0].nombre}</strong>,</p>
-          ${mensajeHtml}
-          <p style="text-align: center; margin-top: 30px;">
-            <a href="https://universidadsigloxxi.com/plataforma" style="background-color: #a72a34; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold;">Ir a la Plataforma</a>
-          </p>
-        </div>
-      </div>
-    `;
-
-    await transporter.sendMail({
-      from: '"Universidad Siglo XXI" <contacto@puntocerodigital.com.mx>',
-      to: correoDestino,
-      subject: asunto,
-      html: htmlContent,
-    });
-  } catch (error) {
-    console.error("Error enviando alerta correo:", error);
-  }
-}
 
 // ==========================================
 // CRON JOB: MENSUALIDADES AUTOMÁTICAS
