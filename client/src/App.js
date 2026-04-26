@@ -105,6 +105,7 @@ import {
   PlusCircle,
   PenTool, // <-- NUEVO PARA LA PIZARRA
   Megaphone,
+  Library,
   AlertOctagon,
 } from "lucide-react";
 import FullCalendar from "@fullcalendar/react";
@@ -747,6 +748,12 @@ const AdminLayout = () => {
       roles: ["admin"],
     },
     {
+      icon: Library,
+      label: "Biblioteca Virtual",
+      path: "/admin/biblioteca",
+      roles: ["admin", "control_escolar"],
+    },
+    {
       icon: FileText,
       label: "Planes de Estudio",
       path: "/planes-estudio",
@@ -959,6 +966,7 @@ const DocenteLayout = () => {
   const navItems = [
     { icon: Home, label: "Mis Cursos", path: "/docente/dashboard" },
     { icon: Mail, label: "Correo Institucional", path: "/docente/correo" },
+    { icon: Library, label: "Biblioteca Virtual", path: "/docente/biblioteca" },
     { icon: UploadCloud, label: "Mi Nube", path: "/docente/mi-nube" },
     { icon: Calendar, label: "Calendario", path: "/docente/calendario" },
     // Puedes agregar más items aquí si el docente tiene más secciones
@@ -1150,6 +1158,7 @@ const AlumnoLayout = () => {
       path: "/alumno/mis-calificaciones",
     },
     { icon: Calendar, label: "Calendario", path: "/alumno/calendario" },
+    { icon: Library, label: "Biblioteca Virtual", path: "/alumno/biblioteca" },
     { icon: User, label: "Mi Perfil", path: "/alumno/mi-perfil" },
     { icon: Mail, label: "Correo Institucional", path: "/alumno/correo" },
     { icon: PenTool, label: "Taller Creativo", path: "/alumno/pizarra" },
@@ -1314,6 +1323,246 @@ const AlumnoLayout = () => {
           <Outlet />
         </div>
       </main>
+    </div>
+  );
+};
+
+// --- COMPONENTE BIBLIOTECA VIRTUAL ---
+const BibliotecaPage = () => {
+  const { user } = useAuth();
+  const [archivos, setArchivos] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [showModal, setShowModal] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+
+  const [form, setForm] = useState({
+    titulo: "",
+    descripcion: "",
+    archivo: null,
+  });
+
+  const fetchArchivos = async () => {
+    try {
+      setLoading(true);
+      const { data } = await api.get("/biblioteca");
+      setArchivos(data);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchArchivos();
+  }, []);
+
+  const handleUpload = async (e) => {
+    e.preventDefault();
+    if (!form.archivo) return alert("Selecciona un archivo");
+    setIsUploading(true);
+
+    const formData = new FormData();
+    formData.append("titulo", form.titulo);
+    formData.append("descripcion", form.descripcion);
+    formData.append("archivo", form.archivo);
+
+    try {
+      await api.post("/admin/biblioteca", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      alert("Archivo subido con éxito");
+      setShowModal(false);
+      setForm({ titulo: "", descripcion: "", archivo: null });
+      fetchArchivos();
+    } catch (error) {
+      alert("Error al subir archivo");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (window.confirm("¿Eliminar este archivo de la biblioteca de todos?")) {
+      try {
+        await api.delete(`/admin/biblioteca/${id}`);
+        fetchArchivos();
+      } catch (e) {
+        alert("Error al eliminar");
+      }
+    }
+  };
+
+  const getIcon = (tipo) => {
+    switch (tipo) {
+      case "pdf":
+        return <FileText className="text-red-500" size={32} />;
+      case "video":
+        return <Video className="text-purple-500" size={32} />;
+      case "imagen":
+        return <Camera className="text-blue-500" size={32} />;
+      case "word":
+        return <FileText className="text-blue-600" size={32} />;
+      case "excel":
+        return <FileText className="text-green-600" size={32} />;
+      case "powerpoint":
+        return <FileText className="text-orange-500" size={32} />;
+      default:
+        return <FileIcon className="text-gray-500" size={32} />;
+    }
+  };
+
+  const filtrados = archivos.filter((a) =>
+    a.titulo.toLowerCase().includes(searchTerm.toLowerCase()),
+  );
+
+  return (
+    <div className="space-y-6 max-w-7xl mx-auto">
+      <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-800 flex items-center gap-3">
+            <div className="p-3 bg-[#a72a34] text-white rounded-xl">
+              <Library size={28} />
+            </div>
+            Biblioteca Virtual
+          </h1>
+          <p className="text-gray-500 mt-2 text-lg ml-16">
+            Acervo digital de la institución.
+          </p>
+        </div>
+        {(user.rol === "admin" || user.rol === "control_escolar") && (
+          <button
+            onClick={() => setShowModal(true)}
+            className="bg-[#a72a34] text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-[#802028]"
+          >
+            <UploadCloud size={20} /> Subir Material
+          </button>
+        )}
+      </div>
+
+      <div className="relative">
+        <Search className="absolute left-4 top-3.5 text-gray-400" size={20} />
+        <input
+          type="text"
+          placeholder="Buscar documento..."
+          className="w-full pl-12 pr-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#a72a34]"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+        />
+      </div>
+
+      {loading ? (
+        <p className="text-center py-10">Cargando biblioteca...</p>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {filtrados.length === 0 && (
+            <p className="col-span-full text-center py-10 text-gray-500 bg-white rounded-xl border border-dashed">
+              No hay archivos.
+            </p>
+          )}
+          {filtrados.map((a) => (
+            <div
+              key={a.id}
+              className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all flex flex-col justify-between"
+            >
+              <div>
+                <div className="flex justify-between items-start mb-3">
+                  <div className="p-2 bg-gray-50 rounded-xl">
+                    {getIcon(a.tipo)}
+                  </div>
+                  {(user.rol === "admin" || user.rol === "control_escolar") && (
+                    <button
+                      onClick={() => handleDelete(a.id)}
+                      className="text-gray-400 hover:text-red-500"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  )}
+                </div>
+                <h3
+                  className="font-bold text-gray-800 line-clamp-2"
+                  title={a.titulo}
+                >
+                  {a.titulo}
+                </h3>
+                <p className="text-xs text-gray-500 mt-1 line-clamp-2">
+                  {a.descripcion || "Sin descripción"}
+                </p>
+              </div>
+              <div className="mt-4 pt-4 border-t border-gray-50">
+                <a
+                  href={`https://api-universidad-c5o8.onrender.com/uploads/biblioteca/${a.ruta_archivo}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="w-full bg-blue-50 text-blue-700 py-2 rounded-lg font-bold flex items-center justify-center gap-2 hover:bg-blue-100 transition-colors"
+                >
+                  <Download size={16} /> Abrir / Descargar
+                </a>
+                <p className="text-[10px] text-gray-400 text-center mt-2">
+                  Subido: {new Date(a.fecha_subida).toLocaleDateString()}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {showModal && (
+        <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-50 p-4">
+          <form
+            onSubmit={handleUpload}
+            className="bg-white p-6 rounded-2xl w-full max-w-md shadow-2xl space-y-4"
+          >
+            <h3 className="font-bold text-xl mb-4 border-b pb-2">
+              Subir a Biblioteca
+            </h3>
+            <input
+              required
+              placeholder="Título del documento"
+              className="w-full p-3 border rounded-xl"
+              value={form.titulo}
+              onChange={(e) => setForm({ ...form, titulo: e.target.value })}
+            />
+            <textarea
+              placeholder="Descripción (Opcional)"
+              className="w-full p-3 border rounded-xl"
+              value={form.descripcion}
+              onChange={(e) =>
+                setForm({ ...form, descripcion: e.target.value })
+              }
+            />
+            <input
+              required
+              type="file"
+              className="w-full p-3 border rounded-xl"
+              onChange={(e) => setForm({ ...form, archivo: e.target.files[0] })}
+            />
+            <div className="flex gap-2 pt-4">
+              <button
+                type="button"
+                onClick={() => setShowModal(false)}
+                className="flex-1 p-3 bg-gray-100 rounded-xl font-bold text-gray-600"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={isUploading}
+                className="flex-1 p-3 bg-[#a72a34] text-white rounded-xl font-bold disabled:opacity-50 flex justify-center gap-2"
+              >
+                {isUploading ? (
+                  "Subiendo..."
+                ) : (
+                  <>
+                    <UploadCloud size={20} /> Subir
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 };
@@ -1892,6 +2141,28 @@ const UserModal = ({
 
   if (!isOpen) return null;
 
+  const handleCambiarFoto = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append("foto", file);
+    try {
+      const res = await api.post(
+        `/admin/usuarios/${userToEdit.id}/foto`,
+        formData,
+        {
+          headers: { "Content-Type": "multipart/form-data" },
+        },
+      );
+      // Actualizamos visualmente el modal
+      userToEdit.foto_perfil = res.data.foto_perfil;
+      alert("Foto actualizada correctamente");
+      onSuccess(); // Para refrescar la tabla de fondo
+    } catch (err) {
+      alert("Error al subir foto");
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-50 p-4 backdrop-blur-sm animate-in fade-in">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl flex flex-col max-h-[95vh]">
@@ -1913,6 +2184,35 @@ const UserModal = ({
         </div>
 
         <form onSubmit={handleSubmit} className="flex flex-col overflow-hidden">
+          {/* SECCIÓN: FOTO DE PERFIL */}
+          <div className="flex items-center gap-6 bg-gray-100 p-4 rounded-xl mb-4">
+            <div className="w-20 h-20 rounded-full border-2 border-gray-300 overflow-hidden bg-white shrink-0">
+              {userToEdit?.foto_perfil ? (
+                <img
+                  src={`https://api-universidad-c5o8.onrender.com/uploads/perfiles/${userToEdit.foto_perfil}`}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-gray-400 font-bold text-xl">
+                  {userToEdit?.nombre?.charAt(0) || "U"}
+                </div>
+              )}
+            </div>
+            <div>
+              <p className="text-sm font-bold text-gray-800 mb-2">
+                Foto del Expediente
+              </p>
+              <label className="cursor-pointer bg-white px-4 py-2 border border-gray-300 text-sm font-bold rounded-lg hover:bg-gray-50 flex items-center gap-2 max-w-max">
+                <Camera size={16} /> Subir Nueva Foto
+                <input
+                  type="file"
+                  className="hidden"
+                  accept="image/*"
+                  onChange={handleCambiarFoto}
+                />
+              </label>
+            </div>
+          </div>
           <div className="p-8 overflow-y-auto flex-1 space-y-8 bg-gray-50/30">
             {/* SECCIÓN: DATOS PERSONALES */}
             <div>
@@ -9102,6 +9402,26 @@ const DetalleFinancieroAlumnoPage = () => {
   const [showModal, setShowModal] = useState(false); // Para generar adeudo manual
   const [conceptos, setConceptos] = useState([]); // Catálogo de conceptos
 
+  const handleEditarFechaPago = async (adeudoId, fechaActual) => {
+    const fechaOriginal = fechaActual ? fechaActual.split("T")[0] : "";
+    const nuevaFecha = prompt(
+      "Editar fecha de pago (Formato AAAA-MM-DD):",
+      fechaOriginal,
+    );
+
+    if (nuevaFecha && nuevaFecha !== fechaOriginal) {
+      try {
+        await api.put(`/admin/finanzas/editar-fecha-pago/${adeudoId}`, {
+          fecha_pago: nuevaFecha,
+        });
+        alert("Fecha actualizada");
+        fetchDatos();
+      } catch (err) {
+        alert("Error al actualizar la fecha.");
+      }
+    }
+  };
+
   const fetchDatos = useCallback(async () => {
     try {
       setLoading(true);
@@ -9252,6 +9572,24 @@ const DetalleFinancieroAlumnoPage = () => {
                 <td className="px-4 py-2">${a.monto_a_pagar}</td>
                 <td className="px-4 py-2">
                   {renderFecha(a.fecha_vencimiento)}
+                </td>
+                <td className="px-4 py-2">
+                  {a.estatus_pago === "pagado" ? (
+                    <div className="flex items-center gap-2 text-green-700 font-medium">
+                      {renderFecha(a.fecha_pago)}
+                      <button
+                        onClick={() =>
+                          handleEditarFechaPago(a.id, a.fecha_pago)
+                        }
+                        className="text-gray-400 hover:text-blue-600"
+                        title="Editar Fecha"
+                      >
+                        <Edit size={14} />
+                      </button>
+                    </div>
+                  ) : (
+                    "-"
+                  )}
                 </td>
                 <td className="px-4 py-2">
                   <span
@@ -15563,6 +15901,7 @@ function App() {
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/admin/anuncios" element={<AnunciosAdminPage />} />
+              <Route path="/admin/biblioteca" element={<BibliotecaPage />} />
               <Route path="/usuarios" element={<UsuariosPage />} />
               <Route
                 path="/usuarios/aspirante/:id"
@@ -15619,6 +15958,7 @@ function App() {
               />
               <Route path="/docente/correo" element={<CorreoPage />} />
               <Route path="/docente/mi-nube" element={<MiDrivePage />} />
+              <Route path="/docente/biblioteca" element={<BibliotecaPage />} />
               <Route path="/docente/mi-perfil" element={<MiPerfilPage />} />
               <Route
                 path="/docente/calendario"
@@ -15689,6 +16029,7 @@ function App() {
                 path="/alumno/mis-calificaciones"
                 element={<MisCalificacionesPage />}
               />
+              <Route path="/alumno/biblioteca" element={<BibliotecaPage />} />
               <Route path="/alumno/mi-nube" element={<MiDrivePage />} />
               <Route
                 path="/alumno/grupo/:grupoId/asignatura/:asignaturaId/aula"

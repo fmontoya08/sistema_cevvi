@@ -51,6 +51,13 @@ const CURP_REGEX =
 
 // --- SERVIR ARCHIVOS ESTÁTICOS ---
 
+// Directorio de BIBLIOTECA VIRTUAL
+const bibliotecaDir = path.join(__dirname, "uploads/biblioteca");
+if (!fs.existsSync(bibliotecaDir)) {
+  fs.mkdirSync(bibliotecaDir, { recursive: true });
+}
+app.use("/uploads/biblioteca", express.static(bibliotecaDir));
+
 // Directorio principal de UPLOADS
 const uploadsDir = path.join(__dirname, "uploads");
 if (!fs.existsSync(uploadsDir)) {
@@ -770,6 +777,32 @@ const recursosStorage = multer.diskStorage({
 });
 
 const uploadRecurso = multer({ storage: recursosStorage });
+
+// Multer para Biblioteca
+const bibliotecaStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, bibliotecaDir),
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    cb(null, "biblio_" + uniqueSuffix + path.extname(file.originalname));
+  },
+});
+const uploadBiblioteca = multer({ storage: bibliotecaStorage });
+
+// Multer para que el Admin suba fotos de otros usuarios
+const adminPerfilesStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, perfilesDir),
+  filename: (req, file, cb) => {
+    const userId = req.params.id; // Toma el ID de la URL, no del token
+    cb(
+      null,
+      `perfil_${userId}_${Date.now()}${path.extname(file.originalname)}`,
+    );
+  },
+});
+const uploadAdminPerfil = multer({
+  storage: adminPerfilesStorage,
+  fileFilter: imageFileFilter,
+});
 
 // --- INICIA NUEVO CÓDIGO (AGREGAR) ---
 // Configuración de Multer para FOTOS DE PERFIL
@@ -8989,6 +9022,137 @@ app.get("/drive/publico/:token", async (req, res) => {
   } catch (error) {
     console.error("Error accediendo a recurso:", error);
     res.status(500).send("Error interno al procesar la descarga.");
+  }
+});
+
+// ==========================================
+// 1. EDITAR FECHA DE PAGO (CAJA)
+// ==========================================
+adminRouter.put("/finanzas/editar-fecha-pago/:adeudoId", async (req, res) => {
+  const { fecha_pago } = req.body; // Formato YYYY-MM-DD
+  try {
+    // Le agregamos la hora actual para que MySQL lo acepte bien en DATETIME
+    const fechaCompleta = `${fecha_pago} 12:00:00`;
+    await db.query("UPDATE adeudos_alumnos SET fecha_pago = ? WHERE id = ?", [
+      fechaCompleta,
+      req.params.adeudoId,
+    ]);
+    res.send({ message: "Fecha de pago actualizada" });
+  } catch (error) {
+    console.error("Error al actualizar fecha de pago:", error);
+    res.status(500).send({ message: "Error al actualizar fecha" });
+  }
+});
+
+// ==========================================
+// 2. SUBIR FOTO DE PERFIL DESDE ADMIN
+// ==========================================
+adminRouter.post(
+  "/usuarios/:id/foto",
+  uploadAdminPerfil.single("foto"),
+  async (req, res) => {
+    if (!req.file)
+      return res.status(400).send({ message: "No se subió archivo" });
+
+    try {
+      const userId = req.params.id;
+      const nuevaFoto = req.file.filename;
+
+      // Borrar foto anterior si existe
+      const [[user]] = await db.query(
+        "SELECT foto_perfil FROM usuarios WHERE id = ?",
+        [userId],
+      );
+      if (user && user.foto_perfil) {
+        const oldPath = path.join(perfilesDir, user.foto_perfil);
+        fs.unlink(oldPath, (err) => {
+          /* Ignorar si no existe */
+        });
+      }
+
+      await db.query("UPDATE usuarios SET foto_perfil = ? WHERE id = ?", [
+        nuevaFoto,
+        userId,
+      ]);
+      res.json({ foto_perfil: nuevaFoto, message: "Foto actualizada" });
+    } catch (error) {
+      res.status(500).send({ message: "Error al actualizar foto" });
+    }
+  },
+);
+
+// ==========================================
+// 3. BIBLIOTECA VIRTUAL (RUTAS)
+// ==========================================
+// A) Leer todos los archivos (Ruta PÚBLICA PARA USUARIOS LOGUEADOS)
+apiRouter.get("/biblioteca", verifyToken, async (req, res) => {
+  try {
+    const [archivos] = await db.query(`
+      SELECT b.*, u.nombre, u.apellido_paterno 
+      FROM biblioteca_virtual b 
+      LEFT JOIN usuarios u ON b.subido_por = u.id 
+      ORDER BY b.fecha_subida DESC
+    `);
+    res.json(archivos);
+  } catch (error) {
+    res.status(500).send({ message: "Error al cargar la biblioteca" });
+  }
+});
+
+// B) Subir archivo a la biblioteca (SOLO ADMIN)
+adminRouter.post(
+  "/biblioteca",
+  uploadBiblioteca.single("archivo"),
+  async (req, res) => {
+    const { titulo, descripcion } = req.body;
+    if (!req.file)
+      return res.status(400).send({ message: "Se requiere un archivo" });
+
+    try {
+      // Determinar el tipo de archivo básico para el ícono en frontend
+      const ext = path.extname(req.file.originalname).toLowerCase();
+      let tipo = "otro";
+      if ([".pdf"].includes(ext)) tipo = "pdf";
+      if ([".mp4", ".avi", ".mov"].includes(ext)) tipo = "video";
+      if ([".jpg", ".jpeg", ".png"].includes(ext)) tipo = "imagen";
+      if ([".doc", ".docx"].includes(ext)) tipo = "word";
+      if ([".xls", ".xlsx"].includes(ext)) tipo = "excel";
+      if ([".ppt", ".pptx"].includes(ext)) tipo = "powerpoint";
+
+      await db.query(
+        "INSERT INTO biblioteca_virtual (titulo, descripcion, ruta_archivo, nombre_original, tipo, subido_por) VALUES (?, ?, ?, ?, ?, ?)",
+        [
+          titulo,
+          descripcion,
+          req.file.filename,
+          req.file.originalname,
+          tipo,
+          req.user.id,
+        ],
+      );
+      res.status(201).send({ message: "Archivo subido a la biblioteca" });
+    } catch (error) {
+      res.status(500).send({ message: "Error al subir archivo" });
+    }
+  },
+);
+
+// C) Eliminar archivo de la biblioteca (SOLO ADMIN)
+adminRouter.delete("/biblioteca/:id", async (req, res) => {
+  try {
+    const [[archivo]] = await db.query(
+      "SELECT ruta_archivo FROM biblioteca_virtual WHERE id = ?",
+      [req.params.id],
+    );
+    if (archivo) {
+      fs.unlink(path.join(bibliotecaDir, archivo.ruta_archivo), (err) => {});
+      await db.query("DELETE FROM biblioteca_virtual WHERE id = ?", [
+        req.params.id,
+      ]);
+    }
+    res.send({ message: "Archivo eliminado" });
+  } catch (error) {
+    res.status(500).send({ message: "Error al eliminar" });
   }
 });
 
