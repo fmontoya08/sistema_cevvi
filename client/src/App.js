@@ -5301,299 +5301,6 @@ const GrupoModal = ({ isOpen, onClose, grupoToEdit, onSuccess, catalogos }) => {
   );
 };
 
-// --- COMPONENTE DETALLE FINANZAS ALUMNO (ADMIN VIEW) ---
-const DetalleFinanzasAlumnoPage = () => {
-  const { id } = useParams(); // ID del alumno
-  const [movimientos, setMovimientos] = useState([]);
-  const [alumno, setAlumno] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  // Modals
-  const [cargoModalOpen, setCargoModalOpen] = useState(false);
-  const [conceptos, setConceptos] = useState([]);
-
-  // Formulario Nuevo Cargo
-  const [formCargo, setFormCargo] = useState({
-    concepto_id: "",
-    fecha_vencimiento: new Date().toISOString().split("T")[0],
-  });
-
-  // Cargar datos
-  const fetchData = useCallback(async () => {
-    try {
-      const { data } = await api.get(`/admin/alumnos/${id}/finanzas`);
-      setMovimientos(data);
-      if (data.length > 0) {
-        setAlumno({
-          nombre: `${data[0].nombre} ${data[0].apellido_paterno} ${data[0].apellido_materno || ""}`,
-          matricula: data[0].matricula,
-        });
-      }
-      // Cargar catálogo de conceptos para el select
-      const resConceptos = await api.get("/admin/conceptos_pago");
-      setConceptos(resConceptos.data);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
-  }, [id]);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
-  // Handlers
-  const handleRegistrarPago = async (adeudoId) => {
-    if (
-      window.confirm("¿Confirmar recepción del pago en efectivo/transferencia?")
-    ) {
-      try {
-        await api.put(`/admin/finanzas/pagar/${adeudoId}`);
-        alert("Pago registrado correctamente.");
-        fetchData();
-      } catch (e) {
-        alert("Error al registrar pago.");
-      }
-    }
-  };
-
-  const handleCrearCargo = async (e) => {
-    e.preventDefault();
-    try {
-      await api.post("/admin/finanzas/cargo", { ...formCargo, alumno_id: id });
-      alert("Cargo asignado.");
-      setCargoModalOpen(false);
-      fetchData();
-    } catch (e) {
-      alert("Error al asignar cargo.");
-    }
-  };
-
-  const handleEliminarCargo = async (adeudoId) => {
-    if (window.confirm("¿Eliminar este cargo incorrecto?")) {
-      try {
-        await api.delete(`/admin/finanzas/cargo/${adeudoId}`);
-        fetchData();
-      } catch (e) {
-        alert("Error al eliminar.");
-      }
-    }
-  };
-
-  // Cálculos
-  const totalPendiente = movimientos
-    .filter(
-      (m) => m.estatus_pago === "pendiente" || m.estatus_pago === "vencido",
-    )
-    .reduce((acc, curr) => acc + parseFloat(curr.monto_a_pagar), 0);
-
-  const formatMoney = (amount) =>
-    new Intl.NumberFormat("es-MX", {
-      style: "currency",
-      currency: "MXN",
-    }).format(amount);
-  const formatDate = (date) =>
-    date ? new Date(date).toLocaleDateString("es-MX") : "-";
-
-  return (
-    <div className="space-y-8 animate-in fade-in duration-300 max-w-7xl mx-auto">
-      {/* HEADER */}
-      <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-center gap-6">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-800 tracking-tight flex items-center gap-3">
-            <div className="p-3 bg-[#a72a34] text-white rounded-xl shadow-lg shadow-red-900/20">
-              <DollarSign size={28} />
-            </div>
-            Finanzas del Alumno
-          </h1>
-          <p className="text-gray-500 mt-2 text-lg ml-16 flex items-center gap-2">
-            <Users size={18} /> {alumno ? alumno.nombre : "Cargando..."}
-            <span className="bg-gray-100 px-2 py-0.5 rounded text-xs font-mono border text-gray-600">
-              {alumno?.matricula}
-            </span>
-          </p>
-        </div>
-        <button
-          onClick={() => setCargoModalOpen(true)}
-          className="bg-[#a72a34] text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-[#802028] shadow-lg transition-all"
-        >
-          <Plus size={20} /> Nuevo Cargo
-        </button>
-      </div>
-
-      {/* TARJETAS RESUMEN */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 relative overflow-hidden">
-          <div className="absolute right-0 top-0 w-20 h-20 bg-red-50 rounded-bl-full -mr-4 -mt-4"></div>
-          <p className="text-gray-500 font-bold uppercase text-xs tracking-wider">
-            Deuda Total
-          </p>
-          <h2 className="text-3xl font-bold text-[#a72a34] mt-2">
-            {formatMoney(totalPendiente)}
-          </h2>
-          <p className="text-xs text-red-400 mt-1 font-medium">
-            Pendiente de cobro
-          </p>
-        </div>
-        {/* Aquí podrías agregar más tarjetas como "Total Pagado" o "Próximo Vencimiento" */}
-      </div>
-
-      {/* LISTA DE MOVIMIENTOS */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="p-6 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
-          <h3 className="font-bold text-gray-700 flex items-center gap-2">
-            <FileText size={20} className="text-gray-400" /> Historial de
-            Movimientos
-          </h3>
-        </div>
-
-        {loading ? (
-          <div className="p-10 text-center text-gray-400">Cargando...</div>
-        ) : (
-          <div className="divide-y divide-gray-100">
-            {movimientos.length === 0 && (
-              <p className="p-8 text-center text-gray-400">
-                Sin movimientos registrados.
-              </p>
-            )}
-
-            {movimientos.map((mov) => (
-              <div
-                key={mov.id}
-                className="p-6 hover:bg-gray-50 transition-colors flex flex-col md:flex-row items-center justify-between gap-4 group"
-              >
-                {/* INFO IZQUIERDA */}
-                <div className="flex items-center gap-4 w-full md:w-auto">
-                  <div
-                    className={`
-                    w-12 h-12 rounded-xl flex items-center justify-center shrink-0 border
-                    ${mov.estatus_pago === "pagado" ? "bg-green-50 border-green-100 text-green-600" : "bg-red-50 border-red-100 text-[#a72a34]"}
-                  `}
-                  >
-                    {mov.estatus_pago === "pagado" ? (
-                      <Check size={24} />
-                    ) : (
-                      <Clock size={24} />
-                    )}
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-gray-800">
-                      {mov.nombre_concepto}
-                    </h4>
-                    <div className="flex gap-4 text-sm text-gray-500 mt-1">
-                      <span className="flex items-center gap-1">
-                        <Calendar size={14} /> Vence:{" "}
-                        {formatDate(mov.fecha_vencimiento)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* INFO DERECHA Y ACCIONES */}
-                <div className="flex items-center gap-6 w-full md:w-auto justify-between md:justify-end">
-                  <div className="text-right">
-                    <span className="block font-bold text-xl text-gray-800">
-                      {formatMoney(mov.monto_a_pagar)}
-                    </span>
-                    <span
-                      className={`
-                      text-xs font-bold uppercase px-2 py-0.5 rounded
-                      ${mov.estatus_pago === "pagado" ? "bg-green-100 text-green-700" : "bg-red-100 text-[#a72a34]"}
-                    `}
-                    >
-                      {mov.estatus_pago}
-                    </span>
-                  </div>
-
-                  {/* BOTONES DE ACCIÓN */}
-                  <div className="flex gap-2">
-                    {mov.estatus_pago !== "pagado" && (
-                      <button
-                        onClick={() => handleRegistrarPago(mov.id)}
-                        className="bg-green-600 text-white px-4 py-2 rounded-lg font-bold text-sm shadow hover:bg-green-700 transition-colors flex items-center gap-2"
-                        title="Registrar Pago Manual"
-                      >
-                        <DollarSign size={16} /> Cobrar
-                      </button>
-                    )}
-
-                    {/* Botón Eliminar (Solo visible si no está pagado o si eres superadmin) */}
-                    <button
-                      onClick={() => handleEliminarCargo(mov.id)}
-                      className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                      title="Eliminar cargo"
-                    >
-                      <Trash2 size={18} />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* MODAL NUEVO CARGO */}
-      {cargoModalOpen && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex justify-center items-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
-            <div className="p-6 border-b flex justify-between items-center bg-gray-50 rounded-t-2xl">
-              <h3 className="font-bold text-lg text-gray-800">
-                Asignar Nuevo Cargo
-              </h3>
-              <button onClick={() => setCargoModalOpen(false)}>
-                <X size={24} className="text-gray-400" />
-              </button>
-            </div>
-            <form onSubmit={handleCrearCargo} className="p-6 space-y-4">
-              <div>
-                <label className="label">Concepto a Cobrar</label>
-                <select
-                  required
-                  className="w-full p-3 border rounded-xl bg-white focus:ring-[#a72a34]"
-                  value={formCargo.concepto_id}
-                  onChange={(e) =>
-                    setFormCargo({ ...formCargo, concepto_id: e.target.value })
-                  }
-                >
-                  <option value="">Seleccione...</option>
-                  {conceptos.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.nombre_concepto} - ${c.monto_default}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="label">Fecha Límite de Pago</label>
-                <input
-                  type="date"
-                  required
-                  className="w-full p-3 border rounded-xl"
-                  value={formCargo.fecha_vencimiento}
-                  onChange={(e) =>
-                    setFormCargo({
-                      ...formCargo,
-                      fecha_vencimiento: e.target.value,
-                    })
-                  }
-                />
-              </div>
-              <button
-                type="submit"
-                className="w-full bg-[#a72a34] text-white py-3 rounded-xl font-bold hover:bg-[#802028] shadow-lg mt-2"
-              >
-                Guardar Cargo
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
 // --- COMPONENTE MIGRACIÓN DE GRUPOS (DISEÑO FINAL MEJORADO) ---
 const MigracionPage = () => {
   const [loading, setLoading] = useState(true);
@@ -9393,95 +9100,110 @@ const CajaPage = () => {
   );
 };
 
-// --- INICIA NUEVO COMPONENTE: DetalleFinancieroAlumnoPage (Admin) ---
-const DetalleFinancieroAlumnoPage = () => {
-  const { id: alumnoId } = useParams();
+// --- COMPONENTE DETALLE FINANZAS ALUMNO (ADMIN VIEW) ---
+const DetalleFinanzasAlumnoPage = () => {
+  const { id } = useParams(); // ID del alumno
+  const [movimientos, setMovimientos] = useState([]);
   const [alumno, setAlumno] = useState(null);
-  const [adeudos, setAdeudos] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false); // Para generar adeudo manual
-  const [conceptos, setConceptos] = useState([]); // Catálogo de conceptos
 
+  // Modals
+  const [cargoModalOpen, setCargoModalOpen] = useState(false);
+  const [conceptos, setConceptos] = useState([]);
+
+  // Formulario Nuevo Cargo
+  const [formCargo, setFormCargo] = useState({
+    concepto_id: "",
+    fecha_vencimiento: new Date().toISOString().split("T")[0],
+  });
+
+  // Cargar datos
+  const fetchData = useCallback(async () => {
+    try {
+      const { data } = await api.get(`/admin/alumnos/${id}/finanzas`);
+      setMovimientos(data);
+      if (data.length > 0) {
+        setAlumno({
+          nombre: `${data[0].nombre} ${data[0].apellido_paterno} ${data[0].apellido_materno || ""}`,
+          matricula: data[0].matricula,
+        });
+      }
+      const resConceptos = await api.get("/admin/conceptos_pago");
+      setConceptos(resConceptos.data);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  // Handlers
+  const handleRegistrarPago = async (adeudoId) => {
+    if (
+      window.confirm("¿Confirmar recepción del pago en efectivo/transferencia?")
+    ) {
+      try {
+        await api.put(`/admin/finanzas/pagar/${adeudoId}`);
+        alert("Pago registrado correctamente.");
+        fetchData();
+      } catch (e) {
+        alert("Error al registrar pago.");
+      }
+    }
+  };
+
+  const handleCrearCargo = async (e) => {
+    e.preventDefault();
+    try {
+      await api.post("/admin/finanzas/cargo", { ...formCargo, alumno_id: id });
+      alert("Cargo asignado.");
+      setCargoModalOpen(false);
+      fetchData();
+    } catch (e) {
+      alert("Error al asignar cargo.");
+    }
+  };
+
+  const handleEliminarCargo = async (adeudoId) => {
+    if (window.confirm("¿Eliminar este cargo incorrecto?")) {
+      try {
+        await api.delete(`/admin/finanzas/cargo/${adeudoId}`);
+        fetchDatos();
+      } catch (e) {
+        alert("Error al eliminar.");
+      }
+    }
+  };
+
+  // --- NUEVA FUNCIÓN: EDITAR FECHA DE PAGO (¡AHORA SÍ ESTÁ AFUERA!) ---
   const handleEditarFechaPago = async (adeudoId, fechaActual) => {
     const fechaOriginal = fechaActual ? fechaActual.split("T")[0] : "";
+
     const nuevaFecha = prompt(
-      "Editar fecha de pago (Formato AAAA-MM-DD):",
+      "Editar fecha de pago (Debe tener el formato AAAA-MM-DD):",
       fechaOriginal,
     );
 
     if (nuevaFecha && nuevaFecha !== fechaOriginal) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(nuevaFecha)) {
+        return alert(
+          "❌ Formato inválido. Debe ser exactamente AAAA-MM-DD (ej. 2024-05-20)",
+        );
+      }
+
       try {
         await api.put(`/admin/finanzas/editar-fecha-pago/${adeudoId}`, {
           fecha_pago: nuevaFecha,
         });
-        alert("Fecha actualizada");
-        fetchDatos();
+        alert("✅ Fecha de pago actualizada correctamente.");
+        fetchDatos(); // Recarga la información
       } catch (err) {
         alert("Error al actualizar la fecha.");
       }
-    }
-  };
-
-  const fetchDatos = useCallback(async () => {
-    try {
-      setLoading(true);
-      const [alumnoRes, adeudosRes, conceptosRes] = await Promise.all([
-        api.get(`/admin/usuarios/${alumnoId}`),
-        api.get(`/admin/alumnos/${alumnoId}/adeudos`),
-        api.get("/admin/conceptos_pago"), // Cargar conceptos para el modal
-      ]);
-      setAlumno(alumnoRes.data);
-      setAdeudos(adeudosRes.data);
-      setConceptos(conceptosRes.data);
-    } catch (error) {
-      console.error("Error al cargar datos financieros", error);
-      alert("No se pudieron cargar los datos.");
-    } finally {
-      setLoading(false);
-    }
-  }, [alumnoId]);
-
-  useEffect(() => {
-    fetchDatos();
-  }, [fetchDatos]);
-
-  const handleMarcarPagado = async (adeudoId) => {
-    if (window.confirm("¿Confirmas que se recibió este pago?")) {
-      try {
-        await api.post(`/admin/adeudos/${adeudoId}/marcar-pagado`);
-        fetchDatos(); // Recargar la lista de adeudos
-      } catch (error) {
-        console.error("Error al marcar pago", error);
-        alert(
-          "Error: " + (error.response?.data?.message || "Error desconocido"),
-        );
-      }
-    }
-  };
-
-  const handleGenerarAdeudo = async (e) => {
-    e.preventDefault();
-    const formData = new FormData(e.target);
-    const conceptoId = formData.get("concepto_id");
-    const monto = formData.get("monto_a_pagar");
-    const fecha = formData.get("fecha_vencimiento");
-
-    // Buscar el monto default si no se provee uno
-    const conceptoSeleccionado = conceptos.find((c) => c.id == conceptoId);
-    const montoFinal = monto || conceptoSeleccionado.monto_default;
-
-    try {
-      await api.post("/admin/adeudos/generar-manual", {
-        alumno_id: alumnoId,
-        concepto_id: conceptoId,
-        monto_a_pagar: montoFinal,
-        fecha_vencimiento: fecha,
-      });
-      setShowModal(false);
-      fetchDatos(); // Recargar
-    } catch (error) {
-      console.error("Error al generar adeudo", error);
-      alert("Error al generar adeudo.");
     }
   };
 
@@ -9498,127 +9220,146 @@ const DetalleFinancieroAlumnoPage = () => {
     }
   };
 
-  // Helper para formatear fechas DATE (YYYY-MM-DD) de forma segura
-  const renderFecha = (fechaString) => {
-    // 1. Revisa si es null, undefined, o la fecha "cero" de MySQL
-    if (!fechaString || fechaString.startsWith("0000-")) {
-      return "N/A";
-    }
+  const formatMoney = (amount) =>
+    new Intl.NumberFormat("es-MX", {
+      style: "currency",
+      currency: "MXN",
+    }).format(amount);
 
-    // 2. Separamos la fecha para evitar problemas de zona horaria (UTC)
-    // Esto toma solo la parte de la fecha (ej. "2025-10-27")
-    const parts = fechaString.split("T")[0].split("-");
-
-    if (parts.length !== 3) {
-      return "Fecha Inválida"; // Formato inesperado
-    }
-
-    // 3. Creamos la fecha como local: new Date(Año, Mes (0-11), Día)
+  const formatDate = (dateString) => {
+    if (!dateString || dateString.startsWith("0000-")) return "N/A";
+    const parts = dateString.split("T")[0].split("-");
+    if (parts.length !== 3) return "Fecha Inválida";
     const date = new Date(parts[0], parts[1] - 1, parts[2]);
-
-    if (isNaN(date.getTime())) {
-      return "Fecha Inválida";
-    }
-
-    // 4. Si todo está bien, la formatea
-    return date.toLocaleDateString();
+    if (isNaN(date.getTime())) return "Fecha Inválida";
+    return date.toLocaleDateString("es-MX");
   };
 
-  if (loading) return <p>Cargando estado de cuenta...</p>;
-  if (!alumno) return <p>Alumno no encontrado.</p>;
+  if (loading)
+    return (
+      <div className="text-center py-10 text-gray-500">
+        Cargando estado de cuenta...
+      </div>
+    );
+  if (!alumno)
+    return (
+      <div className="text-center py-10 text-gray-500">
+        Alumno no encontrado.
+      </div>
+    );
 
   return (
-    <div>
-      <Link
-        to="/admin/finanzas"
-        className="flex items-center text-principal mb-6 hover:underline"
-      >
-        <ArrowLeft size={18} className="mr-2" />
-        Volver a Caja
-      </Link>
-      <h2 className="text-3xl font-bold text-gray-800 mb-2">
-        {alumno.nombre} {alumno.apellido_paterno}{" "}
-        {alumno.apellido_materno || ""}
-      </h2>
-      <p className="text-lg text-secundario mb-6">
-        Matrícula: {alumno.matricula || "N/A"}
-      </p>
+    <div className="space-y-8 animate-in fade-in duration-300 max-w-7xl mx-auto">
+      <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-center gap-6">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-800 tracking-tight flex items-center gap-3">
+            <div className="p-3 bg-[#a72a34] text-white rounded-xl shadow-lg shadow-red-900/20">
+              <DollarSign size={28} />
+            </div>
+            Finanzas del Alumno
+          </h1>
+          <p className="text-gray-500 mt-2 text-lg ml-16 flex items-center gap-2">
+            <Users size={18} /> {alumno.nombre}
+            <span className="bg-gray-100 px-2 py-0.5 rounded text-xs font-mono border text-gray-600">
+              {alumno.matricula}
+            </span>
+          </p>
+        </div>
+        <button
+          onClick={() => setCargoModalOpen(true)}
+          className="bg-[#a72a34] text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-[#802028] shadow-lg transition-all"
+        >
+          <Plus size={20} /> Nuevo Cargo
+        </button>
+      </div>
 
-      <div className="bg-white p-6 rounded-lg shadow">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-xl font-bold">Estado de Cuenta</h3>
-          <button
-            onClick={() => setShowModal(true)}
-            className="flex items-center px-4 py-2 font-semibold text-white bg-secundario rounded-md hover:opacity-90"
-          >
-            <Plus className="w-5 h-5 mr-2" />
-            Generar Adeudo Manual
-          </button>
+      <div className="bg-white p-6 rounded-lg shadow border border-gray-100">
+        <div className="flex justify-between items-center mb-4 border-b pb-4">
+          <h3 className="text-xl font-bold text-gray-800">
+            Historial de Cuenta
+          </h3>
         </div>
         <table className="w-full table-auto text-sm">
           <thead className="text-left bg-gray-50">
             <tr>
-              <th className="px-4 py-2">Concepto</th>
-              <th className="px-4 py-2">Monto</th>
-              <th className="px-4 py-2">Vencimiento</th>
-              <th className="px-4 py-2">Estatus</th>
-              <th className="px-4 py-2">Acción</th>
+              <th className="px-4 py-3 text-gray-600 font-bold uppercase">
+                Concepto
+              </th>
+              <th className="px-4 py-3 text-gray-600 font-bold uppercase">
+                Monto
+              </th>
+              <th className="px-4 py-3 text-gray-600 font-bold uppercase">
+                Vencimiento
+              </th>
+              <th className="px-4 py-3 text-gray-600 font-bold uppercase">
+                Estatus
+              </th>
+              <th className="px-4 py-3 text-gray-600 font-bold uppercase">
+                Acción / Fecha Pago
+              </th>
             </tr>
           </thead>
-          <tbody>
-            {adeudos.map((a) => (
-              <tr key={a.id} className="border-b">
-                <td className="px-4 py-2">{a.nombre_concepto}</td>
-                <td className="px-4 py-2">${a.monto_a_pagar}</td>
-                <td className="px-4 py-2">
-                  {renderFecha(a.fecha_vencimiento)}
+          <tbody className="divide-y divide-gray-100">
+            {movimientos.map((a) => (
+              <tr key={a.id} className="hover:bg-gray-50 transition-colors">
+                <td className="px-4 py-4 font-bold text-gray-800">
+                  {a.nombre_concepto}
                 </td>
-                <td className="px-4 py-2">
-                  {a.estatus_pago === "pagado" ? (
-                    <div className="flex items-center gap-2 text-green-700 font-medium">
-                      {renderFecha(a.fecha_pago)}
+                <td className="px-4 py-4 font-medium">
+                  {formatMoney(a.monto_a_pagar)}
+                </td>
+                <td className="px-4 py-4 text-gray-600">
+                  {formatDate(a.fecha_vencimiento)}
+                </td>
+                <td className="px-4 py-4">
+                  <span
+                    className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${getEstatusBadge(a.estatus_pago)}`}
+                  >
+                    {a.estatus_pago}
+                  </span>
+                </td>
+                <td className="px-4 py-4">
+                  {a.estatus_pago === "pendiente" ||
+                  a.estatus_pago === "vencido" ? (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleRegistrarPago(a.id)}
+                        className="px-4 py-2 text-sm font-bold text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors"
+                      >
+                        Cobrar
+                      </button>
+                      <button
+                        onClick={() => handleEliminarCargo(a.id)}
+                        className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
+                  ) : null}
+                  {a.estatus_pago === "pagado" && (
+                    <div className="flex items-center gap-2 text-green-700 font-bold bg-green-50 px-3 py-1.5 rounded-lg w-max border border-green-100">
+                      {formatDate(a.fecha_pago)}
                       <button
                         onClick={() =>
                           handleEditarFechaPago(a.id, a.fecha_pago)
                         }
-                        className="text-gray-400 hover:text-blue-600"
+                        className="text-gray-400 hover:text-blue-600 ml-2"
                         title="Editar Fecha"
                       >
                         <Edit size={14} />
                       </button>
                     </div>
-                  ) : (
-                    "-"
-                  )}
-                </td>
-                <td className="px-4 py-2">
-                  <span
-                    className={`px-3 py-1 rounded-full text-xs font-semibold ${getEstatusBadge(
-                      a.estatus_pago,
-                    )}`}
-                  >
-                    {a.estatus_pago}
-                  </span>
-                </td>
-                <td className="px-4 py-2">
-                  {a.estatus_pago === "pendiente" && (
-                    <button
-                      onClick={() => handleMarcarPagado(a.id)}
-                      className="px-3 py-1 text-sm font-medium text-white bg-principal rounded-md hover:opacity-90"
-                    >
-                      Registrar Pago
-                    </button>
-                  )}
-                  {a.estatus_pago === "pagado" && (
-                    <span className="text-green-600 font-semibold">Pagado</span>
                   )}
                 </td>
               </tr>
             ))}
-            {adeudos.length === 0 && (
+            {movimientos.length === 0 && (
               <tr>
-                <td colSpan="5" className="text-center text-gray-500 py-6">
-                  Este alumno no tiene adeudos.
+                <td
+                  colSpan="5"
+                  className="text-center text-gray-500 py-10 italic"
+                >
+                  Este alumno no tiene adeudos registrados.
                 </td>
               </tr>
             )}
@@ -9626,67 +9367,67 @@ const DetalleFinancieroAlumnoPage = () => {
         </table>
       </div>
 
-      {/* Modal para Generar Adeudo Manual */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6 relative">
-            <button
-              onClick={() => setShowModal(false)}
-              className="absolute top-4 right-4 text-gray-500 hover:text-gray-800"
-            >
-              <X size={24} />
-            </button>
-            <h3 className="text-2xl font-bold mb-6">Generar Adeudo Manual</h3>
-            <form onSubmit={handleGenerarAdeudo} className="space-y-4">
+      {cargoModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div className="p-6 border-b bg-gray-50 flex justify-between items-center">
+              <h3 className="font-bold text-xl text-gray-800">Nuevo Cargo</h3>
+              <button
+                onClick={() => setCargoModalOpen(false)}
+                className="text-gray-400 hover:text-gray-800"
+              >
+                <X size={24} />
+              </button>
+            </div>
+            <form onSubmit={handleCrearCargo} className="p-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-bold text-gray-700 mb-1">
                   Concepto de Pago
                 </label>
                 <select
-                  name="concepto_id"
-                  className="w-full px-3 py-2 mt-1 border rounded-md"
+                  className="w-full px-4 py-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#a72a34] bg-white"
                   required
+                  value={formCargo.concepto_id}
+                  onChange={(e) =>
+                    setFormCargo({ ...formCargo, concepto_id: e.target.value })
+                  }
                 >
+                  <option value="">Seleccione...</option>
                   {conceptos.map((c) => (
                     <option key={c.id} value={c.id}>
-                      {c.nombre_concepto} (Default: ${c.monto_default})
+                      {c.nombre_concepto} (${c.monto_default})
                     </option>
                   ))}
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Monto (Opcional, si es diferente al default)
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  name="monto_a_pagar"
-                  placeholder="Dejar en blanco para usar el monto default"
-                  className="w-full px-3 py-2 mt-1 border rounded-md"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Fecha de Vencimiento (Opcional)
+                <label className="block text-sm font-bold text-gray-700 mb-1">
+                  Fecha Límite
                 </label>
                 <input
                   type="date"
-                  name="fecha_vencimiento"
-                  className="w-full px-3 py-2 mt-1 border rounded-md"
+                  required
+                  className="w-full px-4 py-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#a72a34]"
+                  value={formCargo.fecha_vencimiento}
+                  onChange={(e) =>
+                    setFormCargo({
+                      ...formCargo,
+                      fecha_vencimiento: e.target.value,
+                    })
+                  }
                 />
               </div>
-              <div className="flex justify-end space-x-4 mt-8">
+              <div className="pt-4 flex gap-3">
                 <button
                   type="button"
-                  onClick={() => setShowModal(false)}
-                  className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
+                  onClick={() => setCargoModalOpen(false)}
+                  className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-bold hover:bg-gray-200"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-principal text-white rounded-md hover:opacity-90"
+                  className="flex-1 py-3 bg-[#a72a34] text-white rounded-xl font-bold hover:bg-[#802028]"
                 >
                   Generar
                 </button>
@@ -9698,11 +9439,7 @@ const DetalleFinancieroAlumnoPage = () => {
     </div>
   );
 };
-// --- FIN COMPONENTE: DetalleFinancieroAlumnoPage (Admin) ---
 
-// --- INICIA NUEVO COMPONENTE: MisPagosPage (Alumno) ---
-// --- COMPONENTE FINANZAS ALUMNO (DASHBOARD ROJO) ---
-// --- COMPONENTE MIS PAGOS (TU DISEÑO) ---
 const MisPagosPage = () => {
   const [movimientos, setMovimientos] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -9881,6 +9618,16 @@ const MisPagosPage = () => {
                         <span className="flex items-center gap-1 text-green-600">
                           <CheckCircle size={14} /> Pagado el:{" "}
                           {formatDate(mov.fecha_pago)}
+                          {/* BOTÓN DE EDITAR FECHA */}
+                          <button
+                            onClick={() =>
+                              handleEditarFechaPago(mov.id, mov.fecha_pago)
+                            }
+                            className="ml-2 p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                            title="Editar fecha en la que se pagó"
+                          >
+                            <Edit size={14} />
+                          </button>
                         </span>
                       )}
                     </div>
