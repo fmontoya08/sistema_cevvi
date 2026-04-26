@@ -9172,7 +9172,7 @@ const DetalleFinanzasAlumnoPage = () => {
     if (window.confirm("¿Eliminar este cargo incorrecto?")) {
       try {
         await api.delete(`/admin/finanzas/cargo/${adeudoId}`);
-        fetchDatos();
+        fetchData(); // <--- CORREGIDO AQUÍ
       } catch (e) {
         alert("Error al eliminar.");
       }
@@ -9200,7 +9200,7 @@ const DetalleFinanzasAlumnoPage = () => {
           fecha_pago: nuevaFecha,
         });
         alert("✅ Fecha de pago actualizada correctamente.");
-        fetchDatos(); // Recarga la información
+        fetchData(); // <--- CORREGIDO AQUÍ
       } catch (err) {
         alert("Error al actualizar la fecha.");
       }
@@ -9618,16 +9618,6 @@ const MisPagosPage = () => {
                         <span className="flex items-center gap-1 text-green-600">
                           <CheckCircle size={14} /> Pagado el:{" "}
                           {formatDate(mov.fecha_pago)}
-                          {/* BOTÓN DE EDITAR FECHA */}
-                          <button
-                            onClick={() =>
-                              handleEditarFechaPago(mov.id, mov.fecha_pago)
-                            }
-                            className="ml-2 p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                            title="Editar fecha en la que se pagó"
-                          >
-                            <Edit size={14} />
-                          </button>
                         </span>
                       )}
                     </div>
