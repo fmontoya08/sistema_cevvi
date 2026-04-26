@@ -788,22 +788,6 @@ const bibliotecaStorage = multer.diskStorage({
 });
 const uploadBiblioteca = multer({ storage: bibliotecaStorage });
 
-// Multer para que el Admin suba fotos de otros usuarios
-const adminPerfilesStorage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, perfilesDir),
-  filename: (req, file, cb) => {
-    const userId = req.params.id; // Toma el ID de la URL, no del token
-    cb(
-      null,
-      `perfil_${userId}_${Date.now()}${path.extname(file.originalname)}`,
-    );
-  },
-});
-const uploadAdminPerfil = multer({
-  storage: adminPerfilesStorage,
-  fileFilter: imageFileFilter,
-});
-
 // --- INICIA NUEVO CÓDIGO (AGREGAR) ---
 // Configuración de Multer para FOTOS DE PERFIL
 const perfilesStorage = multer.diskStorage({
@@ -819,7 +803,6 @@ const perfilesStorage = multer.diskStorage({
   },
 });
 
-// Filtro para aceptar solo imágenes
 const imageFileFilter = (req, file, cb) => {
   if (file.mimetype.startsWith("image/")) {
     cb(null, true);
@@ -833,6 +816,35 @@ const uploadPerfil = multer({
   fileFilter: imageFileFilter,
   limits: { fileSize: 5 * 1024 * 1024 }, // Límite de 5MB
 });
+
+// ===============================================
+// PEGA ESTO AQUÍ ABAJO (YA QUE imageFileFilter EXISTE)
+// ===============================================
+const adminPerfilesStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, perfilesDir),
+  filename: (req, file, cb) => {
+    const userId = req.params.id; // Toma el ID de la URL
+    cb(
+      null,
+      `perfil_${userId}_${Date.now()}${path.extname(file.originalname)}`,
+    );
+  },
+});
+const uploadAdminPerfil = multer({
+  storage: adminPerfilesStorage,
+  fileFilter: imageFileFilter,
+});
+
+// Multer para Biblioteca
+const bibliotecaStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, bibliotecaDir),
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    cb(null, "biblio_" + uniqueSuffix + path.extname(file.originalname));
+  },
+});
+const uploadBiblioteca = multer({ storage: bibliotecaStorage });
+// ===============================================
 // --- TERMINA NUEVO CÓDIGO ---
 // --- TERMINA NUEVO CÓDIGO ---
 // --- CONFIGURACIÓN DE LA BASE DE DATOS ---
