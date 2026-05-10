@@ -2692,7 +2692,7 @@ adminRouter.put("/solicitudes/:id/estatus", async (req, res) => {
 
       // Crear notificación web (campanita)
       await db.query(
-        "INSERT INTO notificaciones (user_id, mensaje, url_destino) VALUES (?, ?, ?)",
+        "INSERT INTO notificaciones (usuario_id, mensaje, url_destino, leido, fecha, tipo) VALUES (?, ?, ?, 0, NOW(), 'sistema')",
         [alumno_id, mensajeAlumno, urlDestinoAlumno],
       );
 
@@ -3875,7 +3875,7 @@ adminRouter.post("/adeudos/generar-manual", async (req, res) => {
 
       // 3. Crear notificación web (campanita)
       await db.query(
-        "INSERT INTO notificaciones (user_id, mensaje, url_destino) VALUES (?, ?, ?)",
+        "INSERT INTO notificaciones (usuario_id, mensaje, url_destino, leido, fecha, tipo) VALUES (?, ?, ?, 0, NOW(), 'pago')",
         [alumno_id, mensaje, urlDestino],
       );
 
@@ -3961,7 +3961,7 @@ adminRouter.post("/adeudos/:id/marcar-pagado", async (req, res) => {
 
       // 3. Crear notificación web (campanita)
       await db.query(
-        "INSERT INTO notificaciones (user_id, mensaje, url_destino) VALUES (?, ?, ?)",
+        "INSERT INTO notificaciones (usuario_id, mensaje, url_destino, leido, fecha, tipo) VALUES (?, ?, ?, 0, NOW(), 'pago')",
         [alumno_id, mensaje, urlDestino],
       );
 
@@ -7143,9 +7143,12 @@ alumnoRouter.post("/solicitudes", async (req, res) => {
           adminId,
           mensajeAdmin,
           urlDestinoAdmin,
+          0,
+          new Date(),
+          'sistema',
         ]);
         await db.query(
-          "INSERT INTO notificaciones (user_id, mensaje, url_destino) VALUES ?",
+          "INSERT INTO notificaciones (usuario_id, mensaje, url_destino, leido, fecha, tipo) VALUES ?",
           [notifDataWeb],
         );
 
@@ -7365,9 +7368,12 @@ alumnoRouter.post("/solicitudes", async (req, res) => {
           adminId,
           mensaje,
           urlDestino,
+          0,
+          new Date(),
+          'sistema',
         ]);
         await db.query(
-          "INSERT INTO notificaciones (user_id, mensaje, url_destino) VALUES ?",
+          "INSERT INTO notificaciones (usuario_id, mensaje, url_destino, leido, fecha, tipo) VALUES ?",
           [notifDataWeb],
         );
 
