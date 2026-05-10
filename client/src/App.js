@@ -169,7 +169,6 @@ api.interceptors.request.use(
 );
 
 // Interceptor de RESPUESTA (para manejar errores)
-// Interceptor de RESPUESTA (para manejar errores)
 api.interceptors.response.use(
   (response) => {
     return response;
@@ -9319,8 +9318,8 @@ const DetalleFinanzasAlumnoPage = () => {
                   </span>
                 </td>
                 <td className="px-4 py-4">
-                  {a.estatus_pago === "pendiente" ||
-                  a.estatus_pago === "vencido" ? (
+                  {/* Convertimos a minúsculas por si la BD manda "PAGADO" o "Pagado" */}
+                  {a.estatus_pago?.toLowerCase() !== "pagado" ? (
                     <div className="flex gap-2">
                       <button
                         onClick={() => handleRegistrarPago(a.id)}
@@ -9335,16 +9334,17 @@ const DetalleFinanzasAlumnoPage = () => {
                         <Trash2 size={18} />
                       </button>
                     </div>
-                  ) : null}
-                  {a.estatus_pago === "pagado" && (
-                    <div className="flex items-center gap-2 text-green-700 font-bold bg-green-50 px-3 py-1.5 rounded-lg w-max border border-green-100">
-                      {formatDate(a.fecha_pago)}
+                  ) : (
+                    <div className="flex items-center gap-3 text-green-700 font-bold bg-green-50 px-3 py-2 rounded-lg w-max border border-green-200">
+                      <span>{formatDate(a.fecha_pago)}</span>
+
+                      {/* BOTÓN DE EDITAR MÁS VISIBLE */}
                       <button
                         onClick={() =>
                           handleEditarFechaPago(a.id, a.fecha_pago)
                         }
-                        className="text-gray-400 hover:text-blue-600 ml-2"
-                        title="Editar Fecha"
+                        className="flex items-center gap-1 p-1.5 bg-white text-gray-600 hover:text-blue-600 hover:bg-blue-100 border border-gray-300 rounded shadow-sm transition-all"
+                        title="Modificar fecha del pago"
                       >
                         <Edit size={14} />
                       </button>
@@ -15586,28 +15586,66 @@ const MisCalificacionesPage = () => {
   );
 };
 
+// --- ERROR BOUNDARY GLOBAL ---
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error("Error no capturado:", error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex h-screen flex-col items-center justify-center bg-gray-100 p-8">
+          <div className="max-w-md rounded-xl bg-white p-8 shadow-lg text-center">
+            <AlertCircle className="mx-auto mb-4 h-16 w-16 text-red-500" />
+            <h1 className="mb-2 text-2xl font-bold text-gray-800">Algo salió mal</h1>
+            <p className="mb-6 text-gray-600">
+              Ocurrió un error inesperado. Intenta recargar la página.
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              className="rounded-lg bg-[#a72a34] px-6 py-2 text-white font-semibold hover:bg-[#8a222b] transition-colors"
+            >
+              Recargar página
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+// Función para transformar la letra de la BD en una palabra completa
+function obtenerNombreGenero(generoCrudo) {
+  if (!generoCrudo) return "No especificado";
+  const generoNormalizado = String(generoCrudo).toUpperCase();
+  switch (generoNormalizado) {
+    case "H":
+    case "MASCULINO":
+      return "Masculino";
+    case "F":
+    case "M":
+    case "FEMENINO":
+      return "Femenino";
+    case "O":
+    case "OTRO":
+      return "Otro";
+    default:
+      return generoCrudo;
+  }
+}
+
 // --- COMPONENTE PRINCIPAL DE LA APP ---
 function App() {
-  // Función para transformar la letra de la BD en una palabra completa
-  const obtenerNombreGenero = (generoCrudo) => {
-    if (!generoCrudo) return "No especificado";
-    const generoNormalizado = String(generoCrudo).toUpperCase();
-    switch (generoNormalizado) {
-      case "H":
-      case "MASCULINO":
-        return "Masculino";
-      case "F":
-      case "M":
-      case "FEMENINO":
-        return "Femenino";
-      case "O":
-      case "OTRO":
-        return "Otro";
-      default:
-        return generoCrudo;
-    }
-  };
   return (
+    <ErrorBoundary>
     <BrowserRouter basename="/plataforma">
       <AuthProvider>
         <Routes>
@@ -15832,6 +15870,7 @@ function App() {
         </Routes>
       </AuthProvider>
     </BrowserRouter>
+    </ErrorBoundary>
   );
 }
 

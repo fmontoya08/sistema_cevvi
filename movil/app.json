@@ -4,7 +4,7 @@
     "slug": "uni-siglo-xxi-alumno",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/logo_sigloxxi.jpg",
+    "icon": "./assets/images/logo_sigloxxi.png",
     "scheme": "movil",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
@@ -14,7 +14,7 @@
     "android": {
       "package": "com.sigloxxi.alumno",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/logo_sigloxxi.jpg",
+        "foregroundImage": "./assets/images/logo_sigloxxi.png",
         "backgroundColor": "#FFFFFF"
       },
       "edgeToEdgeEnabled": true,
@@ -30,7 +30,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/logo_sigloxxi.jpg",
+          "image": "./assets/images/logo_sigloxxi.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
@@ -40,10 +40,12 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/images/logo_sigloxxi.jpg",
+          "icon": "./assets/images/logo_sigloxxi.png",
           "color": "#ffffff"
         }
-      ]
+      ],
+      "expo-font",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,

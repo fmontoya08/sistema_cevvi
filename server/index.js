@@ -12,25 +12,29 @@ const fs = require("fs");
 const MailComposer = require("nodemailer/lib/mail-composer");
 const archiver = require("archiver");
 const cron = require("node-cron");
+require("dotenv").config();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Middleware global para auto-vencer pagos que ya pasaron su fecha
-app.use(async (req, res, next) => {
+// Cron diario para auto-vencer pagos que ya pasaron su fecha
+// Se ejecuta todos los días a las 02:00 AM
+cron.schedule("0 2 * * *", async () => {
   try {
     if (db) {
-      await db.query(`
+      const [result] = await db.query(`
         UPDATE adeudos_alumnos 
         SET estatus_pago = 'vencido' 
         WHERE estatus_pago = 'pendiente' AND fecha_vencimiento < CURDATE()
       `);
+      if (result.affectedRows > 0) {
+        console.log(`[CRON] Pagos vencidos actualizados: ${result.affectedRows} registros`);
+      }
     }
   } catch (e) {
     console.error("Error actualizando pagos vencidos:", e.message);
   }
-  next();
 });
 
 let db;
@@ -45,7 +49,7 @@ async function connectToDatabase() {
   }
 }
 
-const JWT_SECRET = "tu_clave_secreta_super_segura_y_larga";
+const JWT_SECRET = process.env.JWT_SECRET;
 const CURP_REGEX =
   /^[A-Z]{1}[AEIOU]{1}[A-Z]{2}[0-9]{2}(0[1-9]|1[0-2])(0[1-9]|1[0-9]|2[0-9]|3[0-1])[HM]{1}(AS|BC|BS|CC|CS|CH|CL|CM|DF|DG|GT|GR|HG|JC|MC|MN|MS|NT|NL|OC|PL|QT|QR|SP|SL|SR|TC|TS|TL|VZ|YN|ZS|NE)[B-DF-HJ-NP-TV-Z]{3}[A-Z0-9]{1}[0-9]{1}$/;
 
@@ -106,15 +110,15 @@ const nodemailer = require("nodemailer"); // <--- AGREGAR AL INICIO
 // Úsalo con un correo real de Gmail o Outlook para pruebas
 // --- CONFIGURACIÓN DEL CORREO (SMTP PROPIO) ---
 const transporter = nodemailer.createTransport({
-  host: "mail.puntocerodigital.com.mx", // <--- PONE AQUÍ TU SERVIDOR SMTP
-  port: 587, // <--- PUERTO (465 es seguro SSL, 587 es TLS)
-  secure: false, // <--- Pon TRUE si usas puerto 465. Pon FALSE si usas 587.
+  host: process.env.SMTP_HOST,
+  port: parseInt(process.env.SMTP_PORT || "587"),
+  secure: process.env.SMTP_PORT === "465",
   auth: {
-    user: "contacto@puntocerodigital.com.mx", // <--- Tu correo completo
-    pass: "8T&=0Y)4w6C-+Bn&", // <--- La contraseña de ese correo
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
   },
   tls: {
-    rejectUnauthorized: false, // <--- Agrega esto por si tu certificado SSL es compartido
+    rejectUnauthorized: false,
   },
 });
 
@@ -134,10 +138,10 @@ async function enviarCredenciales(
     let transporter = nodemailer.createTransport({
       host: "smtp.gmail.com",
       port: 587,
-      secure: false, // true para 465
+      secure: false,
       auth: {
-        user: "franksnake08@gmail.com", // <--- Pon tu Gmail aquí (el mismo donde creaste la clave)
-        pass: "yipfsxwwmoikajlu", // <--- PEGA AQUÍ LAS 16 LETRAS QUE TE DIO GOOGLE
+        user: process.env.GMAIL_USER,
+        pass: process.env.GMAIL_APP_PASS,
       },
       family: 4,
     });
@@ -188,10 +192,10 @@ async function enviarCredenciales(
 // NUEVO: CONFIGURACIÓN CPANEL (NEUBOX)
 // ==========================================
 const CPANEL_CONFIG = {
-  host: "svgt326.serverneubox.com.mx",
-  user: "puntoce6", // <--- CAMBIA ESTO por tu usuario de cPanel
-  password: "5r6q8aV4lB.I]F", // <--- CAMBIA ESTO por tu contraseña de cPanel
-  domain: "universidadsigloxxi.com",
+  host: process.env.CPANEL_HOST,
+  user: process.env.CPANEL_USER,
+  password: process.env.CPANEL_PASS,
+  domain: process.env.CPANEL_DOMAIN,
 };
 
 // ==========================================
@@ -207,7 +211,7 @@ async function crearCorreoCpanel(usuario, passwordCorreo) {
     const bridgeUrl = `https://www.universidadsigloxxi.com/plataforma/crear_api_correo.php`;
 
     const formData = new URLSearchParams();
-    formData.append("secreto", "ClaveSecretaNode2026"); // Debe coincidir con el PHP
+    formData.append("secreto", process.env.PHP_BRIDGE_SECRET);
     formData.append("email", usuario);
     formData.append("password", passwordCorreo);
 
@@ -1057,9 +1061,41 @@ apiRouter.post("/recuperar-password", async (req, res) => {
 
 apiRouter.use(verifyToken);
 
-// --- RUTA CORREGIDA: Obtener No Leídas ---
-// NOTA: Asegúrate de usar la variable de router correcta (ej: apiRouter o app)
-// Si tu código original decía 'apiRouter.get', usa 'apiRouter'. Si decía 'app.get', usa 'app'.
+// ==========================================
+// REGISTRO DE TOKENS PUSH (NOTIFICACIONES ANDROID)
+// ==========================================
+apiRouter.post("/register-push-token", async (req, res) => {
+  try {
+    if (!req.user) return res.status(401).send({ message: "No autenticado" });
+    const { token } = req.body;
+    if (!token) return res.status(400).send({ message: "Token requerido" });
+    await db.query(
+      "INSERT INTO push_tokens (user_id, token) VALUES (?, ?) ON DUPLICATE KEY UPDATE user_id = VALUES(user_id)",
+      [req.user.id, token],
+    );
+    res.json({ message: "Token registrado" });
+  } catch (error) {
+    console.error("Error registrando push token:", error);
+    res.status(500).send({ message: "Error al registrar token" });
+  }
+});
+
+apiRouter.delete("/unregister-push-token", async (req, res) => {
+  try {
+    if (!req.user) return res.status(401).send({ message: "No autenticado" });
+    const { token } = req.body;
+    if (!token) return res.status(400).send({ message: "Token requerido" });
+    await db.query(
+      "DELETE FROM push_tokens WHERE token = ? AND user_id = ?",
+      [token, req.user.id],
+    );
+    res.json({ message: "Token eliminado" });
+  } catch (error) {
+    console.error("Error eliminando push token:", error);
+    res.status(500).send({ message: "Error al eliminar token" });
+  }
+});
+// ==========================================
 
 // --- RUTAS DE PERFIL Y SEGURIDAD (PARA TODOS LOS USUARIOS) ---
 
@@ -9513,85 +9549,7 @@ alumnoRouter.get("/mis-calificaciones", async (req, res) => {
   }
 });
 // --- FIN: RUTA HISTORIAL DE CALIFICACIONES (ALUMNO) ---
-
-// ==========================================
-// CRON JOB: MENSUALIDADES AUTOMÁTICAS
-// ==========================================
-// Se ejecuta el DÍA 1 de CADA MES a las 00:01 AM ("1 0 1 * *")
-cron.schedule("1 0 1 * *", async () => {
-  console.log("⏳ [CRON] Iniciando generación automática de mensualidades...");
-
-  try {
-    const connection = await db.getConnection();
-    await connection.beginTransaction();
-
-    // 1. Obtener el concepto de mensualidad
-    const [concepto] = await connection.query(
-      "SELECT id, monto_default FROM conceptos_pago WHERE nombre_concepto LIKE '%Mensualidad%' LIMIT 1",
-    );
-    if (concepto.length === 0) {
-      console.log("❌ [CRON] No se encontró el concepto de 'Mensualidad'.");
-      connection.release();
-      return;
-    }
-    const idMensualidad = concepto[0].id;
-    const monto = concepto[0].monto_default;
-
-    // 2. Obtener a TODOS los alumnos activos
-    const [alumnos] = await connection.query(
-      "SELECT id, modalidad, nombre FROM usuarios WHERE rol = 'alumno' AND activo = 1 AND estado_academico = 'activo'",
-    );
-
-    // 3. Función para encontrar el próximo Viernes o Sábado de este mes
-    const getNextDate = (dayOfWeek) => {
-      let d = new Date();
-      d.setDate(1); // Empezamos el día 1 del mes actual
-      while (d.getDay() !== dayOfWeek) {
-        d.setDate(d.getDate() + 1);
-      }
-      return d.toISOString().split("T")[0]; // YYYY-MM-DD
-    };
-
-    // 5 = Viernes (Virtual), 6 = Sábado (Presencial)
-    const fechaVencimientoVirtual = getNextDate(5);
-    const fechaVencimientoPresencial = getNextDate(6);
-
-    let cargosGenerados = 0;
-
-    // 4. Asignar cargos
-    for (const alumno of alumnos) {
-      const fechaVencimiento =
-        alumno.modalidad === "Virtual"
-          ? fechaVencimientoVirtual
-          : fechaVencimientoPresencial;
-
-      // Insertamos el adeudo
-      await connection.query(
-        "INSERT INTO adeudos_alumnos (alumno_id, concepto_id, monto_a_pagar, estatus_pago, fecha_vencimiento) VALUES (?, ?, ?, 'pendiente', ?)",
-        [alumno.id, idMensualidad, monto, fechaVencimiento],
-      );
-
-      // Notificamos por correo
-      enviarAlertaCorreo(
-        alumno.id,
-        "💳 Nueva Mensualidad Generada",
-        "Aviso de Pago",
-        `<p>Se ha generado tu colegiatura de este mes por la cantidad de <strong>$${monto}</strong>.</p>
-         <p>Tu fecha límite de pago (sin recargos) es el <strong>${fechaVencimiento}</strong>.</p>`,
-      );
-
-      cargosGenerados++;
-    }
-
-    await connection.commit();
-    console.log(
-      `✅ [CRON] Éxito. Se generaron ${cargosGenerados} mensualidades.`,
-    );
-    connection.release();
-  } catch (error) {
-    console.error("❌ [CRON] Error:", error);
-  }
-});
+// ELIMINADO: CRON de mensualidades automáticas (se generaban cargos duplicados)
 
 // ==========================================
 // FUNCIÓN GLOBAL: ENVIAR ALERTAS POR CORREO
@@ -9633,73 +9591,6 @@ async function enviarAlertaCorreo(usuarioId, asunto, titulo, mensajeHtml) {
   }
 }
 
-// ==========================================
-// CRON JOB: MENSUALIDADES AUTOMÁTICAS
-// ==========================================
-// Se ejecuta el DÍA 1 de CADA MES a las 00:01 AM ("1 0 1 * *")
-cron.schedule("1 0 1 * *", async () => {
-  console.log("⏳ [CRON] Iniciando generación automática de mensualidades...");
-  try {
-    const connection = await db.getConnection();
-    await connection.beginTransaction();
-
-    const [concepto] = await connection.query(
-      "SELECT id, monto_default FROM conceptos_pago WHERE nombre_concepto LIKE '%Mensualidad%' LIMIT 1",
-    );
-    if (concepto.length === 0) {
-      console.log("❌ [CRON] No se encontró el concepto de 'Mensualidad'.");
-      connection.release();
-      return;
-    }
-    const idMensualidad = concepto[0].id;
-    const monto = concepto[0].monto_default;
-
-    const [alumnos] = await connection.query(
-      "SELECT id, modalidad, nombre FROM usuarios WHERE rol = 'alumno' AND activo = 1 AND estado_academico = 'activo'",
-    );
-
-    const getNextDate = (dayOfWeek) => {
-      let d = new Date();
-      d.setDate(1); // Día 1 del mes actual
-      while (d.getDay() !== dayOfWeek) {
-        d.setDate(d.getDate() + 1);
-      }
-      return d.toISOString().split("T")[0];
-    };
-
-    const fechaVencimientoVirtual = getNextDate(5); // 5 = Viernes
-    const fechaVencimientoPresencial = getNextDate(6); // 6 = Sábado
-    let cargosGenerados = 0;
-
-    for (const alumno of alumnos) {
-      const fechaVencimiento =
-        alumno.modalidad === "Virtual"
-          ? fechaVencimientoVirtual
-          : fechaVencimientoPresencial;
-      await connection.query(
-        "INSERT INTO adeudos_alumnos (alumno_id, concepto_id, monto_a_pagar, estatus_pago, fecha_vencimiento) VALUES (?, ?, ?, 'pendiente', ?)",
-        [alumno.id, idMensualidad, monto, fechaVencimiento],
-      );
-
-      // Notificación de Cobro
-      enviarAlertaCorreo(
-        alumno.id,
-        "💳 Nueva Mensualidad Generada",
-        "Aviso de Pago",
-        `<p>Se ha generado tu colegiatura de este mes por la cantidad de <strong>$${monto}</strong>.</p>
-         <p>Tu fecha límite de pago (sin recargos) es el <strong>${fechaVencimiento}</strong>.</p>`,
-      );
-      cargosGenerados++;
-    }
-    await connection.commit();
-    console.log(
-      `✅ [CRON] Éxito. Se generaron ${cargosGenerados} mensualidades.`,
-    );
-    connection.release();
-  } catch (error) {
-    console.error("❌ [CRON] Error:", error);
-  }
-});
 
 app.listen(PORT, () => {
   console.log(`Servidor corriendo en http://localhost:${PORT}`);

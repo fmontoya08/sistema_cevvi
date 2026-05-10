@@ -6,8 +6,9 @@ import {
   ThemeProvider,
 } from "@react-navigation/native";
 import { useFonts } from "expo-font";
-import { Stack } from "expo-router";
+import { Stack, router } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
+import * as Notifications from "expo-notifications";
 import { useEffect } from "react";
 import "react-native-reanimated";
 import { useColorScheme, ActivityIndicator, View } from "react-native";
@@ -33,6 +34,19 @@ export default function RootLayoutNav() {
       console.error("Error cargando fuentes:", fontError);
     }
   }, [fontsLoaded, fontError]);
+
+  // --- MANEJAR TAP EN NOTIFICACIONES PUSH ---
+  useEffect(() => {
+    const sub = Notifications.addNotificationResponseReceivedListener(
+      (response) => {
+        const url = response.notification.request.content.data?.url;
+        if (url) {
+          router.push(url);
+        }
+      },
+    );
+    return () => sub.remove();
+  }, []);
 
   if (!fontsLoaded && !fontError) {
     return (
