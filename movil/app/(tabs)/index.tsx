@@ -95,6 +95,19 @@ export default function HomeScreen() {
               <Text style={styles.cardText}>Mis Clases</Text>
             </TouchableOpacity>
 
+            {/* Botón: Biblioteca Virtual */}
+            <TouchableOpacity
+              style={styles.card}
+              onPress={() => router.push("/biblioteca")}
+            >
+              <View
+                style={[styles.iconContainer, { backgroundColor: "#fef3c7" }]}
+              >
+                <Ionicons name="library-outline" size={32} color="#d97706" />
+              </View>
+              <Text style={styles.cardText}>Biblioteca</Text>
+            </TouchableOpacity>
+
             {/* Botón: Calendario */}
             <TouchableOpacity
               style={styles.card}
@@ -106,6 +119,29 @@ export default function HomeScreen() {
                 <Ionicons name="calendar-outline" size={32} color="#9333ea" />
               </View>
               <Text style={styles.cardText}>Calendario</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Fila 3: Calificaciones */}
+          <View style={styles.grid}>
+            <TouchableOpacity
+              style={styles.card}
+              onPress={() => router.push("/mis-calificaciones")}
+            >
+              <View style={[styles.iconContainer, { backgroundColor: "#fce7e7" }]}>
+                <Ionicons name="stats-chart" size={32} color="#a72a34" />
+              </View>
+              <Text style={styles.cardText}>Mis Calificaciones</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.card}
+              onPress={() => router.push("/expediente")}
+            >
+              <View style={[styles.iconContainer, { backgroundColor: "#e0f2fe" }]}>
+                <Ionicons name="folder-open" size={32} color="#0284c7" />
+              </View>
+              <Text style={styles.cardText}>Expediente</Text>
             </TouchableOpacity>
           </View>
         </View>

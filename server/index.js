@@ -1483,6 +1483,8 @@ apiRouter.post("/calificar-grupo-completo", async (req, res) => {
             const expoMessages = tokens.map((t) => ({
               to: t.token,
               sound: "default",
+              channelId: "default",
+              priority: "high",
               title: "Boleta Actualizada 📊",
               body: mensaje,
               data: { url: linkDestino },
@@ -2197,6 +2199,8 @@ adminRouter.post("/finanzas/cargo", async (req, res) => {
       const expoMessages = tokens.map((t) => ({
         to: t.token,
         sound: "default",
+        channelId: "default",
+        priority: "high",
         title: "Nuevo Cargo Generado",
         body: mensaje,
         data: { url: linkPagos }, // Para abrir la app en la sección de pagos
@@ -2701,6 +2705,8 @@ adminRouter.put("/solicitudes/:id/estatus", async (req, res) => {
         const messages = tokens.map((t) => ({
           to: t.token,
           sound: "default",
+          channelId: "default",
+          priority: "high",
           title: "Actualización de Solicitud 🔄",
           body: mensajeAlumno,
         }));
@@ -3032,6 +3038,8 @@ adminRouter.post("/calificaciones/guardar-lote", async (req, res) => {
           const expoMessages = tokens.map((t) => ({
             to: t.token,
             sound: "default",
+            channelId: "default",
+            priority: "high",
             title: "Nueva Calificación",
             body: mensaje,
             data: { url: "/alumno/mis-calificaciones" },
@@ -3880,6 +3888,8 @@ adminRouter.post("/adeudos/generar-manual", async (req, res) => {
         const messages = tokens.map((t) => ({
           to: t.token,
           sound: "default",
+          channelId: "default",
+          priority: "high",
           title: "Nuevo Cargo Generado 💳",
           body: mensaje,
         }));
@@ -3964,6 +3974,8 @@ adminRouter.post("/adeudos/:id/marcar-pagado", async (req, res) => {
         const messages = tokens.map((t) => ({
           to: t.token,
           sound: "default",
+          channelId: "default",
+          priority: "high",
           title: "¡Pago Registrado! ✅",
           body: mensaje,
         }));
@@ -4910,6 +4922,8 @@ adminRouter.post("/grupos/:id/agregar-materia", async (req, res) => {
         const expoMessages = tokens.map((t) => ({
           to: t.token,
           sound: "default",
+          channelId: "default",
+          priority: "high",
           title: "Carga Académica Actualizada",
           body: mensaje,
           data: { url: linkAula }, // <-- CORRECCIÓN 2: Enviamos el link al celular también
@@ -6087,6 +6101,8 @@ docenteRouter.post(
             const expoMessages = tokens.map((t) => ({
               to: t.token,
               sound: "default",
+              channelId: "default",
+              priority: "high",
               title: "Nueva Tarea 📚",
               body: mensaje,
               data: { url: urlDestino },
@@ -6187,6 +6203,8 @@ docenteRouter.post(
           const messages = tokens.map((t) => ({
             to: t.token,
             sound: "default",
+            channelId: "default",
+            priority: "high",
             title: tituloPush,
             body: mensaje,
             data: { url: urlDestino },
@@ -6345,6 +6363,8 @@ docenteRouter.post(
             const messages = tokens.map((t) => ({
               to: t.token,
               sound: "default",
+              channelId: "default",
+              priority: "high",
               title: "Nuevo Material 📎", // Icono de clip para archivos
               body: mensaje,
               data: { url: urlDestino },
@@ -6432,6 +6452,8 @@ docenteRouter.post(
             const messages = tokens.map((t) => ({
               to: t.token,
               sound: "default",
+              channelId: "default",
+              priority: "high",
               title: "Nuevo Enlace 🔗", // Icono de link para enlaces
               body: mensaje,
               data: { url: urlDestino },
@@ -6699,6 +6721,8 @@ docenteRouter.post(
             const expoMessages = tokens.map((t) => ({
               to: t.token,
               sound: "default",
+              channelId: "default",
+              priority: "high",
               title: "Reporte de Asistencia 📅",
               body: mensaje,
               data: { url: linkAula },
@@ -6893,6 +6917,8 @@ foroRouter.post(
             const messages = tokens.map((t) => ({
               to: t.token,
               sound: "default",
+              channelId: "default",
+              priority: "high",
               title: "Nuevo Tema en el Foro 💬",
               body: mensajeNotif,
               data: { url: urlDestino },
@@ -7019,6 +7045,8 @@ foroRouter.post("/hilo/:hiloId/respuestas", canAccessForo, async (req, res) => {
             const messages = tokens.map((t) => ({
               to: t.token,
               sound: "default",
+              channelId: "default",
+              priority: "high",
               title: "Nueva Respuesta en Foro 🗣️",
               body: mensajeNotif,
               data: { url: urlDestino },
@@ -7130,6 +7158,8 @@ alumnoRouter.post("/solicitudes", async (req, res) => {
           const messages = tokens.map((t) => ({
             to: t.token,
             sound: "default",
+            channelId: "default",
+            priority: "high",
             title: "Nueva Solicitud Recibida 📬",
             body: mensajeAdmin,
           }));
@@ -7350,6 +7380,8 @@ alumnoRouter.post("/solicitudes", async (req, res) => {
           const messages = tokens.map((t) => ({
             to: t.token,
             sound: "default",
+            channelId: "default",
+            priority: "high",
             title: "Nueva Solicitud Recibida 📬",
             body: mensaje,
           }));
@@ -7558,6 +7590,8 @@ alumnoRouter.post(
             const messages = tokens.map((t) => ({
               to: t.token,
               sound: "default",
+              channelId: "default",
+              priority: "high",
               title: tituloPush,
               body: mensaje,
               data: { url: urlDestino },
@@ -7876,6 +7910,8 @@ app.post("/api/muro/publicar", verifyToken, async (req, res) => {
           const expoMessages = tokens.map((t) => ({
             to: t.token,
             sound: "default",
+            channelId: "default",
+            priority: "high",
             title: "Nuevo Aviso en el Muro 📢",
             body: textoNotificacion,
             data: { url: urlDestino },
@@ -9300,6 +9336,8 @@ adminRouter.post("/anuncios", async (req, res) => {
           const expoMessages = tokens.map((t) => ({
             to: t.token,
             sound: "default",
+            channelId: "default",
+            priority: "high",
             title: "📢 Aviso de Dirección",
             body: titulo,
           }));

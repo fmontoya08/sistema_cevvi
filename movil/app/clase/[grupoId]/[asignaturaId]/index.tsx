@@ -76,6 +76,24 @@ export default function DetalleMateriaScreen() {
           <Text style={styles.cardTitle}>Asistencia</Text>
           <Text style={styles.cardDesc}>Historial de faltas</Text>
         </TouchableOpacity>
+
+        {/* 5. MURO (Stream de avisos) */}
+        <TouchableOpacity style={styles.card} onPress={() => irA("muro")}>
+          <View style={[styles.iconCircle, { backgroundColor: "#e0f2fe" }]}>
+            <Ionicons name="chatbubbles" size={32} color="#0284c7" />
+          </View>
+          <Text style={styles.cardTitle}>Muro</Text>
+          <Text style={styles.cardDesc}>Avisos y debates</Text>
+        </TouchableOpacity>
+
+        {/* 6. EXÁMENES */}
+        <TouchableOpacity style={styles.card} onPress={() => irA("examenes")}>
+          <View style={[styles.iconCircle, { backgroundColor: "#f3e8ff" }]}>
+            <Ionicons name="document-text" size={32} color="#9333ea" />
+          </View>
+          <Text style={styles.cardTitle}>Exámenes</Text>
+          <Text style={styles.cardDesc}>Evaluaciones</Text>
+        </TouchableOpacity>
       </View>
     </ScrollView>
   );
