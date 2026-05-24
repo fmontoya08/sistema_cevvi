@@ -37,12 +37,129 @@ cron.schedule("0 2 * * *", async () => {
   }
 });
 
+// Cron mensual para generar cargos de mensualidad automáticamente
+// Se ejecuta el 1er día de cada mes a las 06:00 AM
+cron.schedule("0 6 1 * *", async () => {
+  try {
+    if (!db) return;
+
+    const [conceptos] = await db.query(
+      "SELECT id, nombre_concepto, monto_default FROM conceptos_pago WHERE tipo = 'RECURRENTE' LIMIT 1",
+    );
+    if (conceptos.length === 0) return;
+    const concepto = conceptos[0];
+
+    const ahora = new Date();
+    const mesNum = ahora.getMonth() + 1;
+    const año = ahora.getFullYear();
+    const nombreMes = ahora.toLocaleString("es-MX", { month: "long" });
+    const mesCapitalizado = nombreMes.charAt(0).toUpperCase() + nombreMes.slice(1);
+
+    // Último día del mes actual
+    const ultimoDia = new Date(año, ahora.getMonth() + 1, 0);
+    const fechaVencimiento = ultimoDia.toISOString().split("T")[0];
+
+    const [alumnos] = await db.query(
+      "SELECT id, nombre, apellido_paterno, apellido_materno FROM usuarios WHERE rol = 'alumno' AND activo = 1",
+    );
+
+    let generados = 0;
+
+    for (const alumno of alumnos) {
+      const [existentes] = await db.query(
+        `SELECT COUNT(*) as total FROM adeudos_alumnos aa
+         INNER JOIN conceptos_pago cp ON aa.concepto_id = cp.id
+         WHERE aa.alumno_id = ? AND cp.tipo = 'RECURRENTE'
+         AND MONTH(aa.fecha_vencimiento) = ? AND YEAR(aa.fecha_vencimiento) = ?`,
+        [alumno.id, mesNum, año],
+      );
+      if (existentes[0].total > 0) continue;
+
+      await db.query(
+        "INSERT INTO adeudos_alumnos (alumno_id, concepto_id, monto_a_pagar, estatus_pago, fecha_vencimiento) VALUES (?, ?, ?, 'pendiente', ?)",
+        [alumno.id, concepto.id, concepto.monto_default, fechaVencimiento],
+      );
+
+      const mensaje = `Se generó tu mensualidad de ${mesCapitalizado} ${año}`;
+
+      await db.query(
+        "INSERT INTO notificaciones (usuario_id, mensaje, url_destino, leido, fecha, tipo) VALUES (?, ?, ?, 0, NOW(), 'pago')",
+        [alumno.id, mensaje, "/pagos"],
+      );
+
+      const [tokens] = await db.query(
+        "SELECT token FROM push_tokens WHERE user_id = ?",
+        [alumno.id],
+      );
+      if (tokens.length > 0) {
+        fetch("https://exp.host/--/api/v2/push/send", {
+          method: "POST",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(
+            tokens.map((t) => ({
+              to: t.token,
+              sound: "default",
+              channelId: "default",
+              priority: "high",
+              title: "Nueva Mensualidad Generada",
+              body: mensaje,
+              data: { url: "/pagos" },
+            })),
+          ),
+        }).catch((err) => console.error("Error enviando push mensualidad:", err));
+      }
+
+      try {
+        const [userData] = await db.query(
+          "SELECT email_personal, email FROM usuarios WHERE id = ?",
+          [alumno.id],
+        );
+        const correoDestino = userData[0]?.email_personal || userData[0]?.email;
+        if (correoDestino) {
+          await enviarAlertaCorreo(
+            alumno.id,
+            "Mensualidad Generada - Universidad Siglo XXI",
+            "Nueva Mensualidad",
+            `<p>Se ha generado tu mensualidad de <strong>$${parseFloat(concepto.monto_default).toFixed(2)} MXN</strong> correspondiente a <strong>${mesCapitalizado} ${año}</strong>.</p>
+             <p>Fecha de vencimiento: <strong>${fechaVencimiento}</strong></p>
+             <p>Realiza tu pago oportunamente para evitar la suspensión de tu acceso a la plataforma.</p>`,
+          );
+        }
+      } catch (emailErr) {
+        console.error(`Error enviando email a alumno ${alumno.id}:`, emailErr.message);
+      }
+
+      generados++;
+    }
+
+    if (generados > 0) {
+      console.log(`[CRON MENSUAL] ${generados} mensualidades generadas correctamente.`);
+    }
+  } catch (e) {
+    console.error("Error en cron mensual:", e.message);
+  }
+});
+
 let db;
 
 async function connectToDatabase() {
   try {
     db = await mysql.createPool(dbConfig);
     console.log("Conectado exitosamente a la base de datos MySQL.");
+
+    // Asegurar que existe el concepto RECURRENTE de mensualidad
+    const [conceptos] = await db.query(
+      "SELECT id FROM conceptos_pago WHERE tipo = 'RECURRENTE' LIMIT 1",
+    );
+    if (conceptos.length === 0) {
+      await db.query(
+        "INSERT INTO conceptos_pago (nombre_concepto, monto_default, tipo, es_concepto_inscripcion) VALUES ('Mensualidad', 1000.00, 'RECURRENTE', 0)",
+      );
+      console.log("[INIT] Concepto 'Mensualidad' creado automáticamente.");
+    }
   } catch (err) {
     console.error("Error al conectar a la base de datos:", err);
     process.exit(1);
@@ -2123,6 +2240,32 @@ adminRouter.post(
     }
   },
 );
+
+// --- RUTA: LISTAR CORREOS INSTITUCIONALES (ADMIN) ---
+adminRouter.get("/email/institucionales", async (req, res) => {
+  try {
+    const [rows] = await db.query(`
+      SELECT
+        u.id,
+        u.nombre,
+        u.apellido_paterno,
+        u.apellido_materno,
+        u.matricula,
+        u.email,
+        u.email_personal,
+        u.rol,
+        CASE WHEN u.password_email IS NOT NULL AND u.password_email != '' THEN 1 ELSE 0 END as correo_configurado,
+        DATE_FORMAT(u.fecha_creacion, '%Y-%m-%d') as fecha_creacion
+      FROM usuarios u
+      WHERE u.activo = 1
+      ORDER BY u.id DESC
+    `);
+    res.json(rows);
+  } catch (error) {
+    console.error("Error listando correos institucionales:", error);
+    res.status(500).send("Error al obtener datos de correos");
+  }
+});
 
 // --- RUTAS DE GESTIÓN FINANCIERA (ADMIN --> ALUMNO) ---
 
@@ -8672,143 +8815,7 @@ app.get("/api/alumno/finanzas/resumen", verificarAlumno, async (req, res) => {
     res.status(500).send("Error del servidor al cargar finanzas");
   }
 });
-// ==========================================
-// MÓDULO DE CORREO (DENTRO DE ADMIN ROUTER)
-// ==========================================
 
-// Configuración para IMAP (Leer correos)
-const mailConfig = {
-  user: "controlescolar@universidadsigloxxi.com",
-  password: "_(Wx!5CSLI9jmof#", // Tu contraseña real
-  host: "mail.universidadsigloxxi.com",
-  imapPort: 993,
-  tls: true,
-};
-
-// 1. RUTA PARA LEER INBOX (GET /api/admin/email/inbox)
-adminRouter.get("/email/inbox", async (req, res) => {
-  const config = {
-    imap: {
-      user: mailConfig.user,
-      password: mailConfig.password,
-      host: mailConfig.host,
-      port: mailConfig.imapPort,
-      tls: true,
-      authTimeout: 3000,
-    },
-  };
-
-  try {
-    const connection = await imaps.connect(config);
-    await connection.openBox("INBOX");
-
-    const searchCriteria = ["ALL"];
-    const fetchOptions = {
-      bodies: ["HEADER", "TEXT"],
-      markSeen: false,
-      struct: true,
-    };
-
-    // Obtenemos mensajes
-    const messages = await connection.search(searchCriteria, fetchOptions);
-
-    // Tomamos los últimos 10
-    const latestMessages = messages.slice(-10).reverse();
-
-    const correosProcesados = await Promise.all(
-      latestMessages.map(async (item) => {
-        const header = item.parts.find((part) => part.which === "HEADER");
-        const subject = header.body.subject
-          ? header.body.subject[0]
-          : "(Sin Asunto)";
-        const from = header.body.from ? header.body.from[0] : "Desconocido";
-        const date = header.body.date ? header.body.date[0] : "";
-
-        return {
-          id: item.attributes.uid,
-          asunto: subject,
-          de: from,
-          fecha: date,
-        };
-      }),
-    );
-
-    connection.end();
-    res.json(correosProcesados);
-  } catch (error) {
-    console.error("Error leyendo correos:", error);
-    res.status(500).send("Error al leer la bandeja de entrada");
-  }
-});
-
-// 2. RUTA PARA ENVIAR CORREO (POST /api/admin/email/enviar)adasd
-adminRouter.post("/email/enviar", async (req, res) => {
-  const { destinatario, asunto, mensaje } = req.body;
-
-  try {
-    // Reutilizamos el transporter que ya tienes configurado más arriba en tu archivo
-    // Asegúrate de que tu variable 'transporter' esté creada antes de esto
-    await transporter.sendMail({
-      from: `"Control Escolar" <${mailConfig.user}>`,
-      to: destinatario,
-      subject: asunto,
-      html: mensaje,
-    });
-
-    res.json({ message: "Correo enviado exitosamente" });
-  } catch (error) {
-    console.error("Error enviando correo:", error);
-    res.status(500).send("Error al enviar el correo");
-  }
-});
-// 3. RUTA PARA LEER EL CUERPO DE UN CORREO ESPECÍFICO
-adminRouter.get("/email/mensaje/:uid", async (req, res) => {
-  const { uid } = req.params;
-
-  const config = {
-    imap: {
-      user: mailConfig.user,
-      password: mailConfig.password,
-      host: mailConfig.host,
-      port: mailConfig.imapPort,
-      tls: true,
-      authTimeout: 10000,
-      tlsOptions: { rejectUnauthorized: false }, // <-- IMPORTANTE: La corrección de seguridad
-    },
-  };
-
-  try {
-    const connection = await imaps.connect(config);
-    await connection.openBox("INBOX");
-
-    const searchCriteria = [["UID", uid]];
-    const fetchOptions = { bodies: [""], markSeen: true }; // "" trae todo el cuerpo
-
-    const messages = await connection.search(searchCriteria, fetchOptions);
-
-    if (messages.length === 0) {
-      connection.end();
-      return res.status(404).send("Correo no encontrado");
-    }
-
-    // Usamos mailparser para convertir el código raro del correo en texto leíble
-    const all = messages[0].parts.find((part) => part.which === "");
-    const parsed = await simpleParser(all.body);
-
-    connection.end();
-
-    // Devolvemos HTML (si tiene) o Texto plano
-    res.json({
-      asunto: parsed.subject,
-      de: parsed.from.text,
-      fecha: parsed.date,
-      html: parsed.html || parsed.textAsHtml || parsed.text, // Priorizamos HTML
-    });
-  } catch (error) {
-    console.error("Error leyendo mensaje:", error);
-    res.status(500).send("Error al abrir el correo");
-  }
-});
 
 // ---------------------------------------------------------
 // RUTA CORREGIDA: NOMBRES EXACTOS DE TU BASE DE DATOSsa

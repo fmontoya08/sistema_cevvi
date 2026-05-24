@@ -5,7 +5,7 @@ import ExploradorArchivos from "./pages/ExploradorArchivos";
 import MiDrivePage from "./pages/MiDrivePage";
 // --- IMPORTACIONES NUEVAS PARA EL AULA VIRTUAL ---
 import MuroDocentePage from "./pages/MuroDocentePage";
-import MuroAlumnoPage from "./pages/MuroAlumnoPage";
+
 import CrearExamenPage from "./pages/CrearExamenPage";
 import EditarExamenPage from "./pages/EditarExamenPage";
 import AnaliticasGrupoPage from "./pages/AnaliticasGrupoPage";
@@ -82,11 +82,10 @@ import {
   FileClock, // <-- AÑADIR
   FileX, // <-- AÑADIR
   Eye,
-  School,
-  UserCheck, // Para docentes
+
   Search,
   GitBranch, // <--- NUEVO
-  AlertTriangle, // Para Alertas
+
   Briefcase, // Para Docentes
   Mail, // Para tabla de usuarios
   Phone, // Para tabla de usuarios
@@ -112,7 +111,6 @@ import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import esLocale from "@fullcalendar/core/locales/es";
-import { Bar, Pie } from "react-chartjs-2";
 import {
   Chart as ChartJS,
   ArcElement,
@@ -738,6 +736,12 @@ const AdminLayout = () => {
       icon: Mail,
       label: "Correo Institucional",
       path: "/admin/correo",
+      roles: ["admin", "control_escolar"],
+    },
+    {
+      icon: Mail,
+      label: "Directorio Correos",
+      path: "/admin/correos-institucionales",
       roles: ["admin", "control_escolar"],
     },
     {
@@ -2190,6 +2194,7 @@ const UserModal = ({
                 <img
                   src={`https://api-universidad-c5o8.onrender.com/uploads/perfiles/${userToEdit.foto_perfil}`}
                   className="w-full h-full object-cover"
+                  alt="Foto de perfil"
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-gray-400 font-bold text-xl">
@@ -2567,82 +2572,6 @@ const UserModal = ({
   );
 };
 
-// --- COMPONENTE FICHA DE GRUPO (Pegar después de UserDetailModal) ---
-const GroupDetailModal = ({ grupo, onClose }) => {
-  if (!grupo) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50 p-4 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border border-gray-100">
-        {/* Encabezado Lila/Morado para diferenciar de Usuarios */}
-        <div className="bg-gradient-to-r from-purple-600 to-indigo-700 p-6 text-white relative">
-          <button
-            onClick={onClose}
-            className="absolute top-4 right-4 text-white/80 hover:text-white transition-colors"
-          >
-            <X size={24} />
-          </button>
-
-          <div className="flex flex-col items-start">
-            <span className="bg-white/20 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider mb-2">
-              {grupo.modalidad}
-            </span>
-            <h2 className="text-3xl font-bold">{grupo.nombre_grupo}</h2>
-            <p className="text-purple-100 text-lg mt-1">{grupo.nombre_plan}</p>
-          </div>
-        </div>
-
-        {/* Cuerpo */}
-        <div className="p-6 space-y-6">
-          <div className="grid grid-cols-2 gap-6">
-            <div className="bg-purple-50 p-3 rounded-lg">
-              <p className="text-xs text-purple-600 uppercase font-bold mb-1">
-                Grado
-              </p>
-              <p className="text-gray-800 font-medium text-lg">
-                {grupo.nombre_grado}
-              </p>
-            </div>
-            <div className="bg-blue-50 p-3 rounded-lg">
-              <p className="text-xs text-blue-600 uppercase font-bold mb-1">
-                Cupo
-              </p>
-              <p className="text-gray-800 font-medium text-lg">
-                {grupo.cupo} Alumnos
-              </p>
-            </div>
-            <div className="col-span-2 bg-gray-50 p-3 rounded-lg flex justify-between items-center">
-              <div>
-                <p className="text-xs text-gray-500 uppercase font-bold mb-1">
-                  Ciclo Escolar
-                </p>
-                <p className="text-gray-800 font-medium">
-                  {grupo.nombre_ciclo}
-                </p>
-              </div>
-              <div className="text-right">
-                <p className="text-xs text-gray-500 uppercase font-bold mb-1">
-                  Sede
-                </p>
-                <p className="text-gray-800 font-medium">{grupo.nombre_sede}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="pt-4 mt-2 border-t border-gray-100 text-center">
-            <button
-              onClick={onClose}
-              className="text-purple-600 hover:text-purple-800 font-medium text-sm transition-colors"
-            >
-              Cerrar Ficha
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
 // --- COMPONENTE USUARIOS (DISEÑO HORIZONTAL "PANORÁMICO" SIN SCROLL) ---
 const UsuariosPage = () => {
   const [usuarios, setUsuarios] = useState([]);
@@ -2903,6 +2832,7 @@ const UsuariosPage = () => {
                           <img
                             src={`https://api-universidad-c5o8.onrender.com/uploads/perfiles/${u.foto_perfil}`}
                             className="w-full h-full object-cover"
+                            alt="Foto de perfil"
                           />
                         ) : (
                           u.nombre.charAt(0)
@@ -3702,238 +3632,6 @@ const UserDetailModal = ({ user, onClose }) => {
   );
 };
 
-const UsuarioModal = ({ usuario, onClose, onSave }) => {
-  const isEditing = !!usuario;
-  const [formData, setFormData] = useState({
-    nombre: usuario?.nombre || "",
-    apellido_paterno: usuario?.apellido_paterno || "",
-    apellido_materno: usuario?.apellido_materno || "",
-    email: usuario?.email || "",
-    password: "",
-    rol: usuario?.rol || "aspirante",
-    genero: usuario?.genero || "",
-    telefono: usuario?.telefono || "",
-    curp: usuario?.curp || "",
-    matricula: usuario?.matricula || "",
-    fecha_nacimiento: usuario?.fecha_nacimiento || "",
-  });
-
-  const [formErrors, setFormErrors] = useState({});
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    if (name === "curp") {
-      setFormData((prev) => ({ ...prev, [name]: value.toUpperCase() }));
-      // Limpia el error de CURP si el usuario está corrigiendo
-      if (formErrors.curp) {
-        setFormErrors((prev) => ({ ...prev, curp: null }));
-      }
-    } else {
-      setFormData((prev) => ({ ...prev, [name]: value }));
-    }
-  };
-
-  const validateCurp = (curp) => {
-    if (!curp || curp.length === 0) return true; // Permite CURP vacía (opcional)
-    const curpRegex =
-      /^[A-Z]{1}[AEIOU]{1}[A-Z]{2}[0-9]{2}(0[1-9]|1[0-2])(0[1-9]|1[0-9]|2[0-9]|3[0-1])[HM]{1}(AS|BC|BS|CC|CS|CH|CL|CM|DF|DG|GT|GR|HG|JC|MC|MN|MS|NT|NL|OC|PL|QT|QR|SP|SL|SR|TC|TS|TL|VZ|YN|ZS|NE)[B-DF-HJ-NP-TV-Z]{3}[A-Z0-9]{1}[0-9]{1}$/;
-    return curpRegex.test(curp);
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setFormErrors({});
-    if (!validateCurp(formData.curp)) {
-      setFormErrors({ curp: "El formato de la CURP no es válido." });
-      return; // Detiene el envío
-    }
-    try {
-      if (isEditing) {
-        const dataToSend = { ...formData };
-        if (!dataToSend.password) {
-          delete dataToSend.password;
-        }
-        await api.put(`/admin/usuarios/${usuario.id}`, dataToSend);
-      } else {
-        await api.post("/admin/usuarios", formData);
-      }
-      onSave();
-      onClose();
-    } catch (error) {
-      console.error("Error al guardar usuario", error);
-      alert(
-        "Error al guardar: " +
-          (error.response?.data?.message || "Error desconocido"),
-      );
-      setFormErrors({
-        submit: error.response?.data?.message || "Error desconocido",
-      });
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6 relative">
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-gray-500 hover:text-gray-800"
-        >
-          <X size={24} />
-        </button>
-        <h3 className="text-2xl font-bold mb-6">
-          {isEditing ? "Editar" : "Nuevo"} Usuario
-        </h3>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <input
-              type="text"
-              name="nombre"
-              value={formData.nombre}
-              onChange={handleChange}
-              placeholder="Nombre(s)"
-              required
-              className="w-full px-3 py-2 border rounded-md"
-            />
-            <input
-              type="text"
-              name="apellido_paterno"
-              value={formData.apellido_paterno}
-              onChange={handleChange}
-              placeholder="Apellido Paterno"
-              required
-              className="w-full px-3 py-2 border rounded-md"
-            />
-            <input
-              type="text"
-              name="apellido_materno"
-              value={formData.apellido_materno}
-              onChange={handleChange}
-              placeholder="Apellido Materno"
-              className="w-full px-3 py-2 border rounded-md"
-            />
-            <input
-              type="text"
-              name="telefono"
-              value={formData.telefono}
-              onChange={handleChange}
-              placeholder="Teléfono"
-              className="w-full px-3 py-2 border rounded-md"
-            />
-            <input
-              type="text"
-              name="curp"
-              value={formData.curp}
-              onChange={handleChange}
-              placeholder="CURP"
-              // --- CAMBIOS AQUÍ ---
-              maxLength="18"
-              className={`w-full px-3 py-2 border rounded-md ${
-                formErrors.curp ? "border-red-500" : "border-gray-300"
-              }`}
-              // Agrega validación nativa del navegador
-              pattern="[A-Z]{1}[AEIOU]{1}[A-Z]{2}[0-9]{2}(0[1-9]|1[0-2])(0[1-9]|1[0-9]|2[0-9]|3[0-1])[HM]{1}(AS|BC|BS|CC|CS|CH|CL|CM|DF|DG|GT|GR|HG|JC|MC|MN|MS|NT|NL|OC|PL|QT|QR|SP|SL|SR|TC|TS|TL|VZ|YN|ZS|NE)[B-DF-HJ-NP-TV-Z]{3}[A-Z0-9]{1}[0-9]{1}"
-              title="Ingresa una CURP válida de 18 caracteres en mayúsculas."
-            />
-            {/* --- CAMPO MATRÍCULA (AHORA READ-ONLY) --- */}
-            {isEditing && (
-              <div>
-                <label className="text-sm font-medium text-gray-700">
-                  Matrícula (generada automáticamente)
-                </label>
-                <input
-                  type="text"
-                  name="matricula"
-                  value={formData.matricula}
-                  readOnly // <-- Importante: solo lectura
-                  className="w-full px-3 py-2 border rounded-md bg-gray-100 cursor-not-allowed" // <-- Estilo de deshabilitado
-                />
-              </div>
-            )}
-            {/* --- FIN --- */}
-
-            <div>
-              <label className="text-sm text-gray-500">
-                Fecha de Nacimiento
-              </label>
-              <input
-                type="date"
-                name="fecha_nacimiento"
-                value={formData.fecha_nacimiento}
-                onChange={handleChange}
-                placeholder="Fecha de Nacimiento"
-                className="w-full px-3 py-2 border rounded-md"
-              />
-            </div>
-            <select
-              name="genero"
-              value={formData.genero}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border rounded-md"
-            >
-              <option value="">-- Seleccione Género --</option>
-              <option value="Femenino">Femenino</option>
-              <option value="Masculino">Masculino</option>
-              <option value="Otro">Otro</option>
-            </select>
-            {/* --- FIN DE CAMPOS NUEVOS --- */}
-          </div>
-          {/* --- NUEVO: MUESTRA EL ERROR DE CURP --- */}
-          {formErrors.curp && (
-            <p className="text-red-600 text-sm">{formErrors.curp}</p>
-          )}
-          <input
-            type="email"
-            name="email"
-            value={formData.email}
-            onChange={handleChange}
-            placeholder="Correo Electrónico"
-            required
-            className="w-full px-3 py-2 border rounded-md"
-          />
-          <input
-            type="password"
-            name="password"
-            value={formData.password}
-            onChange={handleChange}
-            placeholder={
-              isEditing ? "Nueva contraseña (opcional)" : "Contraseña"
-            }
-            required={!isEditing}
-            className="w-full px-3 py-2 border rounded-md"
-          />
-          <select
-            name="rol"
-            value={formData.rol}
-            onChange={handleChange}
-            className="w-full px-3 py-2 border rounded-md"
-          >
-            <option value="aspirante">Aspirante</option>
-            <option value="alumno">Alumno</option>
-            <option value="docente">Docente</option>
-            <option value="control_escolar">Control Escolar</option>
-            <option value="admin">Administrador</option>
-          </select>
-          <div className="flex justify-end space-x-4 mt-8">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              className="px-4 py-2 bg-principal text-white rounded-md hover:opacity-90"
-            >
-              Guardar
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-};
-
 // --- COMPONENTE ASIGNATURAS (INTEGRACIÓN DEFINITIVA) ---
 const AsignaturasPage = () => {
   const [asignaturas, setAsignaturas] = useState([]);
@@ -4370,506 +4068,6 @@ const AsignaturasPage = () => {
   );
 };
 
-// --- MODAL ASIGNATURA (ESTRUCTURA DE DATOS RESTAURADA) ---
-const AsignaturaModalClean = ({ asignatura, onClose, onSave, catalogos }) => {
-  // ESTADO RESTAURADO: Usa los nombres EXACTOS de la base de datos
-  const [form, setForm] = useState({
-    nombre_asignatura: "",
-    clave_asignatura: "", // <-- NOMBRE CORREGIDO (Antes era 'clave')
-    creditos: "",
-    plan_estudio_id: "",
-    grado_id: "",
-    tipo_asignatura_id: "", // <-- CAMPO RECUPERADO
-    calificacion_min: 70, // <-- VALOR POR DEFECTO RESTAURADO
-    calificacion_max: 100,
-  });
-
-  useEffect(() => {
-    if (asignatura) {
-      setForm({
-        nombre_asignatura: asignatura.nombre_asignatura,
-        clave_asignatura: asignatura.clave_asignatura || "",
-        creditos: asignatura.creditos || "",
-        plan_estudio_id: asignatura.plan_estudio_id || "",
-        grado_id: asignatura.grado_id || "",
-        tipo_asignatura_id: asignatura.tipo_asignatura_id || "",
-        calificacion_min: asignatura.calificacion_min || 70,
-        calificacion_max: asignatura.calificacion_max || 100,
-      });
-    } else {
-      // Valores por defecto para nueva materia
-      setForm({
-        nombre_asignatura: "",
-        clave_asignatura: "",
-        creditos: 6,
-        plan_estudio_id: "",
-        grado_id: "",
-        tipo_asignatura_id: "",
-        calificacion_min: 70,
-        calificacion_max: 100,
-      });
-    }
-  }, [asignatura]);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      if (asignatura)
-        await api.put(`/admin/asignaturas/${asignatura.id}`, form);
-      else await api.post("/admin/asignaturas", form);
-      onSave();
-      onClose();
-    } catch (e) {
-      console.error(e);
-      alert(
-        "Error al guardar: " +
-          (e.response?.data?.message || "Revisa los campos"),
-      );
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-50 p-4 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in duration-200">
-        <div className="p-6 border-b border-gray-100 flex justify-between items-center">
-          <h3 className="text-xl font-bold text-gray-800">
-            {asignatura ? "Editar Materia" : "Nueva Materia"}
-          </h3>
-          <button onClick={onClose}>
-            <X size={24} className="text-gray-400 hover:text-gray-600" />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          {/* Fila 1: Nombre y Clave */}
-          <div className="grid grid-cols-3 gap-4">
-            <div className="col-span-2">
-              <label className="block text-sm font-bold text-gray-700 mb-2">
-                Nombre
-              </label>
-              <input
-                autoFocus
-                className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-gray-900"
-                value={form.nombre_asignatura}
-                onChange={(e) =>
-                  setForm({ ...form, nombre_asignatura: e.target.value })
-                }
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">
-                Clave
-              </label>
-              <input
-                className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-gray-900 uppercase"
-                value={form.clave_asignatura}
-                onChange={(e) =>
-                  setForm({ ...form, clave_asignatura: e.target.value })
-                }
-                placeholder="MAT-101"
-                required
-              />
-            </div>
-          </div>
-
-          {/* Fila 2: Créditos y Tipo */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">
-                Créditos
-              </label>
-              <input
-                type="number"
-                className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-gray-900"
-                value={form.creditos}
-                onChange={(e) => setForm({ ...form, creditos: e.target.value })}
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">
-                Tipo
-              </label>
-              <select
-                className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50"
-                value={form.tipo_asignatura_id}
-                onChange={(e) =>
-                  setForm({ ...form, tipo_asignatura_id: e.target.value })
-                }
-                required
-              >
-                <option value="">Seleccionar...</option>
-                {catalogos.tipos.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.tipo}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Fila 3: Selectores de Relación */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">
-                Plan de Estudio
-              </label>
-              <select
-                className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50"
-                value={form.plan_estudio_id}
-                onChange={(e) =>
-                  setForm({ ...form, plan_estudio_id: e.target.value })
-                }
-                required
-              >
-                <option value="">Seleccionar...</option>
-                {catalogos.planes.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.nombre_plan}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">
-                Grado
-              </label>
-              <select
-                className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50"
-                value={form.grado_id}
-                onChange={(e) => setForm({ ...form, grado_id: e.target.value })}
-                required
-              >
-                <option value="">Seleccionar...</option>
-                {catalogos.grados.map((g) => (
-                  <option key={g.id} value={g.id}>
-                    {g.nombre_grado}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Fila 4: Calificaciones (Opcional, pero visualmente separado) */}
-          <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
-                Calif. Mínima
-              </label>
-              <input
-                type="number"
-                step="0.1"
-                className="w-full p-2 border border-gray-200 rounded-lg bg-white"
-                value={form.calificacion_min}
-                onChange={(e) =>
-                  setForm({ ...form, calificacion_min: e.target.value })
-                }
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
-                Calif. Máxima
-              </label>
-              <input
-                type="number"
-                step="0.1"
-                className="w-full p-2 border border-gray-200 rounded-lg bg-white"
-                value={form.calificacion_max}
-                onChange={(e) =>
-                  setForm({ ...form, calificacion_max: e.target.value })
-                }
-              />
-            </div>
-          </div>
-
-          <div className="flex gap-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 py-3 text-gray-600 hover:bg-gray-100 rounded-xl font-bold transition-colors"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              className="flex-1 py-3 bg-[#a72a34] text-white rounded-xl hover:bg-[#802028] font-bold shadow-lg transition-transform active:scale-95"
-            >
-              Guardar Materia
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-};
-
-// --- COMPONENTE MODAL ASIGNATURA (MODERNO) ---
-const AsignaturaModal = ({
-  isOpen,
-  onClose,
-  asigToEdit,
-  onSuccess,
-  catalogos,
-}) => {
-  const [formData, setFormData] = useState({
-    nombre_asignatura: "",
-    clave_asignatura: "",
-    creditos: 0,
-    calificacion_max: 100,
-    calificacion_min: 70,
-    plan_estudio_id: "",
-    tipo_asignatura_id: "",
-    grado_id: "",
-  });
-
-  useEffect(() => {
-    if (asigToEdit) {
-      setFormData({
-        nombre_asignatura: asigToEdit.nombre_asignatura || "",
-        clave_asignatura: asigToEdit.clave_asignatura || "",
-        creditos: asigToEdit.creditos || 0,
-        calificacion_max: asigToEdit.calificacion_max || 100,
-        calificacion_min: asigToEdit.calificacion_min || 70,
-        plan_estudio_id: asigToEdit.plan_estudio_id || "",
-        tipo_asignatura_id: asigToEdit.tipo_asignatura_id || "",
-        grado_id: asigToEdit.grado_id || "",
-      });
-    } else {
-      setFormData({
-        nombre_asignatura: "",
-        clave_asignatura: "",
-        creditos: 6,
-        calificacion_max: 100,
-        calificacion_min: 70,
-        plan_estudio_id: "",
-        tipo_asignatura_id: "",
-        grado_id: "",
-      });
-    }
-  }, [asigToEdit]);
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      if (asigToEdit) {
-        await api.put(`/admin/asignaturas/${asigToEdit.id}`, formData);
-        alert("Asignatura actualizada");
-      } else {
-        await api.post("/admin/asignaturas", formData);
-        alert("Asignatura creada");
-      }
-      onSuccess();
-      onClose();
-    } catch (error) {
-      console.error(error);
-      alert("Error al guardar asignatura");
-    }
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4 backdrop-blur-sm">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden">
-        <div className="bg-gray-50 px-6 py-4 border-b border-gray-100 flex justify-between items-center">
-          <h2 className="text-xl font-bold text-gray-800">
-            {asigToEdit ? "Editar Materia" : "Nueva Materia"}
-          </h2>
-          <button onClick={onClose}>
-            <X size={24} className="text-gray-400 hover:text-gray-600" />
-          </button>
-        </div>
-        <form
-          onSubmit={handleSubmit}
-          className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4"
-        >
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Nombre de la Asignatura
-            </label>
-            <input
-              type="text"
-              name="nombre_asignatura"
-              value={formData.nombre_asignatura}
-              onChange={handleChange}
-              required
-              className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Clave
-            </label>
-            <input
-              type="text"
-              name="clave_asignatura"
-              value={formData.clave_asignatura}
-              onChange={handleChange}
-              required
-              className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 uppercase"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Créditos
-            </label>
-            <input
-              type="number"
-              name="creditos"
-              value={formData.creditos}
-              onChange={handleChange}
-              required
-              className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Plan de Estudio
-            </label>
-            <select
-              name="plan_estudio_id"
-              value={formData.plan_estudio_id}
-              onChange={handleChange}
-              required
-              className="w-full p-2 border rounded bg-white"
-            >
-              <option value="">-- Seleccionar --</option>
-              {catalogos?.planes?.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.nombre_plan}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Grado
-            </label>
-            <select
-              name="grado_id"
-              value={formData.grado_id}
-              onChange={handleChange}
-              required
-              className="w-full p-2 border rounded bg-white"
-            >
-              <option value="">-- Seleccionar --</option>
-              {catalogos?.grados?.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.nombre_grado}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Tipo
-            </label>
-            <select
-              name="tipo_asignatura_id"
-              value={formData.tipo_asignatura_id}
-              onChange={handleChange}
-              required
-              className="w-full p-2 border rounded bg-white"
-            >
-              <option value="">-- Seleccionar --</option>
-              {catalogos?.tipos?.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.nombre_tipo}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="md:col-span-2 pt-4 flex justify-end gap-3 border-t">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 border rounded hover:bg-gray-50"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-2"
-            >
-              <Save size={18} /> Guardar
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-};
-
-// --- FICHA TÉCNICA ASIGNATURA ---
-const AsignaturaDetailModal = ({ asignatura, onClose }) => {
-  if (!asignatura) return null;
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50 p-4 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border border-gray-100">
-        <div className="bg-gradient-to-r from-teal-600 to-emerald-600 p-6 text-white relative">
-          <button
-            onClick={onClose}
-            className="absolute top-4 right-4 text-white/80 hover:text-white"
-          >
-            <X size={24} />
-          </button>
-          <div className="flex flex-col items-start">
-            <span className="bg-white/20 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider mb-2">
-              {asignatura.clave_asignatura}
-            </span>
-            <h2 className="text-2xl font-bold">
-              {asignatura.nombre_asignatura}
-            </h2>
-          </div>
-        </div>
-        <div className="p-6 space-y-4">
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div className="bg-gray-50 p-3 rounded">
-              <p className="text-gray-500 text-xs uppercase font-bold">Plan</p>
-              <p className="font-medium text-gray-800">
-                {asignatura.nombre_plan}
-              </p>
-            </div>
-            <div className="bg-gray-50 p-3 rounded">
-              <p className="text-gray-500 text-xs uppercase font-bold">Grado</p>
-              <p className="font-medium text-gray-800">
-                {asignatura.nombre_grado}
-              </p>
-            </div>
-            <div className="bg-gray-50 p-3 rounded">
-              <p className="text-gray-500 text-xs uppercase font-bold">
-                Créditos
-              </p>
-              <p className="font-medium text-gray-800">{asignatura.creditos}</p>
-            </div>
-            <div className="bg-gray-50 p-3 rounded">
-              <p className="text-gray-500 text-xs uppercase font-bold">Tipo</p>
-              <p className="font-medium text-gray-800">
-                {asignatura.nombre_tipo}
-              </p>
-            </div>
-          </div>
-          <div className="border-t pt-4">
-            <p className="text-xs text-center text-gray-400">
-              Rango de Calificación: {asignatura.calificacion_min} -{" "}
-              {asignatura.calificacion_max}
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
 // --- COMPONENTE GRUPOS (ESTANDARIZADO AL DISEÑO DASHBOARD) ---
 const GruposPage = () => {
   // ... Mantenemos tu misma lógica y estados ...
@@ -5302,7 +4500,7 @@ const GrupoModal = ({ isOpen, onClose, grupoToEdit, onSuccess, catalogos }) => {
 
 // --- COMPONENTE MIGRACIÓN DE GRUPOS (DISEÑO FINAL MEJORADO) ---
 const MigracionPage = () => {
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [gruposDisponibles, setGruposDisponibles] = useState([]);
 
   // Selectores
@@ -5549,7 +4747,7 @@ const MigracionPage = () => {
               >
                 <option value="">-- Seleccionar Destino --</option>
                 {gruposDisponibles.map((g) => (
-                  <option key={g.id} value={g.id} disabled={g.id == origenId}>
+                  <option key={g.id} value={g.id} disabled={g.id === origenId}>
                     {renderGrupoOption(g)}
                   </option>
                 ))}
@@ -5576,7 +4774,7 @@ const MigracionPage = () => {
                 </p>
                 {origenId ? (
                   (() => {
-                    const g = gruposDisponibles.find((x) => x.id == origenId);
+                    const g = gruposDisponibles.find((x) => x.id === origenId);
                     return g ? (
                       <div className="text-sm">
                         <div className="font-bold text-gray-800">
@@ -5612,7 +4810,7 @@ const MigracionPage = () => {
                 </p>
                 {destinoId ? (
                   (() => {
-                    const g = gruposDisponibles.find((x) => x.id == destinoId);
+                    const g = gruposDisponibles.find((x) => x.id === destinoId);
                     return g ? (
                       <div className="text-sm">
                         <div className="font-bold text-gray-800">
@@ -5695,7 +4893,7 @@ const GrupoAdminModal = ({ grupo, onClose }) => {
   const [transferMode, setTransferMode] = useState(null);
   const [targetGroup, setTargetGroup] = useState("");
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       const groupRes = await api.get(`/admin/grupos/${grupo.id}`);
@@ -5723,11 +4921,11 @@ const GrupoAdminModal = ({ grupo, onClose }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [grupo]);
 
   useEffect(() => {
     if (grupo) fetchData();
-  }, [grupo]);
+  }, [grupo, fetchData]);
 
   // --- FUNCIONES NUEVAS DE MATERIAS ---
   const handleAgregarMateria = async () => {
@@ -6841,197 +6039,6 @@ const InscribirAlumnoModal = ({ grupoId, onClose, onSave }) => {
               className="px-4 py-2 bg-principal text-white rounded-md hover:opacity-90 disabled:bg-gray-400"
             >
               Inscribir
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-};
-
-const CatalogoPage = ({ title, apiEndpoint, fields, columns }) => {
-  const [items, setItems] = useState([]);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [currentItem, setCurrentItem] = useState(null);
-
-  const fetchData = useCallback(async () => {
-    try {
-      const response = await api.get(`/admin/${apiEndpoint}`);
-      setItems(response.data);
-    } catch (error) {
-      console.error(`Error al obtener ${title}`, error);
-    }
-  }, [apiEndpoint, title]);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
-  const handleDelete = async (id) => {
-    if (window.confirm("¿Estás seguro?")) {
-      try {
-        await api.delete(`/admin/${apiEndpoint}/${id}`);
-        fetchData();
-      } catch (error) {
-        console.error(`Error al eliminar ${title}`, error);
-      }
-    }
-  };
-
-  const openModal = (item = null) => {
-    setCurrentItem(item);
-    setModalOpen(true);
-  };
-
-  const closeModal = () => {
-    setModalOpen(false);
-    setCurrentItem(null);
-  };
-
-  return (
-    <div>
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-3xl font-bold text-gray-800">Gestión de {title}</h2>
-        <button
-          onClick={() => openModal()}
-          className="flex items-center px-4 py-2 font-semibold text-white bg-principal rounded-md hover:opacity-90"
-        >
-          <Plus className="w-5 h-5 mr-2" />
-          Nuevo
-        </button>
-      </div>
-      <div className="bg-white p-6 rounded-lg shadow">
-        <table className="w-full table-auto">
-          <thead className="text-left bg-gray-50">
-            <tr>
-              {columns.map((col) => (
-                <th key={col.key} className="px-4 py-2">
-                  {col.header}
-                </th>
-              ))}
-              <th className="px-4 py-2">Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((item) => (
-              <tr key={item.id} className="border-b">
-                {columns.map((col) => (
-                  <td key={col.key} className="px-4 py-2">
-                    {item[col.key]}
-                  </td>
-                ))}
-                <td className="px-4 py-2 flex items-center space-x-2">
-                  <button
-                    onClick={() => openModal(item)}
-                    className="text-secundario hover:text-principal"
-                  >
-                    <Edit size={18} />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(item.id)}
-                    className="text-red-500 hover:text-red-700"
-                  >
-                    <Trash2 size={18} />
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {modalOpen && (
-        <CatalogoModal
-          item={currentItem}
-          onClose={closeModal}
-          onSave={fetchData}
-          title={title}
-          apiEndpoint={apiEndpoint}
-          fields={fields}
-        />
-      )}
-    </div>
-  );
-};
-
-const CatalogoModal = ({
-  item,
-  onClose,
-  onSave,
-  title,
-  apiEndpoint,
-  fields,
-}) => {
-  const isEditing = !!item;
-
-  const initialFormState = fields.reduce((acc, field) => {
-    acc[field.name] = item?.[field.name] || "";
-    return acc;
-  }, {});
-
-  const [formData, setFormData] = useState(initialFormState);
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      if (isEditing) {
-        await api.put(`/admin/${apiEndpoint}/${item.id}`, formData);
-      } else {
-        await api.post(`/admin/${apiEndpoint}`, formData);
-      }
-      onSave();
-      onClose();
-    } catch (error) {
-      console.error(`Error al guardar ${title}`, error);
-      alert(
-        "Error al guardar: " +
-          (error.response?.data?.message || "Error desconocido"),
-      );
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6 relative">
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-gray-500 hover:text-gray-800"
-        >
-          <X size={24} />
-        </button>
-        <h3 className="text-2xl font-bold mb-6">
-          {isEditing ? "Editar" : "Nuevo"} {title.slice(0, -1)}
-        </h3>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {fields.map((field) => (
-            <input
-              key={field.name}
-              type={field.type || "text"}
-              name={field.name}
-              value={formData[field.name]}
-              onChange={handleChange}
-              placeholder={field.placeholder}
-              required
-              className="w-full px-3 py-2 border rounded-md"
-            />
-          ))}
-          <div className="flex justify-end space-x-4 mt-8">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              className="px-4 py-2 bg-principal text-white rounded-md hover:opacity-90"
-            >
-              Guardar
             </button>
           </div>
         </form>
@@ -8276,111 +7283,11 @@ const SedesPage = () => {
   );
 };
 
-// --- MODAL DE SEDES ---
-const SedesModal = ({ sede, onClose, onSave }) => {
-  const [formData, setFormData] = useState({ nombre_sede: "", direccion: "" });
-
-  useEffect(() => {
-    if (sede) {
-      setFormData({
-        nombre_sede: sede.nombre_sede,
-        direccion: sede.direccion || "",
-      });
-    } else {
-      setFormData({ nombre_sede: "", direccion: "" });
-    }
-  }, [sede]);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      if (sede) {
-        await api.put(`/admin/sedes/${sede.id}`, formData);
-      } else {
-        await api.post("/admin/sedes", formData);
-      }
-      onSave();
-      onClose();
-    } catch (error) {
-      alert("Error al guardar la sede");
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-50 p-4 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in duration-200">
-        {/* Encabezado Teal */}
-        <div className="bg-gradient-to-r from-teal-600 to-emerald-600 p-6 flex justify-between items-center text-white">
-          <h3 className="text-xl font-bold">
-            {sede ? "Editar Sede" : "Nueva Sede"}
-          </h3>
-          <button
-            onClick={onClose}
-            className="hover:bg-white/20 p-1 rounded-full"
-          >
-            <X size={24} />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
-          <div>
-            <label className="block text-sm font-bold text-gray-700 mb-2">
-              Nombre del Campus / Sede
-            </label>
-            <input
-              type="text"
-              autoFocus
-              className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all font-medium text-lg"
-              placeholder="Ej: Campus Central, Sede Norte"
-              value={formData.nombre_sede}
-              onChange={(e) =>
-                setFormData({ ...formData, nombre_sede: e.target.value })
-              }
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-bold text-gray-700 mb-2">
-              Dirección Física
-            </label>
-            <textarea
-              rows="3"
-              className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all resize-none"
-              placeholder="Calle, Número, Colonia, Ciudad..."
-              value={formData.direccion}
-              onChange={(e) =>
-                setFormData({ ...formData, direccion: e.target.value })
-              }
-            />
-          </div>
-
-          <div className="pt-4 flex gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 py-3 text-gray-600 hover:bg-gray-100 rounded-xl font-medium transition-colors"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              className="flex-1 py-3 bg-teal-600 text-white rounded-xl hover:bg-teal-700 font-bold shadow-lg transition-transform active:scale-95"
-            >
-              Guardar
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-};
-
 // --- COMPONENTE CONCEPTOS DE PAGO (NOMBRE SINGULAR PARA CORREGIR ERROR) ---
 // --- COMPONENTE CONCEPTOS DE PAGO (ADMIN DASHBOARD ROJO) ---
 const ConceptosPagoPage = () => {
   const [conceptos, setConceptos] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
 
@@ -8623,372 +7530,182 @@ const ConceptosPagoPage = () => {
   );
 };
 
-// --- MODAL CONCEPTOS DE PAGO (VERSIÓN FINAL Y ROBUSTA) ---
-const ConceptosPagoModal = ({ concepto, onClose, onSave }) => {
-  const [formData, setFormData] = useState({
-    nombre_concepto: "",
-    monto_default: "",
-    tipo: "",
-    es_concepto_inscripcion: false, // Nuevo campo estado
+// --- COMPONENTE CORREOS INSTITUCIONALES (ADMIN) ---
+const CorreosInstitucionalesPage = () => {
+  const [usuarios, setUsuarios] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filtroRol, setFiltroRol] = useState("todos");
+  const [filtroConfig, setFiltroConfig] = useState("todos");
+  const [busqueda, setBusqueda] = useState("");
+
+  const fetchData = useCallback(async () => {
+    try {
+      const { data } = await api.get("/admin/email/institucionales");
+      setUsuarios(data);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const copiarAlPortapapeles = (texto) => {
+    navigator.clipboard.writeText(texto);
+  };
+
+  const exportarCSV = () => {
+    const cabeceras = "Matricula,Nombre,Correo Institucional,Correo Personal,Rol,Configurado\n";
+    const filas = usuariosFiltrados.map((u) =>
+      [
+        u.matricula,
+        `${u.nombre} ${u.apellido_paterno}`,
+        u.email,
+        u.email_personal || "",
+        u.rol,
+        u.correo_configurado ? "Si" : "No",
+      ].join(","),
+    );
+    const blob = new Blob([cabeceras + filas.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "correos_institucionales.csv";
+    link.click();
+  };
+
+  const usuariosFiltrados = usuarios.filter((u) => {
+    if (filtroRol !== "todos" && u.rol !== filtroRol) return false;
+    if (filtroConfig === "configurado" && !u.correo_configurado) return false;
+    if (filtroConfig === "no_configurado" && u.correo_configurado) return false;
+    if (busqueda) {
+      const q = busqueda.toLowerCase();
+      return (
+        u.nombre.toLowerCase().includes(q) ||
+        (u.apellido_paterno || "").toLowerCase().includes(q) ||
+        (u.email || "").toLowerCase().includes(q) ||
+        (u.matricula || "").toLowerCase().includes(q)
+      );
+    }
+    return true;
   });
 
-  useEffect(() => {
-    if (concepto) {
-      setFormData({
-        nombre_concepto: concepto.nombre_concepto,
-        monto_default: concepto.monto_default,
-        tipo: concepto.tipo || "",
-        es_concepto_inscripcion: concepto.es_concepto_inscripcion === 1, // Convertir 1/0 a true/false
-      });
-    } else {
-      setFormData({
-        nombre_concepto: "",
-        monto_default: "",
-        tipo: "",
-        es_concepto_inscripcion: false,
-      });
-    }
-  }, [concepto]);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      // Preparamos los datos para enviar 1 o 0 en lugar de true/false
-      const payload = {
-        ...formData,
-        es_concepto_inscripcion: formData.es_concepto_inscripcion ? 1 : 0,
-      };
-
-      if (concepto) {
-        await api.put(`/admin/conceptos_pago/${concepto.id}`, payload);
-      } else {
-        await api.post("/admin/conceptos_pago", payload);
-      }
-      onSave();
-      onClose();
-    } catch (error) {
-      console.error(error);
-      alert("Error al guardar. Revisa la consola.");
-    }
-  };
+  const totalConfigurados = usuarios.filter((u) => u.correo_configurado).length;
+  const totalNoConfigurados = usuarios.filter((u) => !u.correo_configurado).length;
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-50 p-4 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
-        <div className="bg-gradient-to-r from-amber-500 to-orange-500 p-6 flex justify-between items-center text-white">
-          <h3 className="text-xl font-bold">
-            {concepto ? "Editar Precio" : "Nuevo Costo"}
-          </h3>
-          <button
-            onClick={onClose}
-            className="hover:bg-white/20 p-1 rounded-full"
-          >
-            <X size={24} />
-          </button>
+    <div className="p-6 max-w-7xl mx-auto">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-black text-gray-900">Correos Institucionales</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            {usuarios.length} usuarios registrados &middot; {totalConfigurados} configurados &middot; {totalNoConfigurados} sin configurar
+          </p>
         </div>
-
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
-          {/* NOMBRE */}
-          <div>
-            <label className="block text-sm font-bold text-gray-700 mb-2">
-              Concepto
-            </label>
-            <input
-              autoFocus
-              className="w-full p-3 border border-gray-300 rounded-xl font-medium focus:ring-2 focus:ring-amber-500"
-              value={formData.nombre_concepto}
-              onChange={(e) =>
-                setFormData({ ...formData, nombre_concepto: e.target.value })
-              }
-              required
-              placeholder="Ej. Inscripción Semestral"
-            />
-          </div>
-
-          {/* TIPO */}
-          <div>
-            <label className="block text-sm font-bold text-gray-700 mb-2">
-              Categoría (Tipo)
-            </label>
-            <input
-              type="text"
-              className="w-full p-3 border border-gray-300 rounded-xl font-medium focus:ring-2 focus:ring-amber-500"
-              value={formData.tipo}
-              onChange={(e) =>
-                setFormData({ ...formData, tipo: e.target.value })
-              }
-              placeholder="Ej: tramite, mensualidad..."
-            />
-          </div>
-
-          {/* MONTO */}
-          <div>
-            <label className="block text-sm font-bold text-gray-700 mb-2">
-              Monto Default (MXN)
-            </label>
-            <div className="relative">
-              <span className="absolute left-3 top-3 text-gray-500 font-bold">
-                $
-              </span>
-              <input
-                type="number"
-                className="w-full pl-8 p-3 border border-gray-300 rounded-xl font-bold text-lg text-gray-800 focus:ring-2 focus:ring-amber-500"
-                value={formData.monto_default}
-                onChange={(e) =>
-                  setFormData({ ...formData, monto_default: e.target.value })
-                }
-                required
-                placeholder="0.00"
-              />
-            </div>
-          </div>
-
-          {/* CHECKBOX INSCRIPCIÓN (NUEVO) */}
-          <div className="flex items-center gap-3 p-3 bg-amber-50 rounded-xl border border-amber-100">
-            <input
-              type="checkbox"
-              id="es_inscripcion"
-              className="w-5 h-5 text-amber-600 rounded focus:ring-amber-500"
-              checked={formData.es_concepto_inscripcion}
-              onChange={(e) =>
-                setFormData({
-                  ...formData,
-                  es_concepto_inscripcion: e.target.checked,
-                })
-              }
-            />
-            <label
-              htmlFor="es_inscripcion"
-              className="text-sm font-medium text-gray-700 cursor-pointer select-none"
-            >
-              ¿Es pago de Inscripción?
-              <p className="text-xs text-gray-500 font-normal">
-                Marca esto si el pago habilita al alumno en el ciclo.
-              </p>
-            </label>
-          </div>
-
-          <div className="pt-4 flex gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 py-3 text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              className="flex-1 py-3 bg-amber-500 text-white rounded-xl font-bold shadow-lg hover:bg-amber-600 transition-transform active:scale-95"
-            >
-              Guardar
-            </button>
-          </div>
-        </form>
+        <button
+          onClick={exportarCSV}
+          className="bg-[#a72a34] hover:bg-[#8f242d] text-white px-4 py-2 rounded-lg text-sm font-bold shadow"
+        >
+          Exportar CSV
+        </button>
       </div>
-    </div>
-  );
-};
-// --- MODAL DE CARRERAS (ESTILO CONSISTENTE) ---
-const CarrerasModal = ({ carrera, onClose, onSave }) => {
-  const [formData, setFormData] = useState({ nombre_carrera: "" });
 
-  useEffect(() => {
-    if (carrera) {
-      setFormData({ nombre_carrera: carrera.nombre_carrera });
-    } else {
-      setFormData({ nombre_carrera: "" });
-    }
-  }, [carrera]);
+      <div className="flex flex-wrap gap-3 mb-4 items-center">
+        <input
+          className="flex-1 min-w-[200px] p-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-[#a72a34] outline-none"
+          placeholder="Buscar por nombre, email o matrícula..."
+          value={busqueda}
+          onChange={(e) => setBusqueda(e.target.value)}
+        />
+        <select
+          className="p-2.5 border border-gray-200 rounded-xl text-sm bg-white"
+          value={filtroRol}
+          onChange={(e) => setFiltroRol(e.target.value)}
+        >
+          <option value="todos">Todos los roles</option>
+          <option value="alumno">Alumnos</option>
+          <option value="docente">Docentes</option>
+          <option value="admin">Administradores</option>
+          <option value="control_escolar">Control Escolar</option>
+          <option value="aspirante">Aspirantes</option>
+        </select>
+        <select
+          className="p-2.5 border border-gray-200 rounded-xl text-sm bg-white"
+          value={filtroConfig}
+          onChange={(e) => setFiltroConfig(e.target.value)}
+        >
+          <option value="todos">Todos los estados</option>
+          <option value="configurado">Configurados</option>
+          <option value="no_configurado">Sin configurar</option>
+        </select>
+      </div>
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      if (carrera) {
-        await api.put(`/admin/carreras/${carrera.id}`, formData);
-      } else {
-        await api.post("/admin/carreras", formData);
-      }
-      onSave();
-      onClose();
-    } catch (error) {
-      alert("Error al guardar la carrera");
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-50 p-4 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in duration-200">
-        {/* Encabezado Índigo */}
-        <div className="bg-gradient-to-r from-indigo-600 to-violet-700 p-6 flex justify-between items-center text-white">
-          <h3 className="text-xl font-bold">
-            {carrera ? "Editar Carrera" : "Nueva Carrera"}
-          </h3>
-          <button
-            onClick={onClose}
-            className="hover:bg-white/20 p-1 rounded-full"
-          >
-            <X size={24} />
-          </button>
+      {loading ? (
+        <div className="text-center py-20 text-gray-400">Cargando...</div>
+      ) : (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+          <table className="w-full text-left">
+            <thead className="bg-gray-50 text-gray-500 uppercase text-xs font-bold border-b border-gray-100">
+              <tr>
+                <th className="p-4">Matrícula</th>
+                <th className="p-4">Nombre</th>
+                <th className="p-4">Correo Institucional</th>
+                <th className="p-4">Correo Personal</th>
+                <th className="p-4">Rol</th>
+                <th className="p-4">Estado</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {usuariosFiltrados.map((u) => (
+                <tr key={u.id} className="hover:bg-gray-50 transition-colors">
+                  <td className="p-4 text-sm font-mono text-gray-600">{u.matricula}</td>
+                  <td className="p-4 text-sm font-medium text-gray-900">
+                    {u.nombre} {u.apellido_paterno}
+                  </td>
+                  <td className="p-4 text-sm text-gray-600">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate max-w-[200px]">{u.email}</span>
+                      <button
+                        onClick={() => copiarAlPortapapeles(u.email)}
+                        className="text-gray-400 hover:text-[#a72a34] shrink-0"
+                        title="Copiar"
+                      >
+                        📋
+                      </button>
+                    </div>
+                  </td>
+                  <td className="p-4 text-sm text-gray-500">{u.email_personal || "—"}</td>
+                  <td className="p-4">
+                    <span className="text-xs px-2 py-1 rounded-full font-medium bg-gray-100 text-gray-600">
+                      {u.rol}
+                    </span>
+                  </td>
+                  <td className="p-4">
+                    {u.correo_configurado ? (
+                      <span className="text-xs px-2 py-1 rounded-full font-medium bg-green-100 text-green-700">
+                        Configurado
+                      </span>
+                    ) : (
+                      <span className="text-xs px-2 py-1 rounded-full font-medium bg-red-100 text-red-700">
+                        Sin configurar
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+              {usuariosFiltrados.length === 0 && (
+                <tr>
+                  <td colSpan="6" className="p-10 text-center text-gray-400">
+                    No se encontraron usuarios con esos filtros.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
-
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
-          <div>
-            <label className="block text-sm font-bold text-gray-700 mb-2">
-              Nombre Oficial
-            </label>
-            <input
-              type="text"
-              autoFocus
-              className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all font-medium text-lg"
-              placeholder="Ej: Licenciatura en Derecho"
-              value={formData.nombre_carrera}
-              onChange={(e) =>
-                setFormData({ ...formData, nombre_carrera: e.target.value })
-              }
-              required
-            />
-            <p className="text-xs text-gray-400 mt-2">
-              Este nombre aparecerá en certificados y planes de estudio.
-            </p>
-          </div>
-
-          <div className="pt-4 flex gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 py-3 text-gray-600 hover:bg-gray-100 rounded-xl font-medium transition-colors"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              className="flex-1 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-bold shadow-lg transition-transform active:scale-95"
-            >
-              Guardar
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-};
-
-// --- MODAL PLANES DE ESTUDIO (MODERNO) ---
-const PlanesEstudioModal = ({ plan, onClose, onSave }) => {
-  const [formData, setFormData] = useState({
-    nombre_plan: plan?.nombre_plan || "",
-    carrera_id: plan?.carrera_id || "",
-  });
-  const [carreras, setCarreras] = useState([]);
-
-  // Cargar carreras para el Select
-  useEffect(() => {
-    const fetchCarreras = async () => {
-      try {
-        const res = await api.get("/admin/carreras");
-        setCarreras(res.data);
-        if (!plan && res.data.length > 0) {
-          setFormData((prev) => ({ ...prev, carrera_id: res.data[0].id }));
-        }
-      } catch (error) {
-        console.error(error);
-      }
-    };
-    fetchCarreras();
-  }, [plan]);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      if (plan) {
-        await api.put(`/admin/planes_estudio/${plan.id}`, formData);
-      } else {
-        await api.post("/admin/planes_estudio", formData);
-      }
-      onSave();
-      onClose();
-    } catch (error) {
-      alert("Error al guardar");
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-50 p-4 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in duration-200">
-        {/* Encabezado */}
-        <div className="bg-gradient-to-r from-pink-600 to-purple-700 p-6 flex justify-between items-center text-white">
-          <h3 className="text-xl font-bold">
-            {plan ? "Editar Plan" : "Nuevo Plan de Estudio"}
-          </h3>
-          <button
-            onClick={onClose}
-            className="hover:bg-white/20 p-1 rounded-full"
-          >
-            <X size={24} />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
-          <div>
-            <label className="block text-sm font-bold text-gray-700 mb-2">
-              Nombre del Plan
-            </label>
-            <input
-              type="text"
-              autoFocus
-              className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-pink-500 transition-all font-medium"
-              placeholder="Ej: Ingeniería 2025, Bachillerato General"
-              value={formData.nombre_plan}
-              onChange={(e) =>
-                setFormData({ ...formData, nombre_plan: e.target.value })
-              }
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-bold text-gray-700 mb-2">
-              Carrera Asociada
-            </label>
-            <div className="relative">
-              <GraduationCap
-                className="absolute left-3 top-3 text-gray-400"
-                size={18}
-              />
-              <select
-                className="w-full pl-10 p-3 border border-gray-300 rounded-xl bg-white focus:ring-2 focus:ring-pink-500 focus:border-pink-500 appearance-none"
-                value={formData.carrera_id}
-                onChange={(e) =>
-                  setFormData({ ...formData, carrera_id: e.target.value })
-                }
-              >
-                <option value="">-- Seleccionar Carrera --</option>
-                {carreras.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.nombre_carrera}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="pt-4 flex gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 py-3 text-gray-600 hover:bg-gray-100 rounded-xl font-medium transition-colors"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              className="flex-1 py-3 bg-pink-600 text-white rounded-xl hover:bg-pink-700 font-bold shadow-lg transition-transform active:scale-95"
-            >
-              Guardar
-            </button>
-          </div>
-        </form>
-      </div>
+      )}
     </div>
   );
 };
@@ -9929,7 +8646,7 @@ const GestionSolicitudesPage = () => {
   const [selectedSolicitud, setSelectedSolicitud] = useState(null);
   const [nuevoEstatus, setNuevoEstatus] = useState("");
   const [comentariosAdmin, setComentariosAdmin] = useState("");
-  const [errorModal, setErrorModal] = useState("");
+  const [, setErrorModal] = useState("");
 
   const estatusDisponibles = [
     "solicitado",
@@ -10158,7 +8875,7 @@ const GestionSolicitudesPage = () => {
 
 // --- COMPONENTE MIGRACIÓN DE GRUPOS (DISEÑO ROJO FINAL) ---
 const MigracionGruposPage = () => {
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [gruposDisponibles, setGruposDisponibles] = useState([]);
 
   // Selectores
@@ -10401,7 +9118,7 @@ const MigracionGruposPage = () => {
               >
                 <option value="">-- Seleccionar Destino --</option>
                 {gruposDisponibles.map((g) => (
-                  <option key={g.id} value={g.id} disabled={g.id == origenId}>
+                  <option key={g.id} value={g.id} disabled={g.id === origenId}>
                     {renderGrupoOption(g)}
                   </option>
                 ))}
@@ -10737,9 +9454,7 @@ const DocenteDashboardPage = () => {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {cursos.map((curso) => {
-                const isCompleted =
-                  curso.total_alumnos > 0 &&
-                  curso.total_calificaciones >= curso.total_alumnos;
+
                 return (
                   <div
                     key={`${curso.grupo_id}-${curso.asignatura_id}`}
@@ -11836,21 +10551,6 @@ const AspiranteDashboardPage = () => {
     </div>
   );
 };
-
-// Helper para botones de Pestañas
-const TabButton = ({ label, isActive, onClick, icon: Icon }) => (
-  <button
-    onClick={onClick}
-    className={`flex items-center px-4 py-3 font-semibold border-b-2 transition-colors duration-150 ${
-      isActive
-        ? "border-principal text-principal"
-        : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-    }`}
-  >
-    {Icon && <Icon size={18} className="mr-2" />}
-    {label}
-  </button>
-);
 
 const AulaVirtualPage = () => {
   const { grupoId, asignaturaId } = useParams();
@@ -14211,7 +12911,7 @@ const NuevoHiloModal = ({
 // Página para ver un Hilo del Foro y sus Respuestas
 const HiloPage = () => {
   const { grupoId, asignaturaId, hiloId } = useParams();
-  const { user } = useAuth(); // Para saber quién está respondiendo
+
   const [hilo, setHilo] = useState(null);
   const [respuestas, setRespuestas] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -14406,8 +13106,6 @@ const DetalleTareaDocentePage = () => {
   const [tarea, setTarea] = useState(null);
   const [entregas, setEntregas] = useState([]);
   const [loading, setLoading] = useState(true);
-  const navigate = useNavigate();
-
   // Estado para el modal de calificación
   const [showCalificarModal, setShowCalificarModal] = useState(false);
   const [selectedEntrega, setSelectedEntrega] = useState(null);
@@ -14573,7 +13271,6 @@ const AsistenciaPage = () => {
   const [alumnos, setAlumnos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const navigate = useNavigate();
 
   // Estado para manejar los cambios de asistencia localmente
   const [asistenciaChanges, setAsistenciaChanges] = useState({});
@@ -15103,16 +13800,6 @@ const MiPerfilPage = () => {
   );
 };
 
-// Componente auxiliar para mostrar la información del perfil
-const InfoItem = ({ label, value, capitalize = false }) => (
-  <div>
-    <p className="text-sm font-medium text-gray-500">{label}</p>
-    <p className={`text-lg text-gray-800 ${capitalize ? "capitalize" : ""}`}>
-      {value || "No especificado"}
-    </p>
-  </div>
-);
-
 // --- TERMINA NUEVO CÓDIGO ---
 
 // --- COMPONENTE ANUNCIOS GLOBALES (ADMIN) ---
@@ -15306,18 +13993,18 @@ const EquiposDocenteView = ({ grupoId, asignaturaId }) => {
   const [cantidad, setCantidad] = useState(2);
   const [loading, setLoading] = useState(true);
 
-  const fetchEquipos = async () => {
+  const fetchEquipos = useCallback(async () => {
     setLoading(true);
     const { data } = await api.get(
       `/docente/aula-virtual/${grupoId}/${asignaturaId}/equipos`,
     );
     setEquipos(data);
     setLoading(false);
-  };
+  }, [asignaturaId, grupoId]);
 
   useEffect(() => {
     fetchEquipos();
-  }, []);
+  }, [fetchEquipos]);
 
   const generarEquipos = async () => {
     if (
@@ -15439,7 +14126,7 @@ const EquiposAlumnoView = ({ grupoId, asignaturaId }) => {
       .get(`/alumno/aula-virtual/${grupoId}/${asignaturaId}/mi-equipo`)
       .then((res) => setMiEquipo(res.data))
       .catch((err) => console.log(err));
-  }, []);
+  }, [asignaturaId, grupoId]);
 
   if (!miEquipo) {
     return (
@@ -15622,26 +14309,6 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-// Función para transformar la letra de la BD en una palabra completa
-function obtenerNombreGenero(generoCrudo) {
-  if (!generoCrudo) return "No especificado";
-  const generoNormalizado = String(generoCrudo).toUpperCase();
-  switch (generoNormalizado) {
-    case "H":
-    case "MASCULINO":
-      return "Masculino";
-    case "F":
-    case "M":
-    case "FEMENINO":
-      return "Femenino";
-    case "O":
-    case "OTRO":
-      return "Otro";
-    default:
-      return generoCrudo;
-  }
-}
-
 // --- COMPONENTE PRINCIPAL DE LA APP ---
 function App() {
   return (
@@ -15684,6 +14351,7 @@ function App() {
               />
               <Route path="/admin/calendario" element={<CalendarioAdmin />} />
               <Route path="/admin/correo" element={<CorreoPage />} />
+              <Route path="/admin/correos-institucionales" element={<CorreosInstitucionalesPage />} />
               <Route path="/grupos" element={<GruposPage />} />
               <Route path="/grupos/:id" element={<DetalleGrupoPage />} />
               <Route path="/admin/migracion" element={<MigracionPage />} />

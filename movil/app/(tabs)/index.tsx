@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   StyleSheet,
   View,
@@ -7,17 +7,40 @@ import {
   ScrollView,
   Image,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { useAuth } from "../../context/AuthContext";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context"; // Importante para iOS
 
 export default function HomeScreen() {
-  const { user } = useAuth();
+  const { user, api } = useAuth();
   const router = useRouter();
+  const [unreadCount, setUnreadCount] = useState(0);
 
   // Si el usuario aún no carga, mostramos un nombre genérico
   const nombreUsuario = user?.nombre || "Alumno";
+
+  const fetchUnreadCount = useCallback(async () => {
+    try {
+      const res = await api.get("/notificaciones/no-leidas");
+      setUnreadCount(res.data.count || 0);
+    } catch (e) {
+      console.log("Error fetching unread count:", e);
+    }
+  }, [api]);
+
+  // Refrescar al entrar a la pantalla
+  useFocusEffect(
+    useCallback(() => {
+      fetchUnreadCount();
+    }, [fetchUnreadCount])
+  );
+
+  // Refrescar cada 30 segundos en segundo plano
+  useEffect(() => {
+    const interval = setInterval(fetchUnreadCount, 30000);
+    return () => clearInterval(interval);
+  }, [fetchUnreadCount]);
 
   return (
     // SafeAreaView protege el contenido de la "muesca" del iPhone
@@ -34,11 +57,17 @@ export default function HomeScreen() {
             style={styles.bellButton}
           >
             <Ionicons name="notifications-outline" size={24} color="#a72a34" />
-            {/* Opcional: Un puntito rojo si hay notificaciones sin leer (requeriría consultar API) */}
+            {unreadCount > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </Text>
+              </View>
+            )}
           </TouchableOpacity>
           {/* Puedes cambiar esta imagen por tu logo real */}
           <Image
-            source={require("../../assets/images/logo_sigloxxi.jpg")}
+            source={require("../../assets/images/logo_sigloxxi.png")}
             style={styles.logo}
           />
         </View>
@@ -242,5 +271,24 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     marginLeft: 10,
+    position: "relative",
+  },
+  badge: {
+    position: "absolute",
+    top: -4,
+    right: -4,
+    backgroundColor: "#dc2626",
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 4,
+    elevation: 4,
+  },
+  badgeText: {
+    color: "#fff",
+    fontSize: 11,
+    fontWeight: "bold",
   },
 });

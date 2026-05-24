@@ -47,6 +47,8 @@ const CorreoPage = () => {
   // --- ESTADOS ---
   const [configurado, setConfigurado] = useState(null);
   const [passwordInput, setPasswordInput] = useState("");
+  const [error, setError] = useState(null);
+  const [verificando, setVerificando] = useState(false);
 
   // UI States (Header Tabs)
   const [carpetaActual, setCarpetaActual] = useState("inbox"); // 'inbox', 'sent', 'trash'
@@ -75,15 +77,19 @@ const CorreoPage = () => {
 
   const token = localStorage.getItem("token");
   const authHeaders = { headers: { Authorization: `Bearer ${token}` } };
-  const API_URL = "https://api-universidad-c5o8.onrender.com/api/email";
+  const API_URL = "/api/email";
 
   // --- EFECTOS ---
   useEffect(() => {
+    setError(null);
     verificarEstado();
   }, []);
 
   useEffect(() => {
-    if (configurado) cargarCarpeta(carpetaActual);
+    if (configurado) {
+      setError(null);
+      cargarCarpeta(carpetaActual);
+    }
   }, [carpetaActual, configurado]);
 
   // --- API ---
@@ -98,6 +104,7 @@ const CorreoPage = () => {
 
   const guardarConfiguracion = async (e) => {
     e.preventDefault();
+    setError(null);
     try {
       await axios.post(
         `${API_URL}/configurar`,
@@ -106,13 +113,44 @@ const CorreoPage = () => {
       );
       setConfigurado(true);
     } catch (error) {
-      alert("Error al conectar.");
+      const msg =
+        error.response?.data?.error ||
+        error.response?.data ||
+        "Error al conectar con el servidor.";
+      setError(msg);
+    }
+  };
+
+  const verificarConexion = async () => {
+    setVerificando(true);
+    setError(null);
+    try {
+      const res = await axios.get(`${API_URL}/folder/inbox`, {
+        ...authHeaders,
+        timeout: 15000,
+      });
+      if (res.data && res.data.length !== undefined) {
+        alert(`✅ Conexión exitosa. Bandeja: ${res.data.length} correos.`);
+      } else {
+        alert("✅ Conexión establecida correctamente.");
+      }
+    } catch (error) {
+      const msg =
+        error.response?.data?.error ||
+        (error.message && error.message.includes("timeout")
+          ? "Tiempo de espera agotado. Verifica tu conexión."
+          : error.message) ||
+        "Error de conexión con el servidor de correo.";
+      setError(msg);
+    } finally {
+      setVerificando(false);
     }
   };
 
   const cargarCarpeta = async (nombre) => {
     setCargando(true);
     setCorreos([]);
+    setError(null);
     setCorreoSeleccionado(null);
     setDetalleCorreo(null);
     setActiveMobileView("list");
@@ -120,7 +158,11 @@ const CorreoPage = () => {
       const res = await axios.get(`${API_URL}/folder/${nombre}`, authHeaders);
       setCorreos(res.data);
     } catch (error) {
-      console.error(error);
+      const msg =
+        error.response?.data?.error ||
+        error.response?.data ||
+        "Error al cargar la bandeja. Verifica tu conexión.";
+      setError(msg);
     } finally {
       setCargando(false);
     }
@@ -131,6 +173,7 @@ const CorreoPage = () => {
     setActiveMobileView("detail");
     setDetalleCorreo(null);
     setCargandoMensaje(true);
+    setError(null);
     try {
       const res = await axios.get(
         `${API_URL}/mensaje/${uid}?folder=${carpetaActual}`,
@@ -138,7 +181,11 @@ const CorreoPage = () => {
       );
       setDetalleCorreo(res.data);
     } catch (error) {
-      alert("No se pudo cargar.");
+      const msg =
+        error.response?.data ||
+        error.response?.data?.error ||
+        "No se pudo cargar el mensaje.";
+      setError(msg);
     } finally {
       setCargandoMensaje(false);
     }
@@ -198,6 +245,7 @@ const CorreoPage = () => {
         onSubmit={guardarConfiguracion}
         pass={passwordInput}
         setPass={setPasswordInput}
+        error={error}
       />
     );
   if (configurado === null)
@@ -241,7 +289,7 @@ const CorreoPage = () => {
           />
         </nav>
 
-        {/* Buscador y Botón Redactar */}
+        {/* Buscador, Verificar y Botón Redactar */}
         <div className="flex items-center gap-3 flex-1 justify-end">
           <div className="relative w-full max-w-xs hidden sm:block">
             <Search
@@ -256,6 +304,15 @@ const CorreoPage = () => {
             />
           </div>
 
+          <button
+            onClick={verificarConexion}
+            disabled={verificando}
+            className="flex items-center gap-1.5 bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-lg text-xs font-medium transition-colors"
+            title="Probar conexión IMAP"
+          >
+            <RefreshCw size={14} className={verificando ? "animate-spin" : ""} />
+            <span className="hidden md:inline">{verificando ? "Verificando..." : "Verificar"}</span>
+          </button>
           <button
             onClick={() => setModoRedactar(true)}
             className="flex items-center gap-2 bg-[#a72a34] hover:bg-[#8f242d] text-white px-4 py-2 rounded-lg font-bold text-sm shadow-lg transition-transform active:scale-95"
@@ -288,11 +345,18 @@ const CorreoPage = () => {
           </div>
 
           <div className="flex-1 overflow-y-auto">
+            {error && (
+              <div className="m-3 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-xs flex items-start gap-2">
+                <span className="mt-0.5 shrink-0">⚠️</span>
+                <span className="flex-1">{error}</span>
+                <button onClick={() => setError(null)} className="text-red-400 hover:text-red-600 font-bold">&times;</button>
+              </div>
+            )}
             {cargando && correos.length === 0 ? (
               <div className="p-10 text-center text-gray-400 text-sm">
                 Cargando...
               </div>
-            ) : correosFiltrados.length === 0 ? (
+            ) : correosFiltrados.length === 0 && !error ? (
               <div className="flex flex-col items-center justify-center h-full text-gray-400 opacity-50 p-6 text-center">
                 <Inbox size={40} className="mb-2" />
                 <p className="text-sm">No hay mensajes aquí.</p>
@@ -606,14 +670,22 @@ const TabButton = ({ label, active, icon: Icon, onClick }) => (
   </button>
 );
 
-const LoginScreen = ({ onSubmit, pass, setPass }) => (
+const LoginScreen = ({ onSubmit, pass, setPass, error }) => (
   <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
     <div className="bg-white p-8 rounded-xl shadow-lg w-full max-w-sm text-center">
       <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
         <Lock size={32} />
       </div>
       <h2 className="text-2xl font-bold mb-2">Acceso a Correo</h2>
-      <form onSubmit={onSubmit} className="space-y-4 mt-6">
+      <p className="text-sm text-gray-500 mb-4">
+        Ingresa tu contraseña de correo institucional
+      </p>
+      {error && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-xs text-left">
+          {error}
+        </div>
+      )}
+      <form onSubmit={onSubmit} className="space-y-4 mt-2">
         <input
           type="password"
           required

@@ -99,7 +99,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     try {
       console.log("--> Obteniendo token de Expo..."); // LOG F
-      token = (await Notifications.getExpoPushTokenAsync()).data;
+      token = (await Notifications.getExpoPushTokenAsync({
+        projectId: "61b1e02d-aded-494a-9f10-a545d8aecb51",
+      })).data;
       console.log("==> Expo Push Token obtenido:", token); // LOG G
     } catch (e) {
       console.error("==> ERROR obteniendo el push token:", e); // LOG H (Error)
@@ -181,7 +183,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const logout = useCallback(async () => {
     try {
       // --- 5. INTENTAMOS ELIMINAR EL TOKEN PUSH DEL BACKEND ---
-      const pushToken = await Notifications.getExpoPushTokenAsync()
+      const pushToken = await Notifications.getExpoPushTokenAsync({
+          projectId: "61b1e02d-aded-494a-9f10-a545d8aecb51",
+        })
         .then((t) => t.data)
         .catch(() => null);
       if (pushToken && user) {
