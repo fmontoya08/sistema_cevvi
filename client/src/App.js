@@ -857,7 +857,7 @@ const AdminLayout = () => {
 
         <nav className="flex-1 px-3 py-6 space-y-1 overflow-y-auto custom-scrollbar">
           {visibleNavItems.map((item) => {
-            const isActive = location.pathname.startsWith(item.path);
+            const isActive = location.pathname === item.path || location.pathname.startsWith(item.path + "/");
             return (
               <Link
                 key={item.label}
@@ -1022,8 +1022,7 @@ const DocenteLayout = () => {
         {/* NAVEGACIÓN */}
         <nav className="flex-1 px-3 py-6 space-y-1 overflow-y-auto">
           {navItems.map((item) => {
-            // Lógica para detectar si el link está activo
-            const isActive = location.pathname.startsWith(item.path);
+            const isActive = location.pathname === item.path || location.pathname.startsWith(item.path + "/");
             return (
               <Link
                 key={item.label}
@@ -1216,7 +1215,7 @@ const AlumnoLayout = () => {
           className="flex-1 px-3 py-6 space-y-1 overflow-y-auto"
         >
           {navItems.map((item) => {
-            const isActive = location.pathname.startsWith(item.path);
+            const isActive = location.pathname === item.path || location.pathname.startsWith(item.path + "/");
             return (
               <Link
                 key={item.label}
@@ -7537,6 +7536,10 @@ const CorreosInstitucionalesPage = () => {
   const [filtroRol, setFiltroRol] = useState("todos");
   const [filtroConfig, setFiltroConfig] = useState("todos");
   const [busqueda, setBusqueda] = useState("");
+  const [pagina, setPagina] = useState(1);
+  const [ordenarPor, setOrdenarPor] = useState("id");
+  const [ordenDir, setOrdenDir] = useState("desc");
+  const porPagina = 20;
 
   const fetchData = useCallback(async () => {
     try {
@@ -7552,6 +7555,10 @@ const CorreosInstitucionalesPage = () => {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  useEffect(() => {
+    setPagina(1);
+  }, [busqueda, filtroRol, filtroConfig]);
 
   const copiarAlPortapapeles = (texto) => {
     navigator.clipboard.writeText(texto);
@@ -7576,21 +7583,52 @@ const CorreosInstitucionalesPage = () => {
     link.click();
   };
 
-  const usuariosFiltrados = usuarios.filter((u) => {
-    if (filtroRol !== "todos" && u.rol !== filtroRol) return false;
-    if (filtroConfig === "configurado" && !u.correo_configurado) return false;
-    if (filtroConfig === "no_configurado" && u.correo_configurado) return false;
-    if (busqueda) {
-      const q = busqueda.toLowerCase();
-      return (
-        u.nombre.toLowerCase().includes(q) ||
-        (u.apellido_paterno || "").toLowerCase().includes(q) ||
-        (u.email || "").toLowerCase().includes(q) ||
-        (u.matricula || "").toLowerCase().includes(q)
-      );
+  const handleSort = (col) => {
+    if (ordenarPor === col) {
+      setOrdenDir(ordenDir === "asc" ? "desc" : "asc");
+    } else {
+      setOrdenarPor(col);
+      setOrdenDir("asc");
     }
-    return true;
-  });
+  };
+
+  const sortIcon = (col) => {
+    if (ordenarPor !== col) return " ↕";
+    return ordenDir === "asc" ? " ↑" : " ↓";
+  };
+
+  const usuariosFiltrados = usuarios
+    .filter((u) => {
+      if (filtroRol !== "todos" && u.rol !== filtroRol) return false;
+      if (filtroConfig === "configurado" && !u.correo_configurado) return false;
+      if (filtroConfig === "no_configurado" && u.correo_configurado) return false;
+      if (busqueda) {
+        const q = busqueda.toLowerCase();
+        return (
+          u.nombre.toLowerCase().includes(q) ||
+          (u.apellido_paterno || "").toLowerCase().includes(q) ||
+          (u.email || "").toLowerCase().includes(q) ||
+          (u.matricula || "").toLowerCase().includes(q)
+        );
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      const dir = ordenDir === "asc" ? 1 : -1;
+      let va = a[ordenarPor];
+      let vb = b[ordenarPor];
+      if (ordenarPor === "nombre") {
+        va = `${a.nombre} ${a.apellido_paterno}`.toLowerCase();
+        vb = `${b.nombre} ${b.apellido_paterno}`.toLowerCase();
+      }
+      if (typeof va === "string") return va.localeCompare(vb) * dir;
+      return ((va || 0) - (vb || 0)) * dir;
+    });
+
+  const totalPaginas = Math.max(1, Math.ceil(usuariosFiltrados.length / porPagina));
+  const paginaActual = Math.min(pagina, totalPaginas);
+  const inicio = (paginaActual - 1) * porPagina;
+  const usuariosPagina = usuariosFiltrados.slice(inicio, inicio + porPagina);
 
   const totalConfigurados = usuarios.filter((u) => u.correo_configurado).length;
   const totalNoConfigurados = usuarios.filter((u) => !u.correo_configurado).length;
@@ -7601,7 +7639,7 @@ const CorreosInstitucionalesPage = () => {
         <div>
           <h1 className="text-2xl font-black text-gray-900">Correos Institucionales</h1>
           <p className="text-sm text-gray-500 mt-1">
-            {usuarios.length} usuarios registrados &middot; {totalConfigurados} configurados &middot; {totalNoConfigurados} sin configurar
+            {usuarios.length} usuarios &middot; {totalConfigurados} configurados &middot; {totalNoConfigurados} sin configurar
           </p>
         </div>
         <button
@@ -7649,16 +7687,26 @@ const CorreosInstitucionalesPage = () => {
           <table className="w-full text-left">
             <thead className="bg-gray-50 text-gray-500 uppercase text-xs font-bold border-b border-gray-100">
               <tr>
-                <th className="p-4">Matrícula</th>
-                <th className="p-4">Nombre</th>
-                <th className="p-4">Correo Institucional</th>
+                <th className="p-4 cursor-pointer select-none hover:text-gray-700" onClick={() => handleSort("matricula")}>
+                  Matrícula<span className="text-gray-300">{sortIcon("matricula")}</span>
+                </th>
+                <th className="p-4 cursor-pointer select-none hover:text-gray-700" onClick={() => handleSort("nombre")}>
+                  Nombre<span className="text-gray-300">{sortIcon("nombre")}</span>
+                </th>
+                <th className="p-4 cursor-pointer select-none hover:text-gray-700" onClick={() => handleSort("email")}>
+                  Correo Institucional<span className="text-gray-300">{sortIcon("email")}</span>
+                </th>
                 <th className="p-4">Correo Personal</th>
-                <th className="p-4">Rol</th>
-                <th className="p-4">Estado</th>
+                <th className="p-4 cursor-pointer select-none hover:text-gray-700" onClick={() => handleSort("rol")}>
+                  Rol<span className="text-gray-300">{sortIcon("rol")}</span>
+                </th>
+                <th className="p-4 cursor-pointer select-none hover:text-gray-700" onClick={() => handleSort("correo_configurado")}>
+                  Estado<span className="text-gray-300">{sortIcon("correo_configurado")}</span>
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {usuariosFiltrados.map((u) => (
+              {usuariosPagina.map((u) => (
                 <tr key={u.id} className="hover:bg-gray-50 transition-colors">
                   <td className="p-4 text-sm font-mono text-gray-600">{u.matricula}</td>
                   <td className="p-4 text-sm font-medium text-gray-900">
@@ -7695,7 +7743,7 @@ const CorreosInstitucionalesPage = () => {
                   </td>
                 </tr>
               ))}
-              {usuariosFiltrados.length === 0 && (
+              {usuariosPagina.length === 0 && (
                 <tr>
                   <td colSpan="6" className="p-10 text-center text-gray-400">
                     No se encontraron usuarios con esos filtros.
@@ -7704,6 +7752,48 @@ const CorreosInstitucionalesPage = () => {
               )}
             </tbody>
           </table>
+
+          {totalPaginas > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 bg-gray-50">
+              <span className="text-xs text-gray-500">
+                Mostrando {inicio + 1}-{Math.min(inicio + porPagina, usuariosFiltrados.length)} de {usuariosFiltrados.length}
+              </span>
+              <div className="flex gap-1">
+                <button
+                  onClick={() => setPagina(paginaActual - 1)}
+                  disabled={paginaActual <= 1}
+                  className="px-3 py-1.5 text-xs rounded-lg border border-gray-200 bg-white hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Anterior
+                </button>
+                {Array.from({ length: Math.min(totalPaginas, 5) }, (_, i) => {
+                  const start = Math.max(1, Math.min(paginaActual - 2, totalPaginas - 4));
+                  const page = start + i;
+                  if (page > totalPaginas) return null;
+                  return (
+                    <button
+                      key={page}
+                      onClick={() => setPagina(page)}
+                      className={`px-3 py-1.5 text-xs rounded-lg border ${
+                        page === paginaActual
+                          ? "bg-[#a72a34] text-white border-[#a72a34]"
+                          : "border-gray-200 bg-white hover:bg-gray-100"
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  );
+                })}
+                <button
+                  onClick={() => setPagina(paginaActual + 1)}
+                  disabled={paginaActual >= totalPaginas}
+                  className="px-3 py-1.5 text-xs rounded-lg border border-gray-200 bg-white hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Siguiente
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
