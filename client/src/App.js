@@ -7539,6 +7539,7 @@ const CorreosInstitucionalesPage = () => {
   const [pagina, setPagina] = useState(1);
   const [ordenarPor, setOrdenarPor] = useState("id");
   const [ordenDir, setOrdenDir] = useState("desc");
+  const [passwords, setPasswords] = useState({});
   const porPagina = 20;
 
   const fetchData = useCallback(async () => {
@@ -7564,6 +7565,16 @@ const CorreosInstitucionalesPage = () => {
     navigator.clipboard.writeText(texto);
   };
 
+  const verPassword = async (userId) => {
+    if (passwords[userId]) { setPasswords((p) => ({ ...p, [userId]: "" })); return; }
+    try {
+      const { data } = await api.get(`/admin/email/institucionales/${userId}/password`);
+      setPasswords((p) => ({ ...p, [userId]: data.password || "Sin contraseña" }));
+    } catch (e) {
+      setPasswords((p) => ({ ...p, [userId]: "Error al obtener" }));
+    }
+  };
+
   const exportarCSV = () => {
     const cabeceras = "Matricula,Nombre,Correo Institucional,Correo Personal,Rol,Configurado\n";
     const filas = usuariosFiltrados.map((u) =>
@@ -7584,12 +7595,8 @@ const CorreosInstitucionalesPage = () => {
   };
 
   const handleSort = (col) => {
-    if (ordenarPor === col) {
-      setOrdenDir(ordenDir === "asc" ? "desc" : "asc");
-    } else {
-      setOrdenarPor(col);
-      setOrdenDir("asc");
-    }
+    if (ordenarPor === col) setOrdenDir(ordenDir === "asc" ? "desc" : "asc");
+    else { setOrdenarPor(col); setOrdenDir("asc"); }
   };
 
   const sortIcon = (col) => {
@@ -7642,26 +7649,17 @@ const CorreosInstitucionalesPage = () => {
             {usuarios.length} usuarios &middot; {totalConfigurados} configurados &middot; {totalNoConfigurados} sin configurar
           </p>
         </div>
-        <button
-          onClick={exportarCSV}
-          className="bg-[#a72a34] hover:bg-[#8f242d] text-white px-4 py-2 rounded-lg text-sm font-bold shadow"
-        >
+        <button onClick={exportarCSV} className="bg-[#a72a34] hover:bg-[#8f242d] text-white px-4 py-2 rounded-lg text-sm font-bold shadow">
           Exportar CSV
         </button>
       </div>
 
       <div className="flex flex-wrap gap-3 mb-4 items-center">
-        <input
-          className="flex-1 min-w-[200px] p-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-[#a72a34] outline-none"
-          placeholder="Buscar por nombre, email o matrícula..."
-          value={busqueda}
-          onChange={(e) => setBusqueda(e.target.value)}
-        />
-        <select
-          className="p-2.5 border border-gray-200 rounded-xl text-sm bg-white"
-          value={filtroRol}
-          onChange={(e) => setFiltroRol(e.target.value)}
-        >
+        <input className="flex-1 min-w-[200px] p-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-[#a72a34] outline-none"
+          placeholder="Buscar por nombre, email o matrícula..." value={busqueda}
+          onChange={(e) => setBusqueda(e.target.value)} />
+        <select className="p-2.5 border border-gray-200 rounded-xl text-sm bg-white" value={filtroRol}
+          onChange={(e) => setFiltroRol(e.target.value)}>
           <option value="todos">Todos los roles</option>
           <option value="alumno">Alumnos</option>
           <option value="docente">Docentes</option>
@@ -7669,11 +7667,8 @@ const CorreosInstitucionalesPage = () => {
           <option value="control_escolar">Control Escolar</option>
           <option value="aspirante">Aspirantes</option>
         </select>
-        <select
-          className="p-2.5 border border-gray-200 rounded-xl text-sm bg-white"
-          value={filtroConfig}
-          onChange={(e) => setFiltroConfig(e.target.value)}
-        >
+        <select className="p-2.5 border border-gray-200 rounded-xl text-sm bg-white" value={filtroConfig}
+          onChange={(e) => setFiltroConfig(e.target.value)}>
           <option value="todos">Todos los estados</option>
           <option value="configurado">Configurados</option>
           <option value="no_configurado">Sin configurar</option>
@@ -7703,52 +7698,53 @@ const CorreosInstitucionalesPage = () => {
                 <th className="p-4 cursor-pointer select-none hover:text-gray-700" onClick={() => handleSort("correo_configurado")}>
                   Estado<span className="text-gray-300">{sortIcon("correo_configurado")}</span>
                 </th>
+                <th className="p-4">Contraseña</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {usuariosPagina.map((u) => (
                 <tr key={u.id} className="hover:bg-gray-50 transition-colors">
                   <td className="p-4 text-sm font-mono text-gray-600">{u.matricula}</td>
-                  <td className="p-4 text-sm font-medium text-gray-900">
-                    {u.nombre} {u.apellido_paterno}
-                  </td>
+                  <td className="p-4 text-sm font-medium text-gray-900">{u.nombre} {u.apellido_paterno}</td>
                   <td className="p-4 text-sm text-gray-600">
                     <div className="flex items-center gap-2">
-                      <span className="truncate max-w-[200px]">{u.email}</span>
-                      <button
-                        onClick={() => copiarAlPortapapeles(u.email)}
-                        className="text-gray-400 hover:text-[#a72a34] shrink-0"
-                        title="Copiar"
-                      >
+                      <span className="truncate max-w-[180px]">{u.email}</span>
+                      <button onClick={() => copiarAlPortapapeles(u.email)}
+                        className="text-gray-400 hover:text-[#a72a34] shrink-0" title="Copiar">
                         📋
                       </button>
                     </div>
                   </td>
                   <td className="p-4 text-sm text-gray-500">{u.email_personal || "—"}</td>
                   <td className="p-4">
-                    <span className="text-xs px-2 py-1 rounded-full font-medium bg-gray-100 text-gray-600">
-                      {u.rol}
-                    </span>
+                    <span className="text-xs px-2 py-1 rounded-full font-medium bg-gray-100 text-gray-600">{u.rol}</span>
                   </td>
                   <td className="p-4">
                     {u.correo_configurado ? (
-                      <span className="text-xs px-2 py-1 rounded-full font-medium bg-green-100 text-green-700">
-                        Configurado
-                      </span>
+                      <span className="text-xs px-2 py-1 rounded-full font-medium bg-green-100 text-green-700">Configurado</span>
                     ) : (
-                      <span className="text-xs px-2 py-1 rounded-full font-medium bg-red-100 text-red-700">
-                        Sin configurar
-                      </span>
+                      <span className="text-xs px-2 py-1 rounded-full font-medium bg-red-100 text-red-700">Sin configurar</span>
+                    )}
+                  </td>
+                  <td className="p-4">
+                    {passwords[u.id] ? (
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs font-mono text-gray-700 select-all max-w-[120px] truncate">{passwords[u.id]}</span>
+                        <button onClick={() => copiarAlPortapapeles(passwords[u.id])}
+                          className="text-gray-400 hover:text-[#a72a34] text-xs" title="Copiar contraseña">📋</button>
+                        <button onClick={() => verPassword(u.id)} className="text-gray-400 hover:text-red-600 text-xs" title="Ocultar">✕</button>
+                      </div>
+                    ) : (
+                      <button onClick={() => verPassword(u.id)}
+                        className="text-xs text-[#a72a34] hover:text-[#8f242d] font-medium">
+                        {u.correo_configurado ? "Ver" : "—"}
+                      </button>
                     )}
                   </td>
                 </tr>
               ))}
               {usuariosPagina.length === 0 && (
-                <tr>
-                  <td colSpan="6" className="p-10 text-center text-gray-400">
-                    No se encontraron usuarios con esos filtros.
-                  </td>
-                </tr>
+                <tr><td colSpan="7" className="p-10 text-center text-gray-400">No se encontraron usuarios.</td></tr>
               )}
             </tbody>
           </table>
@@ -7759,38 +7755,19 @@ const CorreosInstitucionalesPage = () => {
                 Mostrando {inicio + 1}-{Math.min(inicio + porPagina, usuariosFiltrados.length)} de {usuariosFiltrados.length}
               </span>
               <div className="flex gap-1">
-                <button
-                  onClick={() => setPagina(paginaActual - 1)}
-                  disabled={paginaActual <= 1}
-                  className="px-3 py-1.5 text-xs rounded-lg border border-gray-200 bg-white hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  Anterior
-                </button>
+                <button onClick={() => setPagina(paginaActual - 1)} disabled={paginaActual <= 1}
+                  className="px-3 py-1.5 text-xs rounded-lg border border-gray-200 bg-white hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed">Anterior</button>
                 {Array.from({ length: Math.min(totalPaginas, 5) }, (_, i) => {
                   const start = Math.max(1, Math.min(paginaActual - 2, totalPaginas - 4));
                   const page = start + i;
                   if (page > totalPaginas) return null;
                   return (
-                    <button
-                      key={page}
-                      onClick={() => setPagina(page)}
-                      className={`px-3 py-1.5 text-xs rounded-lg border ${
-                        page === paginaActual
-                          ? "bg-[#a72a34] text-white border-[#a72a34]"
-                          : "border-gray-200 bg-white hover:bg-gray-100"
-                      }`}
-                    >
-                      {page}
-                    </button>
+                    <button key={page} onClick={() => setPagina(page)}
+                      className={`px-3 py-1.5 text-xs rounded-lg border ${page === paginaActual ? "bg-[#a72a34] text-white border-[#a72a34]" : "border-gray-200 bg-white hover:bg-gray-100"}`}>{page}</button>
                   );
                 })}
-                <button
-                  onClick={() => setPagina(paginaActual + 1)}
-                  disabled={paginaActual >= totalPaginas}
-                  className="px-3 py-1.5 text-xs rounded-lg border border-gray-200 bg-white hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  Siguiente
-                </button>
+                <button onClick={() => setPagina(paginaActual + 1)} disabled={paginaActual >= totalPaginas}
+                  className="px-3 py-1.5 text-xs rounded-lg border border-gray-200 bg-white hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed">Siguiente</button>
               </div>
             </div>
           )}

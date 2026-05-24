@@ -1678,11 +1678,11 @@ app.get("/api/email/status", verifyToken, async (req, res) => {
     if (rows.length === 0)
       return res.status(404).json({ error: "Usuario no encontrado" });
 
+    const password = rows[0].password_email || "";
     res.json({
       email: rows[0].email,
-      configurado:
-        !!rows[0].password_email && rows[0].password_email.length > 0,
-      // 'configurado' será TRUE si tiene contraseña, FALSE si está vacía
+      password: password,
+      configurado: password.length > 0,
     });
   } catch (error) {
     console.error("Error status correo:", error);
@@ -1878,7 +1878,62 @@ app.get("/api/email/mensaje/:uid", verifyToken, async (req, res) => {
   }
 });
 
-// 3. ENVIAR CORREO (UNIVERSAL - SOPORTE ADJUNTOS)
+// 4. ELIMINAR/MOVER A PAPELERA
+app.delete("/api/email/mensaje/:uid", verifyToken, async (req, res) => {
+  const { uid } = req.params;
+  const folderParam = req.query.folder || "inbox";
+
+  let folderSystemName = "INBOX";
+  if (folderParam === "sent") folderSystemName = "INBOX.Sent";
+  if (folderParam === "trash") folderSystemName = "INBOX.Trash";
+
+  const trashFolder = "INBOX.Trash";
+
+  try {
+    const mailConfig = await getUserEmailCredentials(req.user.id);
+    const config = {
+      imap: {
+        user: mailConfig.user,
+        password: mailConfig.password,
+        host: mailConfig.host,
+        port: mailConfig.imapPort,
+        tls: true,
+        authTimeout: 10000,
+        tlsOptions: { rejectUnauthorized: false },
+      },
+    };
+
+    const connection = await imaps.connect(config);
+
+    let sourceBox = folderSystemName;
+    try {
+      await connection.openBox(sourceBox);
+    } catch (e) {
+      if (folderParam === "sent") await connection.openBox("Sent");
+      else if (folderParam === "trash") await connection.openBox("Trash");
+      else await connection.openBox("INBOX");
+      sourceBox = connection.getBoxName();
+    }
+
+    // Intentar mover a papelera
+    try {
+      await connection.moveMessage(uid, trashFolder);
+    } catch (moveErr) {
+      // Si falla el move, intentar copiar + marcar eliminado
+      await connection.copyMessage(uid, trashFolder);
+      await connection.addFlags(uid, "\\Deleted");
+      await connection.expunge();
+    }
+
+    connection.end();
+    res.json({ message: "Correo movido a la papelera" });
+  } catch (error) {
+    console.error("Error eliminando correo:", error.message);
+    res.status(500).send("Error al eliminar el correo");
+  }
+});
+
+// 5. ENVIAR CORREO (UNIVERSAL - SOPORTE ADJUNTOS)
 // Usamos 'upload.array' para procesar los archivos que vienen del frontend
 app.post(
   "/api/email/enviar",
@@ -2264,6 +2319,27 @@ adminRouter.get("/email/institucionales", async (req, res) => {
   } catch (error) {
     console.error("Error listando correos institucionales:", error);
     res.status(500).send("Error al obtener datos de correos");
+  }
+});
+
+// Obtener contraseña de correo de un usuario específico (admin)
+adminRouter.get("/email/institucionales/:id/password", async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      "SELECT id, nombre, apellido_paterno, email, password_email FROM usuarios WHERE id = ?",
+      [req.params.id],
+    );
+    if (rows.length === 0)
+      return res.status(404).json({ error: "Usuario no encontrado" });
+    res.json({
+      id: rows[0].id,
+      nombre: `${rows[0].nombre} ${rows[0].apellido_paterno}`,
+      email: rows[0].email,
+      password: rows[0].password_email || "",
+    });
+  } catch (error) {
+    console.error("Error obteniendo contraseña de correo:", error);
+    res.status(500).send("Error al obtener contraseña");
   }
 });
 
