@@ -30,6 +30,7 @@ const CorreoPage = () => {
   const [verificando, setVerificando] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showSavedPassword, setShowSavedPassword] = useState(false);
+  const [reconfigurando, setReconfigurando] = useState(false);
 
   const [carpetaActual, setCarpetaActual] = useState("inbox");
   const [modoRedactar, setModoRedactar] = useState(false);
@@ -82,9 +83,39 @@ const CorreoPage = () => {
     try {
       await axios.post(`${API_URL}/configurar`, { password: passwordInput }, authHeaders);
       setPasswordGuardada(passwordInput);
+      setReconfigurando(false);
       setConfigurado(true);
     } catch (err) {
       setError(err.response?.data?.error || err.response?.data || "Error al conectar.");
+    }
+  };
+
+  const iniciarReconfiguracion = () => {
+    setPasswordInput(passwordGuardada);
+    setReconfigurando(true);
+    setConfigurado(false);
+    setError(null);
+  };
+
+  const restablecerPassword = async () => {
+    if (!window.confirm("Se generará una nueva contraseña y se actualizará en cPanel automáticamente. ¿Continuar?"))
+      return;
+    setError(null);
+    setVerificando(true);
+    try {
+      const res = await axios.post(`${API_URL}/restablecer-password`, {}, authHeaders);
+      const { password, email } = res.data;
+      setPasswordGuardada(password);
+      setPasswordInput(password);
+      setShowPassword(true);
+      alert(`✅ Contraseña restablecida con éxito.\n\nCorreo: ${email}\nNueva contraseña: ${password}\n\nGuarda estos datos.`);
+      setReconfigurando(false);
+      setConfigurado(true);
+    } catch (err) {
+      const msg = err.response?.data?.error || "Error al restablecer contraseña.";
+      setError(msg);
+    } finally {
+      setVerificando(false);
     }
   };
 
@@ -221,8 +252,18 @@ const CorreoPage = () => {
           <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
             <Lock size={32} />
           </div>
-          <h2 className="text-2xl font-bold mb-1">Acceso a Correo</h2>
+          <h2 className="text-2xl font-bold mb-1">{reconfigurando ? "Actualizar Contraseña" : "Acceso a Correo"}</h2>
           {emailUsuario && <p className="text-sm text-gray-500 mb-4">{emailUsuario}</p>}
+          {reconfigurando && (
+            <div className="text-xs text-amber-600 mb-4 bg-amber-50 p-2 rounded-lg space-y-2">
+              <p>La contraseña guardada no es válida.</p>
+              <button type="button" onClick={restablecerPassword} disabled={verificando}
+                className="w-full bg-orange-600 text-white py-2 rounded-lg font-bold hover:bg-orange-700 transition disabled:opacity-50 text-xs">
+                {verificando ? "Generando..." : "Restablecer automáticamente"}
+              </button>
+              <p className="text-gray-500">o ingresa la nueva contraseña manualmente:</p>
+            </div>
+          )}
           {error && (
             <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-xs text-left">{error}</div>
           )}
@@ -242,10 +283,16 @@ const CorreoPage = () => {
               </button>
             </div>
             <button type="submit" className="w-full bg-red-600 text-white py-3 rounded-lg font-bold hover:bg-red-700 transition">
-              Entrar
+              {reconfigurando ? "Actualizar y probar" : "Entrar"}
             </button>
+            {reconfigurando && (
+              <button type="button" onClick={() => { setReconfigurando(false); setConfigurado(true); }}
+                className="w-full text-xs text-gray-500 hover:text-gray-700 underline mt-2">
+                Cancelar
+              </button>
+            )}
           </form>
-          {passwordGuardada && (
+          {passwordGuardada && !reconfigurando && (
             <div className="mt-4 pt-4 border-t border-gray-100">
               <button type="button" onClick={() => setShowSavedPassword(!showSavedPassword)}
                 className="text-xs text-gray-500 hover:text-red-600 underline">
@@ -318,6 +365,11 @@ const CorreoPage = () => {
             <RefreshCw size={14} className={verificando ? "animate-spin" : ""} />
             <span className="hidden md:inline">{verificando ? "..." : "Verificar"}</span>
           </button>
+          <button onClick={iniciarReconfiguracion}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-gray-200 hover:bg-gray-100 text-gray-600">
+            <Lock size={14} />
+            <span className="hidden md:inline">Cambiar contraseña</span>
+          </button>
 
           <button onClick={() => { setRespuestaA(null); setNuevoCorreo({ destinatario: "", asunto: "", mensaje: "" }); setModoRedactar(true); }}
             className="flex items-center gap-1.5 bg-[#a72a34] hover:bg-[#8f242d] text-white px-4 py-1.5 rounded-lg text-xs font-bold shadow transition-all active:scale-95">
@@ -331,7 +383,21 @@ const CorreoPage = () => {
         <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
           <AlertTriangle size={18} className="text-red-500 shrink-0 mt-0.5" />
           <p className="text-sm text-red-700 flex-1">{error}</p>
-          <button onClick={() => setError(null)} className="text-red-400 hover:text-red-600 font-bold">&times;</button>
+          <div className="flex gap-2 shrink-0">
+            {(error.toLowerCase().includes("authentication") || error.toLowerCase().includes("contraseña") || error.includes("401") || error.includes("incorrecta")) && (
+              <>
+                <button onClick={iniciarReconfiguracion}
+                  className="text-xs bg-red-600 text-white px-3 py-1.5 rounded-lg font-bold hover:bg-red-700 transition-colors">
+                  Reingresar
+                </button>
+                <button onClick={restablecerPassword} disabled={verificando}
+                  className="text-xs bg-orange-600 text-white px-3 py-1.5 rounded-lg font-bold hover:bg-orange-700 transition-colors disabled:opacity-50">
+                  {verificando ? "..." : "Restablecer auto"}
+                </button>
+              </>
+            )}
+            <button onClick={() => setError(null)} className="text-red-400 hover:text-red-600 font-bold">&times;</button>
+          </div>
         </div>
       )}
 

@@ -1,4 +1,4 @@
-import CorreoPage from "./pages/CorreoAdminPage";
+﻿import CorreoPage from "./pages/CorreoAdminPage";
 import RegistroPage from "./pages/RegistroPage";
 import RegistroDocentePage from "./pages/RegistroDocentePage";
 import ExploradorArchivos from "./pages/ExploradorArchivos";
@@ -106,6 +106,8 @@ import {
   Megaphone,
   Library,
   AlertOctagon,
+  UserCheck,
+  XCircle,
 } from "lucide-react";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
@@ -724,6 +726,12 @@ const AdminLayout = () => {
       icon: Users,
       label: "Usuarios",
       path: "/usuarios",
+      roles: ["admin", "control_escolar"],
+    },
+    {
+      icon: UserCheck,
+      label: "Revisar Aspirantes",
+      path: "/admin/aspirantes/revision",
       roles: ["admin", "control_escolar"],
     },
     {
@@ -1571,89 +1579,132 @@ const BibliotecaPage = () => {
 
 const AspiranteLayout = () => {
   const { logout, user } = useAuth();
+  const location = useLocation();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const navItems = [
+    {
+      icon: FileIcon,
+      label: "Mi Expediente",
+      path: "/aspirante/dashboard",
+    },
+  ];
+
+  if (!user) return null;
+
   return (
-    <div className="flex h-screen bg-gray-100 font-sans">
-      <aside className="w-64 flex-shrink-0 bg-gray-800 text-white flex flex-col">
-        <div className="h-20 flex items-center justify-center border-b border-gray-700">
-          <svg
-            className="w-auto h-10 text-principal"
-            viewBox="0 0 24 24"
-            fill="currentColor"
+    <div className="flex h-screen bg-gray-50 font-sans overflow-hidden">
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 md:hidden backdrop-blur-sm transition-opacity"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 flex flex-col transform transition-transform duration-300 ease-in-out shadow-xl md:shadow-none ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}
+      >
+        <div className="p-6 flex flex-col items-center justify-center border-b border-gray-100 relative">
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="absolute top-2 right-2 p-2 text-gray-400 hover:text-red-500 md:hidden"
           >
-            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5-10-5-10 5z" />
-          </svg>
+            <X size={24} />
+          </button>
+          <div className="w-24 h-24 mb-3 flex items-center justify-center">
+            <img
+              src={process.env.PUBLIC_URL + '/logo.png'}
+              alt='Logo Universidad'
+              className='mx-auto h-20 w-auto object-contain mb-4'
+            />
+          </div>
+          <h2 className='font-bold text-lg text-center leading-tight text-[#a72a34]'>
+            {BRAND.name}
+          </h2>
         </div>
-        <nav className="flex-1 px-4 py-6 space-y-2">
-          <Link
-            to="/aspirante/dashboard"
-            className="flex items-center px-4 py-2 rounded-lg bg-principal text-white"
-          >
-            <FileIcon className="w-5 h-5 mr-3" />
-            Mi Expediente
-          </Link>
+
+        <nav className='flex-1 px-3 py-6 space-y-1 overflow-y-auto custom-scrollbar'>
+          {navItems.map((item) => {
+            const isActive = location.pathname === item.path || location.pathname.startsWith(item.path + '/');
+            return (
+              <Link
+                key={item.label}
+                to={item.path}
+                onClick={() => setSidebarOpen(false)}
+                className={`flex items-center px-4 py-3 rounded-xl transition-all duration-200 font-medium text-sm ${isActive ? 'bg-[#a72a34] text-white shadow-md shadow-red-900/10' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'}`}
+              >
+                <item.icon
+                  className={`w-5 h-5 mr-3 ${isActive ? 'text-white' : 'text-[#bb9a5a]'}`}
+                />
+                {item.label}
+              </Link>
+            );
+          })}
         </nav>
-        <div className="px-4 py-4 border-t border-gray-700">
+
+        <div className='px-4 py-4 border-t border-gray-100'>
+          <div className='mb-3 px-3 py-2 bg-gray-50 rounded-lg border border-gray-100'>
+            <p className='text-[10px] font-bold uppercase text-[#bb9a5a]'>
+              Rol Actual
+            </p>
+            <p className='text-sm font-bold text-gray-700 capitalize'>
+              {user?.rol.replace('_', ' ')}
+            </p>
+          </div>
           <button
             onClick={logout}
-            className="w-full flex items-center px-4 py-2 rounded-lg text-gray-300 hover:bg-principal hover:text-white transition-colors duration-200"
+            className='w-full flex items-center justify-center px-4 py-2 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 text-sm font-bold transition-colors'
           >
-            <LogOut className="w-5 h-5 mr-3" />
-            Cerrar Sesión
+            <LogOut className='w-4 h-4 mr-2' /> Cerrar Sesion
           </button>
         </div>
       </aside>
-      <main className="flex-1 overflow-y-auto">
-        <header className="bg-white shadow-sm p-4 flex justify-between items-center">
-          <h1 className="text-2xl font-semibold text-gray-800">
-            Portal del Aspirante
-          </h1>
-          {/* --- REEMPLAZA ESTE DIV --- */}
-          <div className="flex items-center space-x-4">
-            <NotificationBell />
-            {/* Link al Perfil con Foto */}
-            <Link
-              to={
-                user?.rol === "admin" ? "/mi-perfil" : `/${user?.rol}/mi-perfil`
-              }
-              className="flex items-center space-x-2 text-gray-600 hover:text-principal"
-            >
-              <img
-                // Construye la URL de la foto o usa placeholder
-                src={
-                  user?.foto_perfil
-                    ? `https://api-universidad-c5o8.onrender.com/uploads/perfiles/${user.foto_perfil}`
-                    : `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                        user?.nombre || "?",
-                      )}+${encodeURIComponent(
-                        user?.apellido_paterno || "?",
-                      )}&background=random&color=fff`
-                }
-                alt="Perfil"
-                className="w-8 h-8 rounded-full object-cover border border-gray-300"
-                // Fallback por si la imagen no carga
-                onError={(e) => {
-                  e.target.onerror = null;
-                  e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                    user?.nombre || "?",
-                  )}+${encodeURIComponent(
-                    user?.apellido_paterno || "?",
-                  )}&background=random&color=fff`;
-                }}
-              />
-              <span>{user?.nombre}</span>
-            </Link>
-            {/* Botón Logout */}
+
+      <main className='flex-1 flex flex-col h-full relative overflow-hidden md:ml-64 transition-all duration-300'>
+        <header className='bg-white sticky top-0 z-30 shadow-sm px-4 py-3 flex justify-between items-center h-16'>
+          <div className='flex items-center gap-3'>
             <button
-              onClick={logout}
-              className="text-gray-500 hover:text-principal"
-              title="Cerrar Sesión"
+              onClick={() => setSidebarOpen(true)}
+              className='p-2 -ml-2 text-gray-600 hover:bg-gray-100 rounded-lg md:hidden'
             >
-              <LogOut size={22} />
+              <Menu size={28} />
             </button>
+            <h1 className='text-xl font-bold text-gray-800 tracking-tight'>
+              Portal del Aspirante
+            </h1>
           </div>
-          {/* --- FIN REEMPLAZO --- */}
+          <div className='flex items-center gap-4'>
+            <div className='text-gray-500 hover:text-[#a72a34] transition-colors cursor-pointer relative'>
+              <NotificationBell />
+            </div>
+            <div className='h-8 w-px bg-gray-200 mx-1 hidden sm:block'></div>
+            <Link
+              to='/aspirante/mi-perfil'
+              className='flex items-center gap-3 hover:bg-gray-50 p-1 pr-2 rounded-full transition-colors group cursor-pointer'
+            >
+              <div className='text-right hidden sm:block'>
+                <p className='text-sm font-bold text-gray-800 group-hover:text-[#a72a34] transition-colors'>
+                  {user?.nombre}
+                </p>
+                <p className='text-xs text-gray-500 capitalize'>{user?.rol}</p>
+              </div>
+              <div className='w-10 h-10 rounded-full bg-gray-100 border border-gray-200 overflow-hidden group-hover:border-[#a72a34] transition-colors'>
+                {user?.foto_perfil ? (
+                  <img
+                    src={'https://api-universidad-c5o8.onrender.com/uploads/perfiles/' + user.foto_perfil}
+                    className='w-full h-full object-cover'
+                    alt='Perfil'
+                  />
+                ) : (
+                  <div className='w-full h-full flex items-center justify-center text-gray-400 font-bold text-lg bg-gray-100'>
+                    {user?.nombre?.charAt(0)?.toUpperCase() || '?'}
+                  </div>
+                )}
+              </div>
+            </Link>
+          </div>
         </header>
-        <div className="p-6">
+        <div className='flex-1 overflow-y-auto p-6'>
           <Outlet />
         </div>
       </main>
@@ -7575,6 +7626,17 @@ const CorreosInstitucionalesPage = () => {
     }
   };
 
+  const restablecerPasswordUser = async (userId) => {
+    if (!window.confirm("¿Restablecer contraseña de correo? Se generará una nueva automáticamente.")) return;
+    try {
+      const { data } = await api.post(`/admin/email/institucionales/${userId}/restablecer-password`);
+      setPasswords((p) => ({ ...p, [userId]: data.password }));
+      alert(`✅ Contraseña restablecida\n\nCorreo: ${data.email}\nNueva: ${data.password}`);
+    } catch (e) {
+      alert("Error al restablecer: " + (e.response?.data?.error || e.message));
+    }
+  };
+
   const exportarCSV = () => {
     const cabeceras = "Matricula,Nombre,Correo Institucional,Correo Personal,Rol,Configurado\n";
     const filas = usuariosFiltrados.map((u) =>
@@ -7727,19 +7789,25 @@ const CorreosInstitucionalesPage = () => {
                     )}
                   </td>
                   <td className="p-4">
-                    {passwords[u.id] ? (
-                      <div className="flex items-center gap-1">
-                        <span className="text-xs font-mono text-gray-700 select-all max-w-[120px] truncate">{passwords[u.id]}</span>
-                        <button onClick={() => copiarAlPortapapeles(passwords[u.id])}
-                          className="text-gray-400 hover:text-[#a72a34] text-xs" title="Copiar contraseña">📋</button>
-                        <button onClick={() => verPassword(u.id)} className="text-gray-400 hover:text-red-600 text-xs" title="Ocultar">✕</button>
-                      </div>
-                    ) : (
-                      <button onClick={() => verPassword(u.id)}
-                        className="text-xs text-[#a72a34] hover:text-[#8f242d] font-medium">
-                        {u.correo_configurado ? "Ver" : "—"}
+                    <div className="flex items-center gap-1">
+                      {passwords[u.id] ? (
+                        <>
+                          <span className="text-xs font-mono text-gray-700 select-all max-w-[100px] truncate">{passwords[u.id]}</span>
+                          <button onClick={() => copiarAlPortapapeles(passwords[u.id])}
+                            className="text-gray-400 hover:text-[#a72a34] text-xs" title="Copiar">📋</button>
+                          <button onClick={() => verPassword(u.id)} className="text-gray-400 hover:text-red-600 text-xs" title="Ocultar">✕</button>
+                        </>
+                      ) : (
+                        <button onClick={() => verPassword(u.id)}
+                          className="text-xs text-[#a72a34] hover:text-[#8f242d] font-medium">
+                          {u.correo_configurado ? "Ver" : "—"}
+                        </button>
+                      )}
+                      <button onClick={() => restablecerPasswordUser(u.id)}
+                        className="text-xs bg-orange-500 hover:bg-orange-600 text-white px-2 py-1 rounded font-medium ml-1">
+                        Reset
                       </button>
-                    )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -10485,7 +10553,7 @@ const AspiranteDashboardPage = () => {
       setSelectedFile(null); // Limpiar el input
       e.target.reset(); // Limpiar el form
     } catch (error) {
-      // ... (manejo de error)
+      alert("Error al subir archivo: " + (error.response?.data?.message || error.message));
     }
   };
 
@@ -10496,7 +10564,7 @@ const AspiranteDashboardPage = () => {
         await api.delete(`/aspirante/expedientes/${docId}`);
         fetchAspirante();
       } catch (error) {
-        // ... (manejo de error)
+        alert("Error al eliminar: " + (error.response?.data?.message || error.message));
       }
     }
   };
@@ -10618,6 +10686,362 @@ const AspiranteDashboardPage = () => {
     </div>
   );
 };
+
+
+const RevisionAspirantesPage = () => {
+  const { user } = useAuth();
+  const [aspirantes, setAspirantes] = useState([]);
+  const [selected, setSelected] = useState(null);
+  const [documentos, setDocumentos] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [rejectModal, setRejectModal] = useState(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [converting, setConverting] = useState(false);
+
+  const fetchAspirantes = useCallback(async () => {
+    try {
+      setLoading(true);
+      const { data } = await api.get("/admin/aspirantes/revision");
+      setAspirantes(data);
+    } catch (error) {
+      console.error("Error al cargar aspirantes", error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchAspirantes(); }, [fetchAspirantes]);
+
+  const verDocumentos = async (aspiranteId) => {
+    try {
+      setDetailLoading(true);
+      const { data } = await api.get(`/admin/aspirantes/${aspiranteId}/documentos`);
+      setSelected(data.aspirante);
+      setDocumentos(data.documentos);
+    } catch (error) {
+      alert("Error al cargar documentos: " + (error.response?.data?.message || error.message));
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const handleRevisar = async (docId, estatus) => {
+    if (estatus === "rechazado") {
+      setRejectModal(docId);
+      setRejectReason("");
+      return;
+    }
+    try {
+      await api.put(`/admin/expedientes/${docId}/revisar`, { estatus });
+      verDocumentos(selected.id);
+      fetchAspirantes();
+    } catch (error) {
+      alert("Error al revisar: " + (error.response?.data?.message || error.message));
+    }
+  };
+
+  const handleRechazarConfirm = async () => {
+    try {
+      await api.put(`/admin/expedientes/${rejectModal}/revisar`, {
+        estatus: "rechazado",
+        comentario: rejectReason || null,
+      });
+      setRejectModal(null);
+      setRejectReason("");
+      verDocumentos(selected.id);
+      fetchAspirantes();
+    } catch (error) {
+      alert("Error al rechazar: " + (error.response?.data?.message || error.message));
+    }
+  };
+
+  const convertir = async () => {
+    if (!window.confirm("¿Estás seguro de convertir a " + selected.nombre + " " + (selected.apellido_paterno || "") + " a alumno?")) return;
+    try {
+      setConverting(true);
+      await api.post(`/admin/aspirantes/${selected.id}/convertir`);
+      alert("Aspirante convertido a alumno exitosamente");
+      setSelected(null);
+      setDocumentos([]);
+      fetchAspirantes();
+    } catch (error) {
+      alert("Error al convertir: " + (error.response?.data?.message || error.message));
+    } finally {
+      setConverting(false);
+    }
+  };
+
+  const badgeColor = (estatus) => {
+    switch (estatus) {
+      case "aprobado": return "bg-green-100 text-green-700";
+      case "rechazado": return "bg-red-100 text-red-700";
+      case "pendiente": return "bg-yellow-100 text-yellow-700";
+      case "no_subido": return "bg-gray-100 text-gray-500";
+      default: return "bg-gray-100 text-gray-500";
+    }
+  };
+
+  const badgeText = (estatus) => {
+    switch (estatus) {
+      case "aprobado": return "Aprobado";
+      case "rechazado": return "Rechazado";
+      case "pendiente": return "Pendiente";
+      case "no_subido": return "No subido";
+      default: return estatus;
+    }
+  };
+
+  if (!user) return null;
+
+  return (
+    <div className="space-y-8 animate-in fade-in duration-300">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <div className="p-3 bg-[#a72a34] text-white rounded-xl shadow-lg shadow-red-900/20">
+            <UserCheck size={28} />
+          </div>
+          <div>
+            <h1 className="text-3xl font-bold text-gray-800 tracking-tight">Revisión de Aspirantes</h1>
+            <p className="text-gray-500 mt-1">
+              {selected
+                ? "Documentos del aspirante seleccionado"
+                : "Revisa y aprueba los documentos de los aspirantes"}
+            </p>
+          </div>
+        </div>
+        {selected && (
+          <button
+            onClick={() => { setSelected(null); setDocumentos([]); }}
+            className="flex items-center gap-2 text-principal hover:underline font-medium"
+          >
+            <ArrowLeft size={18} /> Volver al listado
+          </button>
+        )}
+      </div>
+
+      {!selected ? (
+        loading ? (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 text-center">
+            <p className="text-gray-500">Cargando aspirantes...</p>
+          </div>
+        ) : aspirantes.length === 0 ? (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 text-center">
+            <p className="text-gray-500">No hay aspirantes pendientes de revisión.</p>
+          </div>
+        ) : (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse min-w-[800px]">
+                <thead>
+                  <tr className="bg-gray-50 text-gray-500 uppercase text-xs font-bold border-b border-gray-100">
+                    <th className="p-5">Aspirante</th>
+                    <th className="p-5">Documentos</th>
+                    <th className="p-5">Aprobados</th>
+                    <th className="p-5">Rechazados</th>
+                    <th className="p-5">Progreso</th>
+                    <th className="p-5">Acción</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {aspirantes.map((a) => (
+                    <tr key={a.id} className="hover:bg-gray-50/50 transition-colors">
+                      <td className="p-5">
+                        <div className="flex items-center gap-3">
+                          <img
+                            src={a.foto_perfil
+                              ? "https://api-universidad-c5o8.onrender.com/uploads/perfiles/" + a.foto_perfil
+                              : "https://ui-avatars.com/api/?name=" + encodeURIComponent(a.nombre) + "+" + encodeURIComponent(a.apellido_paterno || "") + "&background=random&color=fff"
+                            }
+                            alt=""
+                            className="w-10 h-10 rounded-full object-cover"
+                          />
+                          <div>
+                            <p className="font-medium text-gray-800">{a.nombre} {a.apellido_paterno}</p>
+                            <p className="text-sm text-gray-500">{a.email}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="p-5 text-gray-700">{a.subidos}/{a.total_requeridos}</td>
+                      <td className="p-5">
+                        <span className={"px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider " + (a.aprobados === a.total_requeridos ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500")}>
+                          {a.aprobados}
+                        </span>
+                      </td>
+                      <td className="p-5">
+                        {a.rechazados > 0 ? (
+                          <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-red-100 text-red-700">{a.rechazados}</span>
+                        ) : (
+                          <span className="text-gray-400">—</span>
+                        )}
+                      </td>
+                      <td className="p-5">
+                        <div className="w-32 bg-gray-200 rounded-full h-2.5 overflow-hidden">
+                          <div
+                            className={"h-full rounded-full transition-all duration-500 " + (a.aprobados === a.total_requeridos ? "bg-green-500" : a.rechazados > 0 ? "bg-red-500" : "bg-yellow-500")}
+                            style={{ width: (a.subidos / a.total_requeridos * 100) + "%" }}
+                          />
+                        </div>
+                      </td>
+                      <td className="p-5">
+                        <button
+                          onClick={() => verDocumentos(a.id)}
+                          className="bg-[#a72a34] text-white px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 hover:bg-[#802028] shadow-lg shadow-red-900/20 transition-transform active:scale-95"
+                        >
+                          <UserCheck size={16} /> Revisar
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )
+      ) : (
+        <div className="space-y-6">
+          <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
+            <div className="flex items-center gap-4 mb-4">
+              <img
+                src={"https://ui-avatars.com/api/?name=" + encodeURIComponent(selected.nombre) + "+" + encodeURIComponent(selected.apellido_paterno || "") + "&background=a72a34&color=fff&size=64"}
+                alt=""
+                className="w-16 h-16 rounded-full object-cover border-2 border-gray-100"
+              />
+              <div>
+                <h3 className="text-2xl font-bold text-gray-800">{selected.nombre} {selected.apellido_paterno} {selected.apellido_materno || ""}</h3>
+                <p className="text-gray-500">{selected.email}</p>
+                {selected.matricula && <p className="text-sm text-gray-400">Matrícula: {selected.matricula}</p>}
+              </div>
+            </div>
+          </div>
+
+          {detailLoading ? (
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 text-center">
+              <p className="text-gray-500">Cargando documentos...</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {documentos.map((doc, idx) => (
+                <div key={idx} className={"bg-white p-6 rounded-2xl border shadow-sm hover:shadow-md transition-all border-l-4 " + (
+                  doc.estatus === "aprobado" ? "border-green-500" :
+                  doc.estatus === "rechazado" ? "border-red-500" :
+                  doc.estatus === "pendiente" ? "border-yellow-500" :
+                  "border-gray-200"
+                )}>
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="font-bold text-gray-800 text-lg">{doc.tipo_nombre}</h4>
+                    <span className={"px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider " + badgeColor(doc.estatus)}>
+                      {badgeText(doc.estatus)}
+                    </span>
+                  </div>
+
+                  {doc.estatus !== "no_subido" && (
+                    <a
+                      href={"https://api-universidad-c5o8.onrender.com/uploads/" + doc.ruta_archivo}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 text-blue-600 hover:underline mb-4 font-medium"
+                    >
+                      <FileIcon size={18} /> {doc.nombre_original}
+                    </a>
+                  )}
+
+                  {doc.estatus === "no_subido" && (
+                    <p className="text-sm text-gray-400 mb-4">El aspirante aún no ha subido este documento.</p>
+                  )}
+
+                  {doc.comentario && (
+                    <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-4">
+                      <p className="text-xs font-bold text-red-700 uppercase tracking-wider mb-1">Motivo del rechazo:</p>
+                      <p className="text-sm text-red-600">{doc.comentario}</p>
+                    </div>
+                  )}
+
+                  {(doc.estatus === "pendiente" || doc.estatus === "rechazado") && (
+                    <div className="flex gap-3 mt-2">
+                      <button
+                        onClick={() => handleRevisar(doc.id, "aprobado")}
+                        className="flex-1 bg-green-600 text-white px-4 py-2.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-green-700 shadow-lg transition-transform active:scale-95"
+                      >
+                        <CheckCircle size={16} /> Aprobar
+                      </button>
+                      <button
+                        onClick={() => handleRevisar(doc.id, "rechazado")}
+                        className="flex-1 bg-red-600 text-white px-4 py-2.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-red-700 shadow-lg transition-transform active:scale-95"
+                      >
+                        <XCircle size={16} /> Rechazar
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {documentos.length > 0 && documentos.every((d) => d.estatus === "aprobado") && (
+            <div className="bg-green-50 border border-green-200 rounded-2xl p-8 text-center">
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-4">
+                <CheckCircle size={32} className="text-green-600" />
+              </div>
+              <p className="text-xl font-bold text-green-800 mb-2">Todos los documentos aprobados</p>
+              <p className="text-green-600 mb-6">Este aspirante está listo para convertirse en alumno.</p>
+              <button
+                onClick={convertir}
+                disabled={converting}
+                className="bg-[#a72a34] text-white px-8 py-3.5 rounded-xl font-bold flex items-center gap-2 hover:bg-[#802028] shadow-lg shadow-red-900/20 transition-transform active:scale-95 mx-auto disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {converting ? "Convirtiendo..." : "Convertir a Alumno"}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {rejectModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex justify-center items-center z-50 p-4 animate-in fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+            <div className="bg-white p-6 border-b flex justify-between items-center shrink-0">
+              <h3 className="font-bold text-xl text-gray-800">Rechazar Documento</h3>
+              <button
+                onClick={() => setRejectModal(null)}
+                className="text-gray-400 hover:bg-gray-100 p-2 rounded-full transition-colors"
+              >
+                <X size={24} />
+              </button>
+            </div>
+            <div className="p-6">
+              <p className="text-sm text-gray-600 mb-4">
+                Indica el motivo del rechazo para que el aspirante lo corrija:
+              </p>
+              <textarea
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                placeholder="Ej: El documento no se ve legible, súbelo escaneado y derecho..."
+                className="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#a72a34] outline-none mb-6"
+                rows={4}
+              />
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={() => setRejectModal(null)}
+                  className="px-6 py-3 text-gray-500 hover:text-gray-700 font-bold hover:bg-gray-100 rounded-xl transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleRechazarConfirm}
+                  className="bg-red-600 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-red-700 shadow-lg transition-transform active:scale-95"
+                >
+                  <XCircle size={18} /> Rechazar Documento
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 
 const AulaVirtualPage = () => {
   const { grupoId, asignaturaId } = useParams();
@@ -14416,6 +14840,7 @@ function App() {
                 path="/usuarios/aspirante/:id"
                 element={<DetalleAspirantePage />}
               />
+              <Route path="/admin/aspirantes/revision" element={<RevisionAspirantesPage />} />
               <Route path="/admin/calendario" element={<CalendarioAdmin />} />
               <Route path="/admin/correo" element={<CorreoPage />} />
               <Route path="/admin/correos-institucionales" element={<CorreosInstitucionalesPage />} />
