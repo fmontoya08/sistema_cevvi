@@ -12,6 +12,7 @@ const fs = require("fs");
 const MailComposer = require("nodemailer/lib/mail-composer");
 const archiver = require("archiver");
 const cron = require("node-cron");
+const https = require("https");
 require("dotenv").config();
 
 const app = express();
@@ -354,6 +355,50 @@ async function crearCorreoCpanel(usuario, passwordCorreo) {
     }
   } catch (error) {
     console.error("❌ Error de conexión con el Puente PHP:", error.message);
+    return false;
+  }
+}
+
+// ==========================================
+// CAMBIAR CONTRASEÑA DE CORREO VÍA CPANEL UAPI
+// ==========================================
+async function cambiarPasswordCpanel(usuario, nuevoPassword) {
+  const domain = CPANEL_CONFIG.domain;
+  const logMsg = `[CPANEL-UAPI] Cambiando password para ${usuario}@${domain}`;
+  console.log(logMsg);
+
+  try {
+    const url = `https://${CPANEL_CONFIG.host}:2083/execute/Email/passwd_pop`;
+    const response = await axios.post(
+      url,
+      new URLSearchParams({
+        email: usuario,
+        password: nuevoPassword,
+        domain: domain,
+      }),
+      {
+        auth: {
+          username: CPANEL_CONFIG.user,
+          password: CPANEL_CONFIG.password,
+        },
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        httpsAgent: new https.Agent({ rejectUnauthorized: false }),
+        timeout: 15000,
+      },
+    );
+
+    if (response.data && response.data.status === 1) {
+      console.log(`✅ ${logMsg} — Éxito`);
+      return true;
+    } else {
+      const errMsg = response.data?.errors?.[0] || "Error desconocido";
+      console.error(`❌ ${logMsg} — ${errMsg}`);
+      return false;
+    }
+  } catch (error) {
+    console.error(`❌ Error en UAPI: ${error.message}`);
     return false;
   }
 }
@@ -1711,6 +1756,39 @@ app.post("/api/email/configurar", verifyToken, async (req, res) => {
   }
 });
 
+// 3. Restablecer contraseña de correo automáticamente (cPanel + BD)
+app.post("/api/email/restablecer-password", verifyToken, async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      "SELECT email FROM usuarios WHERE id = ?",
+      [req.user.id],
+    );
+    if (rows.length === 0)
+      return res.status(404).json({ error: "Usuario no encontrado" });
+
+    const emailLocal = rows[0].email.split("@")[0];
+    const nuevoPassword = `Siglo.${Math.random().toString(36).slice(2, 8).toUpperCase()}!`;
+
+    const exito = await cambiarPasswordCpanel(emailLocal, nuevoPassword);
+    if (!exito)
+      return res.status(500).json({ error: "No se pudo cambiar la contraseña en cPanel." });
+
+    await db.query("UPDATE usuarios SET password_email = ? WHERE id = ?", [
+      nuevoPassword,
+      req.user.id,
+    ]);
+
+    res.json({
+      message: "Contraseña restablecida correctamente",
+      password: nuevoPassword,
+      email: rows[0].email,
+    });
+  } catch (error) {
+    console.error("Error restableciendo contraseña:", error);
+    res.status(500).send("Error al restablecer contraseña");
+  }
+});
+
 // ... Aquí siguen las rutas de inbox, mensaje, etc. que ya tenías ...
 
 // 1. LEER CARPETA (Ruta Dinámica: Inbox, Enviados, Papelera)
@@ -2343,9 +2421,39 @@ adminRouter.get("/email/institucionales/:id/password", async (req, res) => {
   }
 });
 
-// --- RUTAS DE GESTIÓN FINANCIERA (ADMIN --> ALUMNO) ---
+// Restablecer contraseña de correo de un usuario (admin)
+adminRouter.post("/email/institucionales/:id/restablecer-password", async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      "SELECT id, email FROM usuarios WHERE id = ?",
+      [req.params.id],
+    );
+    if (rows.length === 0)
+      return res.status(404).json({ error: "Usuario no encontrado" });
 
-// 1. OBTENER FINANZAS DE UN ALUMNO ESPECÍFICO
+    const emailLocal = rows[0].email.split("@")[0];
+    const nuevoPassword = `Siglo.${Math.random().toString(36).slice(2, 8).toUpperCase()}!`;
+
+    const exito = await cambiarPasswordCpanel(emailLocal, nuevoPassword);
+    if (!exito)
+      return res.status(500).json({ error: "No se pudo cambiar la contraseña en cPanel." });
+
+    await db.query("UPDATE usuarios SET password_email = ? WHERE id = ?", [
+      nuevoPassword,
+      req.params.id,
+    ]);
+
+    res.json({
+      message: "Contraseña restablecida correctamente",
+      password: nuevoPassword,
+      email: rows[0].email,
+    });
+  } catch (error) {
+    console.error("Error restableciendo contraseña:", error);
+    res.status(500).send("Error al restablecer contraseña");
+  }
+});
+
 adminRouter.get("/alumnos/:id/finanzas", async (req, res) => {
   try {
     const [rows] = await db.query(
@@ -5674,7 +5782,149 @@ adminRouter.delete("/expedientes/:id", async (req, res) => {
   }
 });
 
-// --- MÓDULO MIGRACIÓN ---
+// --- RUTAS DE REVISI�N DE ASPIRANTES ---
+
+// 1. Listar aspirantes con estatus de documentos
+adminRouter.get("/aspirantes/revision", async (req, res) => {
+  try {
+    const [aspirantes] = await db.query(
+      "SELECT id, nombre, apellido_paterno, apellido_materno, email, matricula, foto_perfil FROM usuarios WHERE rol = 'aspirante' AND activo = 1 ORDER BY fecha_creacion DESC"
+    );
+
+    const docsRequeridos = ["acta_nacimiento", "curp", "certificado_bachillerato", "comprobante_domicilio"];
+
+    const resultado = await Promise.all(
+      aspirantes.map(async (a) => {
+        const [docs] = await db.query(
+          "SELECT tipo_documento, estatus FROM expediente_aspirantes WHERE aspirante_id = ?",
+          [a.id]
+        );
+        const subidos = docs.length;
+        const aprobados = docs.filter((d) => d.estatus === "aprobado").length;
+        const rechazados = docs.filter((d) => d.estatus === "rechazado").length;
+        const pendientes = docs.filter((d) => d.estatus === "pendiente").length;
+        const faltantes = docsRequeridos.length - subidos;
+        return { ...a, total_requeridos: docsRequeridos.length, subidos, aprobados, rechazados, pendientes, faltantes };
+      })
+    );
+
+    res.json(resultado);
+  } catch (error) {
+    console.error("Error al listar aspirantes para revisi�n:", error);
+    res.status(500).send({ message: "Error al obtener aspirantes" });
+  }
+});
+
+// 2. Obtener documentos de un aspirante espec�fico
+adminRouter.get("/aspirantes/:id/documentos", async (req, res) => {
+  try {
+    const [aspirante] = await db.query(
+      "SELECT id, nombre, apellido_paterno, apellido_materno, email, matricula FROM usuarios WHERE id = ? AND rol = 'aspirante'",
+      [req.params.id]
+    );
+    if (aspirante.length === 0) {
+      return res.status(404).send({ message: "Aspirante no encontrado" });
+    }
+
+    const [docs] = await db.query(
+      "SELECT e.*, u.nombre as revisado_por_nombre FROM expediente_aspirantes e LEFT JOIN usuarios u ON e.revisado_por = u.id WHERE e.aspirante_id = ? ORDER BY e.tipo_documento",
+      [req.params.id]
+    );
+
+    const tiposRequeridos = [
+      { id: "acta_nacimiento", nombre: "Acta de Nacimiento" },
+      { id: "curp", nombre: "CURP" },
+      { id: "certificado_bachillerato", nombre: "Certificado de Bachillerato" },
+      { id: "comprobante_domicilio", nombre: "Comprobante de Domicilio" },
+    ];
+
+    const documentos = tiposRequeridos.map((tipo) => {
+      const doc = docs.find((d) => d.tipo_documento === tipo.id);
+      return doc
+        ? { ...doc, tipo_nombre: tipo.nombre }
+        : { tipo_documento: tipo.id, tipo_nombre: tipo.nombre, estatus: "no_subido" };
+    });
+
+    res.json({ aspirante: aspirante[0], documentos });
+  } catch (error) {
+    console.error("Error al obtener documentos del aspirante:", error);
+    res.status(500).send({ message: "Error al obtener documentos" });
+  }
+});
+
+// 3. Aprobar o rechazar un documento
+adminRouter.put("/expedientes/:id/revisar", async (req, res) => {
+  try {
+    const { estatus, comentario } = req.body;
+    if (!["aprobado", "rechazado"].includes(estatus)) {
+      return res.status(400).send({ message: "Estatus inv�lido. Use aprobado o rechazado" });
+    }
+
+    const [[doc]] = await db.query("SELECT * FROM expediente_aspirantes WHERE id = ?", [req.params.id]);
+    if (!doc) {
+      return res.status(404).send({ message: "Documento no encontrado" });
+    }
+
+    await db.query(
+      "UPDATE expediente_aspirantes SET estatus = ?, comentario = ?, revisado_por = ?, fecha_revision = NOW() WHERE id = ?",
+      [estatus, comentario || null, req.user.id, req.params.id]
+    );
+
+    res.send({ message: "Documento " + (estatus === "aprobado" ? "aprobado" : "rechazado") });
+  } catch (error) {
+    console.error("Error al revisar documento:", error);
+    res.status(500).send({ message: "Error al revisar documento" });
+  }
+});
+
+// 4. Convertir aspirante a alumno
+adminRouter.post("/aspirantes/:id/convertir", async (req, res) => {
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const [aspirante] = await connection.query(
+      "SELECT id, nombre, apellido_paterno FROM usuarios WHERE id = ? AND rol = 'aspirante'",
+      [req.params.id]
+    );
+    if (aspirante.length === 0) {
+      await connection.rollback();
+      return res.status(404).send({ message: "Aspirante no encontrado" });
+    }
+
+    const [docs] = await connection.query(
+      "SELECT tipo_documento, estatus FROM expediente_aspirantes WHERE aspirante_id = ?",
+      [req.params.id]
+    );
+
+    const tiposRequeridos = ["acta_nacimiento", "curp", "certificado_bachillerato", "comprobante_domicilio"];
+    const subidos = docs.map((d) => d.tipo_documento);
+    const tiposFaltantes = tiposRequeridos.filter((t) => !subidos.includes(t));
+    const rechazados = docs.filter((d) => d.estatus === "rechazado");
+
+    if (tiposFaltantes.length > 0) {
+      await connection.rollback();
+      return res.status(400).send({ message: "Faltan documentos: " + tiposFaltantes.join(", ") });
+    }
+    if (rechazados.length > 0) {
+      await connection.rollback();
+      return res.status(400).send({ message: "Hay documentos rechazados. Revisa antes de convertir." });
+    }
+
+    await connection.query("UPDATE usuarios SET rol = 'alumno' WHERE id = ?", [req.params.id]);
+    await connection.commit();
+    res.send({ message: "Aspirante convertido a alumno exitosamente" });
+  } catch (error) {
+    await connection.rollback();
+    console.error("Error al convertir aspirante:", error);
+    res.status(500).send({ message: "Error al convertir aspirante" });
+  } finally {
+    connection.release();
+  }
+});
+
+// --- M�DULO MIGRACI�N ---
+
 
 // 1. Ejecutar Migración de Grupo (CORREGIDO: Incluye 'cupo' y 'sede_id')
 adminRouter.post("/migracion/ejecutar", async (req, res) => {
