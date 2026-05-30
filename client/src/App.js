@@ -10734,10 +10734,34 @@ const RevisionAspirantesPage = () => {
     }
     try {
       await api.put(`/admin/expedientes/${docId}/revisar`, { estatus });
-      verDocumentos(selected.id);
+      const { data } = await api.get(`/admin/aspirantes/${selected.id}/documentos`);
+      setSelected(data.aspirante);
+      setDocumentos(data.documentos);
       fetchAspirantes();
+      if (data.documentos.length > 0 && data.documentos.every((d) => d.estatus === "aprobado")) {
+        setTimeout(() => {
+          if (window.confirm("Todos los documentos están aprobados. ¿Deseas convertir a " + data.aspirante.nombre + " a alumno ahora?")) {
+            convertirDirecto(data.aspirante.id);
+          }
+        }, 300);
+      }
     } catch (error) {
       alert("Error al revisar: " + (error.response?.data?.message || error.message));
+    }
+  };
+
+  const convertirDirecto = async (id) => {
+    try {
+      setConverting(true);
+      await api.post(`/admin/aspirantes/${id}/convertir`);
+      alert("Aspirante convertido a alumno exitosamente");
+      setSelected(null);
+      setDocumentos([]);
+      fetchAspirantes();
+    } catch (error) {
+      alert("Error al convertir: " + (error.response?.data?.message || error.message));
+    } finally {
+      setConverting(false);
     }
   };
 
@@ -10758,18 +10782,7 @@ const RevisionAspirantesPage = () => {
 
   const convertir = async () => {
     if (!window.confirm("¿Estás seguro de convertir a " + selected.nombre + " " + (selected.apellido_paterno || "") + " a alumno?")) return;
-    try {
-      setConverting(true);
-      await api.post(`/admin/aspirantes/${selected.id}/convertir`);
-      alert("Aspirante convertido a alumno exitosamente");
-      setSelected(null);
-      setDocumentos([]);
-      fetchAspirantes();
-    } catch (error) {
-      alert("Error al convertir: " + (error.response?.data?.message || error.message));
-    } finally {
-      setConverting(false);
-    }
+    convertirDirecto(selected.id);
   };
 
   const badgeColor = (estatus) => {
@@ -10936,14 +10949,48 @@ const RevisionAspirantesPage = () => {
                   </div>
 
                   {doc.estatus !== "no_subido" && (
-                    <a
-                      href={"https://api-universidad-c5o8.onrender.com/uploads/" + doc.ruta_archivo}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2 text-blue-600 hover:underline mb-4 font-medium"
-                    >
-                      <FileIcon size={18} /> {doc.nombre_original}
-                    </a>
+                    <div className="space-y-3 mb-4">
+                      <div className="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden max-h-48">
+                        {/\.(jpg|jpeg|png|gif|webp)$/i.test(doc.ruta_archivo) ? (
+                          <img
+                            src={"https://api-universidad-c5o8.onrender.com/uploads/" + doc.ruta_archivo}
+                            alt={doc.nombre_original}
+                            className="w-full h-48 object-contain bg-white"
+                          />
+                        ) : /\.pdf$/i.test(doc.ruta_archivo) ? (
+                          <iframe
+                            src={"https://api-universidad-c5o8.onrender.com/uploads/" + doc.ruta_archivo + "#toolbar=0"}
+                            className="w-full h-48 bg-white"
+                            title={doc.nombre_original}
+                          />
+                        ) : (
+                          <div className="flex items-center justify-center h-24 text-gray-400 gap-2">
+                            <FileIcon size={32} />
+                            <span className="text-sm">Vista previa no disponible</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-600 truncate">{doc.nombre_original}</span>
+                        <div className="flex gap-2 shrink-0">
+                          <a
+                            href={"https://api-universidad-c5o8.onrender.com/uploads/" + doc.ruta_archivo}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1.5 text-sm font-medium text-gray-600 hover:text-gray-800 bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg transition-colors"
+                          >
+                            <Eye size={14} /> Ver
+                          </a>
+                          <a
+                            href={"https://api-universidad-c5o8.onrender.com/uploads/" + doc.ruta_archivo}
+                            download
+                            className="flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-colors"
+                          >
+                            <Download size={14} /> Descargar
+                          </a>
+                        </div>
+                      </div>
+                    </div>
                   )}
 
                   {doc.estatus === "no_subido" && (
@@ -10979,16 +11026,16 @@ const RevisionAspirantesPage = () => {
           )}
 
           {documentos.length > 0 && documentos.every((d) => d.estatus === "aprobado") && (
-            <div className="bg-green-50 border border-green-200 rounded-2xl p-8 text-center">
-              <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-4">
-                <CheckCircle size={32} className="text-green-600" />
+            <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300 rounded-2xl p-8 text-center animate-pulse">
+              <div className="inline-flex items-center justify-center w-20 h-20 bg-green-100 rounded-full mb-4 ring-4 ring-green-200">
+                <CheckCircle size={40} className="text-green-600" />
               </div>
-              <p className="text-xl font-bold text-green-800 mb-2">Todos los documentos aprobados</p>
-              <p className="text-green-600 mb-6">Este aspirante está listo para convertirse en alumno.</p>
+              <p className="text-2xl font-bold text-green-800 mb-2">¡Todos los documentos aprobados!</p>
+              <p className="text-green-600 mb-6 text-lg">Este aspirante está listo para convertirse en alumno.</p>
               <button
                 onClick={convertir}
                 disabled={converting}
-                className="bg-[#a72a34] text-white px-8 py-3.5 rounded-xl font-bold flex items-center gap-2 hover:bg-[#802028] shadow-lg shadow-red-900/20 transition-transform active:scale-95 mx-auto disabled:opacity-50 disabled:cursor-not-allowed"
+                className="bg-[#a72a34] text-white px-10 py-4 rounded-xl font-bold text-lg flex items-center gap-2 hover:bg-[#802028] shadow-lg shadow-red-900/20 transition-transform active:scale-95 mx-auto disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {converting ? "Convirtiendo..." : "Convertir a Alumno"}
               </button>
