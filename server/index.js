@@ -161,6 +161,18 @@ async function connectToDatabase() {
       );
       console.log("[INIT] Concepto 'Mensualidad' creado automáticamente.");
     }
+
+    // Migración: agregar columna hibrida si no existe
+    try {
+      await db.query(
+        "ALTER TABLE aula_virtual_config ADD COLUMN `hibrida` tinyint(1) DEFAULT 0 AFTER `contacto_docente`",
+      );
+      console.log("[MIGRACION] Columna 'hibrida' agregada a aula_virtual_config.");
+    } catch (migrateErr) {
+      if (!migrateErr.message.includes("Duplicate column")) {
+        console.warn("[MIGRACION] Nota:", migrateErr.message);
+      }
+    }
   } catch (err) {
     console.error("Error al conectar a la base de datos:", err);
     process.exit(1);
@@ -6310,7 +6322,7 @@ docenteRouter.get(
 async function getOrCreateAulaConfig(grupoId, asignaturaId) {
   // 1. Asegurar registro en tabla principal
   await db.query(
-    "INSERT IGNORE INTO aula_virtual_config (grupo_id, asignatura_id) VALUES (?, ?)",
+    "INSERT IGNORE INTO aula_virtual_config (grupo_id, asignatura_id, hibrida) VALUES (?, ?, 0)",
     [grupoId, asignaturaId],
   );
 
@@ -6372,11 +6384,12 @@ docenteRouter.put(
       enlace_videollamada,
       descripcion_curso,
       objetivos,
-      evaluacion, // Texto descriptivo opcional
+      evaluacion,
       horario,
       contacto_docente,
       notificar_inicio,
-      criterios, // ARRAY DE CRITERIOS (Este es el importante)
+      hibrida,
+      criterios,
     } = req.body;
 
     const docente_id = req.user.id;
@@ -6400,16 +6413,17 @@ docenteRouter.put(
       const sqlConfig = `
         INSERT INTO aula_virtual_config (
           grupo_id, asignatura_id, enlace_videollamada, descripcion_curso, 
-          objetivos, evaluacion, horario, contacto_docente
+          objetivos, evaluacion, horario, contacto_docente, hibrida
         ) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) 
         ON DUPLICATE KEY UPDATE 
           enlace_videollamada = VALUES(enlace_videollamada), 
           descripcion_curso = VALUES(descripcion_curso),
           objetivos = VALUES(objetivos),
           evaluacion = VALUES(evaluacion),
           horario = VALUES(horario),
-          contacto_docente = VALUES(contacto_docente)
+          contacto_docente = VALUES(contacto_docente),
+          hibrida = VALUES(hibrida)
       `;
 
       await connection.query(sqlConfig, [
@@ -6421,6 +6435,7 @@ docenteRouter.put(
         evaluacion || null,
         horario || null,
         contacto_docente || null,
+        hibrida ? 1 : 0,
       ]);
 
       // 3. GUARDAR CRITERIOS DINÁMICOS

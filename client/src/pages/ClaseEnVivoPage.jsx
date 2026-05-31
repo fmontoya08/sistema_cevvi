@@ -1,12 +1,20 @@
 import React, { useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { JitsiMeeting } from "@jitsi/react-sdk";
-import { ArrowLeft, Loader } from "lucide-react";
+import { ArrowLeft, Loader, MonitorSmartphone } from "lucide-react";
+import useHybridClassMonitor from "../hooks/useHybridClassMonitor";
+import useAudioMixer from "../hooks/useAudioMixer";
+import HybridClassPanel from "../components/HybridClassPanel";
 
 const ClaseEnVivoPage = () => {
   const { salaName } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [cargando, setCargando] = useState(true);
+  const [externalApi, setExternalApi] = useState(null);
+  const esHibrida = searchParams.get("hibrida") === "true";
+  const monitor = useHybridClassMonitor(esHibrida ? externalApi : null);
+  const audioMixer = useAudioMixer(esHibrida ? externalApi : null);
 
   // Recuperar usuario
   const user = JSON.parse(localStorage.getItem("user"));
@@ -42,9 +50,16 @@ const ClaseEnVivoPage = () => {
         >
           <ArrowLeft size={18} /> Salir de la Clase
         </button>
-        <span className="text-xs text-gray-400 font-mono hidden sm:block">
-          Sala ID: {roomNameClean}
-        </span>
+        <div className="flex items-center gap-3">
+          {esHibrida && (
+            <span className="flex items-center gap-1.5 text-xs font-bold bg-purple-700/60 text-purple-200 px-2.5 py-1 rounded-full">
+              <MonitorSmartphone size={14} /> Híbrida
+            </span>
+          )}
+          <span className="text-xs text-gray-400 font-mono hidden sm:block">
+            Sala ID: {roomNameClean}
+          </span>
+        </div>
       </div>
 
       {/* Contenedor Jitsi */}
@@ -62,10 +77,9 @@ const ClaseEnVivoPage = () => {
             startWithAudioMuted: true,
             startWithVideoMuted: true,
             disableThirdPartyRequests: true,
-            prejoinPageEnabled: false, // Intentar entrar directo
+            prejoinPageEnabled: false,
           }}
           interfaceConfigOverwrite={{
-            // Barra de herramientas limpia
             TOOLBAR_BUTTONS: [
               "microphone",
               "camera",
@@ -85,14 +99,11 @@ const ClaseEnVivoPage = () => {
             displayName: displayName,
             email: user.email,
           }}
-          onApiReady={(externalApi) => {
+          onApiReady={(api) => {
             setCargando(false);
+            setExternalApi(api);
 
-            // --- CORRECCIÓN IMPORTANTE ---
-            // Hemos ELIMINADO la línea 'navigate(-1)' del evento videoConferenceLeft.
-            // Ahora, si Jitsi se desconecta o cuelgas, NO te sacará de la página automáticamente.
-            // Tendrás que dar clic en el botón rojo de "Salir de la Clase" arriba.
-            externalApi.addEventListener("videoConferenceLeft", () => {
+            api.addEventListener("videoConferenceLeft", () => {
               console.log(
                 "El usuario colgó la llamada (La sesión permanece abierta).",
               );
@@ -104,6 +115,14 @@ const ClaseEnVivoPage = () => {
             iframeRef.style.border = "none";
           }}
         />
+
+        {esHibrida && !cargando && (
+          <HybridClassPanel
+            monitor={monitor}
+            audioMixer={audioMixer}
+            externalApi={externalApi}
+          />
+        )}
       </div>
     </div>
   );

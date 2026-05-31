@@ -136,6 +136,7 @@ CREATE TABLE `aula_virtual_config` (
   `evaluacion` text,
   `horario` text,
   `contacto_docente` text,
+  `hibrida` tinyint(1) DEFAULT 0,
   PRIMARY KEY (`id`),
   UNIQUE KEY `grupo_id` (`grupo_id`,`asignatura_id`),
   KEY `asignatura_id` (`asignatura_id`),

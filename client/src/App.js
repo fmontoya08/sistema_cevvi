@@ -102,6 +102,7 @@ import {
   Loader,
   Folder,
   PlusCircle,
+  MonitorSmartphone,
   PenTool, // <-- NUEVO PARA LA PIZARRA
   Megaphone,
   Library,
@@ -2660,7 +2661,11 @@ const UsuariosPage = () => {
     carrera_id: "",
     sede_id: "",
   });
-  const [formDocente, setFormDocente] = useState({ ...formInicial });
+  const [formDocente, setFormDocente] = useState({
+    ...formInicial,
+    email_personal: "",
+    sede_id: "",
+  });
 
   // --- FUNCIÓN PARA DESCARGAR ZIP CON TOKEN DE SEGURIDAD ---
   const handleDownloadZip = async () => {
@@ -3137,20 +3142,21 @@ const UsuariosPage = () => {
                   <label className="block text-xs font-bold text-gray-400 uppercase mb-1">
                     Género
                   </label>
-                  <select
-                    className="w-full p-3 border border-gray-200 rounded-xl bg-white focus:ring-2 focus:ring-[#a72a34] outline-none"
-                    value={formAspirante.genero}
-                    onChange={(e) =>
-                      setFormAspirante({
-                        ...formAspirante,
-                        genero: e.target.value,
-                      })
-                    }
-                  >
-                    <option value="">Select...</option>
-                    <option value="M">Masculino</option>
-                    <option value="F">Femenino</option>
-                  </select>
+                    <select
+                      className="w-full p-3 border border-gray-200 rounded-xl bg-white focus:ring-2 focus:ring-[#a72a34] outline-none"
+                      value={formAspirante.genero}
+                      onChange={(e) =>
+                        setFormAspirante({
+                          ...formAspirante,
+                          genero: e.target.value,
+                        })
+                      }
+                    >
+                      <option value="">Selecciona...</option>
+                      <option value="H">Hombre</option>
+                      <option value="M">Mujer</option>
+                      <option value="O">Otro</option>
+                    </select>
                 </div>
                 <div className="lg:col-span-2">
                   <label className="block text-xs font-bold text-gray-400 uppercase mb-1">
@@ -3308,18 +3314,33 @@ const UsuariosPage = () => {
 
                 {/* FILA 2 */}
                 <div className="lg:col-span-2">
-                  <label className="block text-xs font-bold text-gray-400 uppercase mb-1">
-                    Email Institucional *
+                  <label className="block text-xs font-bold text-gray-400 uppercase mb-1 flex items-center gap-1">
+                    <Mail size={14} /> Correo Personal (Gmail / Outlook) *
                   </label>
                   <input
                     required
                     type="email"
+                    placeholder="Para enviar credenciales..."
                     className="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#a72a34] outline-none"
-                    value={formDocente.email}
+                    value={formDocente.email_personal}
                     onChange={(e) =>
-                      setFormDocente({ ...formDocente, email: e.target.value })
+                      setFormDocente({ ...formDocente, email_personal: e.target.value })
                     }
                   />
+                </div>
+                <div className="lg:col-span-2">
+                  <label className="block text-xs font-bold text-gray-400 uppercase mb-1">
+                    Correo Institucional (Automático)
+                  </label>
+                  <input
+                    type="text"
+                    disabled
+                    className="w-full p-3 border border-gray-200 rounded-xl bg-gray-100 text-gray-500 cursor-not-allowed italic"
+                    placeholder="Se generará al guardar (ej: doc2026001@...)"
+                  />
+                  <p className="text-[10px] text-red-500 mt-1 font-bold">
+                    * El sistema creará el correo automáticamente.
+                  </p>
                 </div>
                 <div className="lg:col-span-1">
                   <label className="block text-xs font-bold text-gray-400 uppercase mb-1">
@@ -3349,9 +3370,10 @@ const UsuariosPage = () => {
                       setFormDocente({ ...formDocente, genero: e.target.value })
                     }
                   >
-                    <option value="">Select...</option>
-                    <option value="M">Masculino</option>
-                    <option value="F">Femenino</option>
+                    <option value="">Selecciona...</option>
+                    <option value="H">Hombre</option>
+                    <option value="M">Mujer</option>
+                    <option value="O">Otro</option>
                   </select>
                 </div>
 
@@ -3371,6 +3393,26 @@ const UsuariosPage = () => {
                       })
                     }
                   />
+                </div>
+                <div className="lg:col-span-1">
+                  <label className="block text-xs font-bold text-gray-400 uppercase mb-1">
+                    Sede *
+                  </label>
+                  <select
+                    required
+                    className="w-full p-3 border border-gray-200 rounded-xl bg-white focus:ring-2 focus:ring-[#a72a34] outline-none"
+                    value={formDocente.sede_id}
+                    onChange={(e) =>
+                      setFormDocente({ ...formDocente, sede_id: e.target.value })
+                    }
+                  >
+                    <option value="">-- Selecciona --</option>
+                    {sedes.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.nombre_sede}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
@@ -11099,6 +11141,7 @@ const AulaVirtualPage = () => {
   const [isEditing, setIsEditing] = useState(false); // Para editar la config del curso
   const [formData, setFormData] = useState({
     /* ... estado inicial ... */
+    hibrida: false,
   });
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -11179,9 +11222,10 @@ const AulaVirtualPage = () => {
         enlace_videollamada: data.enlace_videollamada || "",
         descripcion_curso: data.descripcion_curso || "",
         objetivos: data.objetivos || "",
-        evaluacion: data.evaluacion || "", // Esto queda como texto extra
+        evaluacion: data.evaluacion || "",
         horario: data.horario || "",
         contacto_docente: data.contacto_docente || "",
+        hibrida: data.hibrida ? true : false,
       });
     } catch (error) {
       console.error("Error al cargar config", error);
@@ -11435,10 +11479,32 @@ const AulaVirtualPage = () => {
               🔔 ¡Avisar a alumnos que la clase inicia YA!
             </span>
           </label>
+
+          {/* --- CHECKBOX MODO HÍBRIDO --- */}
+          <label className="flex items-center gap-2 cursor-pointer bg-purple-50 px-3 py-2 rounded-lg border border-purple-200 hover:bg-purple-100 transition-colors">
+            <input
+              type="checkbox"
+              checked={formData.hibrida || false}
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  hibrida: e.target.checked,
+                }))
+              }
+              className="w-4 h-4 text-purple-700 rounded focus:ring-purple-500"
+            />
+            <span className="text-sm font-bold text-purple-700 flex items-center gap-1.5">
+              <MonitorSmartphone size={16} /> Clase Híbrida (presencial + virtual)
+            </span>
+          </label>
         </div>
         <p className="text-xs text-gray-400 mt-2">
           Nota: Marca la casilla de la campana si quieres enviar una
           notificación push aunque el enlace sea el mismo de ayer.
+        </p>
+        <p className="text-xs text-purple-500 mt-1">
+          Modo híbrido: activa el panel de control con monitoreo de alumnos virtuales,
+          alerta de manos levantadas y mezclador de micrófonos.
         </p>
       </div>
       {/* Nuevos Campos Estructurados */}
@@ -12047,15 +12113,36 @@ const AulaVirtualPage = () => {
                 </div>
 
                 {config.enlace_videollamada && (
-                  // VOLVEMOS AL ENLACE DIRECTO (Abre nueva pestaña)
-                  <a
-                    href={config.enlace_videollamada}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="px-6 py-3 bg-[#a72a34] hover:bg-[#802028] text-white font-bold rounded-xl transition-all shadow-lg transform hover:-translate-y-1 flex items-center gap-2"
-                  >
-                    Unirse a la Clase <ArrowRightCircle size={18} />
-                  </a>
+                  <div className="flex gap-2">
+                    <a
+                      href={config.enlace_videollamada}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-6 py-3 bg-[#a72a34] hover:bg-[#802028] text-white font-bold rounded-xl transition-all shadow-lg transform hover:-translate-y-1 flex items-center gap-2"
+                    >
+                      Unirse a la Clase <ArrowRightCircle size={18} />
+                    </a>
+                    {user.rol === "docente" && config.hibrida && (
+                      <button
+                        onClick={() => {
+                          const roomName = `SIGLOXXI-G${grupoId}-A${asignaturaId}`;
+                          const url = config.enlace_videollamada.match(
+                            /meet\.jit\.si\/(.+)/,
+                          );
+                          const sala = url
+                            ? url[1]
+                            : roomName;
+                          navigate(
+                            `/${user.rol}/clase-en-vivo/${sala}?hibrida=true`,
+                          );
+                        }}
+                        className="px-6 py-3 bg-purple-700 hover:bg-purple-800 text-white font-bold rounded-xl transition-all shadow-lg transform hover:-translate-y-1 flex items-center gap-2"
+                      >
+                        <MonitorSmartphone size={18} />
+                        Clase Híbrida
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
 
