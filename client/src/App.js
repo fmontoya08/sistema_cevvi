@@ -25,6 +25,7 @@ import React, {
   useContext,
   useMemo,
   useCallback,
+  useRef,
 } from "react";
 import {
   BrowserRouter,
@@ -152,8 +153,10 @@ const BRAND = {
 };
 
 // --- CONFIGURACIÓN DE AXIOS ---
+const API_BASE_URL = "https://api-universidad-c5o8.onrender.com";
+
 const api = axios.create({
-  baseURL: "https://api-universidad-c5o8.onrender.com/api",
+  baseURL: `${API_BASE_URL}/api`,
 });
 
 api.interceptors.request.use(
@@ -188,7 +191,7 @@ api.interceptors.response.use(
       localStorage.removeItem("user");
       localStorage.removeItem("token");
       if (window.location.pathname !== "/login") {
-        window.location.href = "plataforma/login";
+        window.location.href = "/plataforma/login";
       }
     }
     return Promise.reject(error);
@@ -938,7 +941,7 @@ const AdminLayout = () => {
               <div className="w-10 h-10 rounded-full bg-gray-100 border border-gray-200 overflow-hidden group-hover:border-[#a72a34] transition-colors">
                 {user?.foto_perfil ? (
                   <img
-                    src={`https://api-universidad-c5o8.onrender.com/uploads/perfiles/${user.foto_perfil}`}
+                    src={`${API_BASE_URL}/uploads/perfiles/${user.foto_perfil}`}
                     className="w-full h-full object-cover"
                     alt="Perfil"
                   />
@@ -981,7 +984,7 @@ const DocenteLayout = () => {
     { icon: Library, label: "Biblioteca Virtual", path: "/docente/biblioteca" },
     { icon: UploadCloud, label: "Mi Nube", path: "/docente/mi-nube" },
     { icon: Calendar, label: "Calendario", path: "/docente/calendario" },
-    // Puedes agregar más items aquí si el docente tiene más secciones
+    { icon: Video, label: "Clases Grabadas", path: "/docente/clases-grabadas" },
   ];
 
   return (
@@ -1119,7 +1122,7 @@ const DocenteLayout = () => {
               <div className="w-10 h-10 rounded-full bg-gray-100 border border-gray-200 overflow-hidden group-hover:border-[#a72a34] transition-colors">
                 {user?.foto_perfil ? (
                   <img
-                    src={`https://api-universidad-c5o8.onrender.com/uploads/perfiles/${user.foto_perfil}`}
+                    src={`${API_BASE_URL}/uploads/perfiles/${user.foto_perfil}`}
                     className="w-full h-full object-cover"
                     alt="Perfil"
                   />
@@ -1174,6 +1177,7 @@ const AlumnoLayout = () => {
     { icon: Mail, label: "Correo Institucional", path: "/alumno/correo" },
     { icon: PenTool, label: "Taller Creativo", path: "/alumno/pizarra" },
     { icon: UploadCloud, label: "Mi Nube", path: "/alumno/mi-nube" },
+    { icon: Video, label: "Clases Grabadas", path: "/alumno/clases-grabadas" },
   ];
 
   return (
@@ -1314,7 +1318,7 @@ const AlumnoLayout = () => {
               <div className="w-10 h-10 rounded-full bg-gray-100 border border-gray-200 overflow-hidden group-hover:border-[#a72a34] transition-colors">
                 {user?.foto_perfil ? (
                   <img
-                    src={`https://api-universidad-c5o8.onrender.com/uploads/perfiles/${user.foto_perfil}`}
+                    src={`${API_BASE_URL}/uploads/perfiles/${user.foto_perfil}`}
                     className="w-full h-full object-cover"
                     alt="Perfil"
                   />
@@ -1503,7 +1507,7 @@ const BibliotecaPage = () => {
               </div>
               <div className="mt-4 pt-4 border-t border-gray-50">
                 <a
-                  href={`https://api-universidad-c5o8.onrender.com/uploads/biblioteca/${a.ruta_archivo}`}
+                  href={`${API_BASE_URL}/uploads/biblioteca/${a.ruta_archivo}`}
                   target="_blank"
                   rel="noreferrer"
                   className="w-full bg-blue-50 text-blue-700 py-2 rounded-lg font-bold flex items-center justify-center gap-2 hover:bg-blue-100 transition-colors"
@@ -1692,7 +1696,7 @@ const AspiranteLayout = () => {
               <div className='w-10 h-10 rounded-full bg-gray-100 border border-gray-200 overflow-hidden group-hover:border-[#a72a34] transition-colors'>
                 {user?.foto_perfil ? (
                   <img
-                    src={'https://api-universidad-c5o8.onrender.com/uploads/perfiles/' + user.foto_perfil}
+                    src={`${API_BASE_URL}/uploads/perfiles/${user.foto_perfil}`}
                     className='w-full h-full object-cover'
                     alt='Perfil'
                   />
@@ -2243,7 +2247,7 @@ const UserModal = ({
             <div className="w-20 h-20 rounded-full border-2 border-gray-300 overflow-hidden bg-white shrink-0">
               {userToEdit?.foto_perfil ? (
                 <img
-                  src={`https://api-universidad-c5o8.onrender.com/uploads/perfiles/${userToEdit.foto_perfil}`}
+                  src={`${API_BASE_URL}/uploads/perfiles/${userToEdit.foto_perfil}`}
                   className="w-full h-full object-cover"
                   alt="Foto de perfil"
                 />
@@ -2885,7 +2889,7 @@ const UsuariosPage = () => {
                       <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center font-bold overflow-hidden border">
                         {u.foto_perfil ? (
                           <img
-                            src={`https://api-universidad-c5o8.onrender.com/uploads/perfiles/${u.foto_perfil}`}
+                            src={`${API_BASE_URL}/uploads/perfiles/${u.foto_perfil}`}
                             className="w-full h-full object-cover"
                             alt="Foto de perfil"
                           />
@@ -3488,7 +3492,7 @@ const UserDetailModal = ({ user, onClose }) => {
             <div className="w-24 h-24 bg-white rounded-full border-4 border-white/30 flex items-center justify-center text-4xl font-bold text-[#a72a34] shadow-lg overflow-hidden shrink-0">
               {user.foto_perfil ? (
                 <img
-                  src={`https://api-universidad-c5o8.onrender.com/uploads/perfiles/${user.foto_perfil}`}
+                  src={`${API_BASE_URL}/uploads/perfiles/${user.foto_perfil}`}
                   className="w-full h-full object-cover"
                   alt="Perfil"
                 />
@@ -3751,6 +3755,29 @@ const AsignaturasPage = () => {
     grado_id: "",
   });
 
+  const fileInputRef = useRef(null);
+  const [importando, setImportando] = useState(false);
+
+  const handleImportClick = () => fileInputRef.current?.click();
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportando(true);
+    try {
+      const formData = new FormData();
+      formData.append("archivo", file);
+      const { data } = await api.post("/admin/asignaturas/importar-excel", formData);
+      alert(data.message);
+      fetchData();
+    } catch (error) {
+      alert(error.response?.data?.message || "Error al importar.");
+    } finally {
+      setImportando(false);
+      e.target.value = "";
+    }
+  };
+
   // 1. CARGA INTELIGENTE DE DATOS
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -3902,12 +3929,28 @@ const AsignaturasPage = () => {
             {verEliminados ? "Volver" : "Papelera"}
           </button>
           {!verEliminados && (
-            <button
-              onClick={() => openModal()}
-              className="bg-[#a72a34] text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg hover:bg-[#802028]"
-            >
-              <Plus size={20} /> Nueva Materia
-            </button>
+            <>
+              <button
+                onClick={handleImportClick}
+                disabled={importando}
+                className="bg-green-600 text-white px-5 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg hover:bg-green-700"
+              >
+                <Upload size={20} /> {importando ? "Importando..." : "Importar Excel"}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx"
+                className="hidden"
+                onChange={handleFileChange}
+              />
+              <button
+                onClick={() => openModal()}
+                className="bg-[#a72a34] text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg hover:bg-[#802028]"
+              >
+                <Plus size={20} /> Nueva Materia
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -9533,7 +9576,7 @@ const DocenteDashboardPage = () => {
         <div className="w-24 h-24 rounded-full border-4 border-white/20 overflow-hidden bg-white/10 shrink-0 z-10 flex items-center justify-center text-3xl font-bold">
           {user?.foto_perfil ? (
             <img
-              src={`https://api-universidad-c5o8.onrender.com/uploads/perfiles/${user.foto_perfil}`}
+              src={`${API_BASE_URL}/uploads/perfiles/${user.foto_perfil}`}
               className="w-full h-full object-cover"
               alt="Perfil"
             />
@@ -9741,7 +9784,7 @@ const DetalleCursoDocentePage = () => {
 
       // 1. Obtener Analíticas (Promedios calculados)
       const { data: dataAnaliticas } = await axios.get(
-        `https://api-universidad-c5o8.onrender.com/api/analiticas/${grupoId}/${asignaturaId}`,
+        `${API_BASE_URL}/api/analiticas/${grupoId}/${asignaturaId}`,
         { headers: { Authorization: `Bearer ${token}` } },
       );
 
@@ -9762,7 +9805,7 @@ const DetalleCursoDocentePage = () => {
 
       // 2. Obtener Lista de Alumnos (para ver si ya hay calificación guardada)
       const { data: dataCurso } = await axios.get(
-        `https://api-universidad-c5o8.onrender.com/api/docente/v2/grupo/${grupoId}/asignatura/${asignaturaId}/alumnos`,
+        `${API_BASE_URL}/api/docente/v2/grupo/${grupoId}/asignatura/${asignaturaId}/alumnos`,
         { headers: { Authorization: `Bearer ${token}` } },
       );
 
@@ -9945,7 +9988,7 @@ const DetalleCursoDocentePage = () => {
                           className="h-10 w-10 rounded-full object-cover border border-gray-200"
                           src={
                             alumno.foto_perfil
-                              ? `https://api-universidad-c5o8.onrender.com/uploads/perfiles/${alumno.foto_perfil}`
+                              ? `${API_BASE_URL}/uploads/perfiles/${alumno.foto_perfil}`
                               : `https://ui-avatars.com/api/?name=${alumno.nombre}&background=random&color=fff`
                           }
                           alt=""
@@ -10077,14 +10120,12 @@ const AdminCalificarPage = () => {
         const valorActual = calificaciones[alumnoId];
         const valorOriginal = originalCalificaciones[alumnoId];
 
-        // Solo incluiremos la calificación si:
-        // 1. No está vacía (es nueva o modificada)
-        // 2. Y es DIFERENTE del valor original que cargó la página
-        return valorActual !== "" && valorActual !== valorOriginal;
+        // Incluir la calificación si es DIFERENTE del valor original
+        return valorActual !== valorOriginal;
       })
       .map((alumnoId) => ({
         alumno_id: parseInt(alumnoId),
-        calificacion: calificaciones[alumnoId],
+        calificacion: calificaciones[alumnoId] === "" ? null : calificaciones[alumnoId],
       }));
 
     // Si no hay calificaciones nuevas o modificadas, no hacemos nada
@@ -10222,7 +10263,7 @@ const AlumnoDashboardPage = () => {
         <div className="w-24 h-24 rounded-full border-4 border-white/20 overflow-hidden bg-white/10 shrink-0 z-10 flex items-center justify-center text-3xl font-bold">
           {user?.foto_perfil ? (
             <img
-              src={`https://api-universidad-c5o8.onrender.com/uploads/perfiles/${user.foto_perfil}`}
+              src={`${API_BASE_URL}/uploads/perfiles/${user.foto_perfil}`}
               className="w-full h-full object-cover"
               alt="Perfil"
             />
@@ -10516,7 +10557,7 @@ const DetalleAspirantePage = () => {
                 </td>
                 <td className="px-4 py-2">
                   <a
-                    href={`https://api-universidad-c5o8.onrender.com/uploads/${doc.ruta_archivo}`}
+                    href={`${API_BASE_URL}/uploads/${doc.ruta_archivo}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center text-blue-600 hover:underline"
@@ -10703,7 +10744,7 @@ const AspiranteDashboardPage = () => {
                 </td>
                 <td className="px-4 py-2">
                   <a
-                    href={`https://api-universidad-c5o8.onrender.com/uploads/${doc.ruta_archivo}`}
+                    href={`${API_BASE_URL}/uploads/${doc.ruta_archivo}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center text-blue-600 hover:underline"
@@ -10905,7 +10946,7 @@ const RevisionAspirantesPage = () => {
                         <div className="flex items-center gap-3">
                           <img
                             src={a.foto_perfil
-                              ? "https://api-universidad-c5o8.onrender.com/uploads/perfiles/" + a.foto_perfil
+                              ? `${API_BASE_URL}/uploads/perfiles/${a.foto_perfil}`
                               : "https://ui-avatars.com/api/?name=" + encodeURIComponent(a.nombre) + "+" + encodeURIComponent(a.apellido_paterno || "") + "&background=random&color=fff"
                             }
                             alt=""
@@ -10995,13 +11036,13 @@ const RevisionAspirantesPage = () => {
                       <div className="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden max-h-48">
                         {/\.(jpg|jpeg|png|gif|webp)$/i.test(doc.ruta_archivo) ? (
                           <img
-                            src={"https://api-universidad-c5o8.onrender.com/uploads/" + doc.ruta_archivo}
+                            src={`${API_BASE_URL}/uploads/${doc.ruta_archivo}`}
                             alt={doc.nombre_original}
                             className="w-full h-48 object-contain bg-white"
                           />
                         ) : /\.pdf$/i.test(doc.ruta_archivo) ? (
                           <iframe
-                            src={"https://api-universidad-c5o8.onrender.com/uploads/" + doc.ruta_archivo + "#toolbar=0"}
+                            src={`${API_BASE_URL}/uploads/${doc.ruta_archivo}#toolbar=0`}
                             className="w-full h-48 bg-white"
                             title={doc.nombre_original}
                           />
@@ -11016,7 +11057,7 @@ const RevisionAspirantesPage = () => {
                         <span className="text-sm text-gray-600 truncate">{doc.nombre_original}</span>
                         <div className="flex gap-2 shrink-0">
                           <a
-                            href={"https://api-universidad-c5o8.onrender.com/uploads/" + doc.ruta_archivo}
+                            href={`${API_BASE_URL}/uploads/${doc.ruta_archivo}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="flex items-center gap-1.5 text-sm font-medium text-gray-600 hover:text-gray-800 bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg transition-colors"
@@ -11024,7 +11065,7 @@ const RevisionAspirantesPage = () => {
                             <Eye size={14} /> Ver
                           </a>
                           <a
-                            href={"https://api-universidad-c5o8.onrender.com/uploads/" + doc.ruta_archivo}
+                            href={`${API_BASE_URL}/uploads/${doc.ruta_archivo}`}
                             download
                             className="flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-colors"
                           >
@@ -11163,6 +11204,9 @@ const AulaVirtualPage = () => {
 
   // --- NUEVO ESTADO PARA PESTAÑAS Y FORO ---
   const [activeTab, setActiveTab] = useState("info"); // 'info', 'tareas', 'recursos', 'foro'
+  const [grabacionesAula, setGrabacionesAula] = useState([]);
+  const [loadingGrabacionesAula, setLoadingGrabacionesAula] = useState(false);
+  const [showSubirGrabacionModal, setShowSubirGrabacionModal] = useState(false);
   const [hilosForo, setHilosForo] = useState([]);
   const [loadingHilos, setLoadingHilos] = useState(true);
   const [showNuevoHiloModal, setShowNuevoHiloModal] = useState(false);
@@ -11293,6 +11337,23 @@ const AulaVirtualPage = () => {
   }, [grupoId, asignaturaId]);
   // --- FIN NUEVA FUNCIÓN ---
 
+  // --- FUNCIÓN PARA CARGAR GRABACIONES ---
+  const fetchGrabacionesAula = useCallback(async () => {
+    setLoadingGrabacionesAula(true);
+    try {
+      const { data } = await api.get(
+        `/${user.rol}/aula-virtual/${grupoId}/${asignaturaId}/grabaciones`
+      );
+      setGrabacionesAula(data || []);
+    } catch (error) {
+      console.error("Error al cargar grabaciones:", error);
+      setGrabacionesAula([]);
+    } finally {
+      setLoadingGrabacionesAula(false);
+    }
+  }, [user.rol, grupoId, asignaturaId]);
+  // --- FIN FUNCIÓN GRABACIONES ---
+
   // Cargar todos los datos al montar
   useEffect(() => {
     setLoading(true); // Ponemos el loading principal
@@ -11301,7 +11362,8 @@ const AulaVirtualPage = () => {
       fetchTareas(),
       fetchRecursos(),
       fetchHistorialAsistencia(),
-      fetchHilos(), // <-- Llamamos a cargar hilos
+      fetchHilos(),
+      fetchGrabacionesAula(),
     ]).then(() => {
       // setLoading(false); // fetchAulaConfig ya lo hace en su finally
     });
@@ -11311,7 +11373,8 @@ const AulaVirtualPage = () => {
     fetchRecursos,
     fetchHistorialAsistencia,
     fetchHilos,
-  ]); // <-- Agregamos fetchHilos
+    fetchGrabacionesAula,
+  ]);
 
   const handleSave = async (e) => {
     e.preventDefault();
@@ -11819,7 +11882,7 @@ const AulaVirtualPage = () => {
           const Icono = isEnlace ? LinkIcon : Paperclip;
           const url = isEnlace
             ? recurso.ruta_o_url
-            : `https://api-universidad-c5o8.onrender.com/uploads/recursos/${recurso.ruta_o_url}`;
+            : `${API_BASE_URL}/uploads/recursos/${recurso.ruta_o_url}`;
           return (
             <div
               key={recurso.id}
@@ -11927,7 +11990,63 @@ const AulaVirtualPage = () => {
       </div>
     );
   };
-  // --- FIN NUEVO COMPONENTE ---
+
+  // --- COMPONENTE LISTA DE GRABACIONES (AULA VIRTUAL) ---
+  const renderGrabacionesList = () => {
+    if (loadingGrabacionesAula) return <p>Cargando grabaciones...</p>;
+    if (grabacionesAula.length === 0) {
+      return (
+        <p className="text-gray-500">
+          {user.rol === "docente"
+            ? "Aún no has subido grabaciones para este curso."
+            : "No hay grabaciones disponibles para este curso."}
+        </p>
+      );
+    }
+    return (
+      <div className="space-y-3">
+        {grabacionesAula.map((g) => (
+          <Link
+            key={g.id}
+            to={
+              user.rol === "docente"
+                ? `/docente/clases-grabadas/${g.id}`
+                : `/alumno/clases-grabadas/${g.id}`
+            }
+            className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border hover:bg-gray-100 transition-all"
+          >
+            <div className="flex items-center gap-3">
+              <Video className="w-6 h-6 text-[#a72a34]" />
+              <div>
+                <span className="font-bold text-gray-800">{g.titulo}</span>
+                <p className="text-xs text-gray-500">
+                  {new Date(g.fecha_creacion).toLocaleDateString()}
+                  {g.duracion_seg && ` · ${Math.round(g.duracion_seg / 60)} min`}
+                </p>
+              </div>
+            </div>
+            {user.rol === "docente" ? (
+              <span className="text-xs text-gray-500">{g.total_alumnos || 0} alumno(s)</span>
+            ) : (
+              <div className="flex items-center gap-2">
+                {g.mi_progreso > 0 && (
+                  <span className="text-xs font-semibold text-green-600">
+                    {Math.round(g.mi_progreso)}%
+                  </span>
+                )}
+                {g.mi_completado ? (
+                  <CheckCircle size={18} className="text-green-500" />
+                ) : (
+                  <Video size={18} className="text-[#a72a34]" />
+                )}
+              </div>
+            )}
+          </Link>
+        ))}
+      </div>
+    );
+  };
+  // --- FIN COMPONENTE GRABACIONES ---
 
   // --- Componente Principal de Vista (Rediseñado con Pestañas) ---
   // --- Componente Principal de Vista (Rediseñado con Pestañas) ---
@@ -12078,6 +12197,12 @@ const AulaVirtualPage = () => {
               className={`pb-3 px-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all whitespace-nowrap ${activeTab === "equipos" ? "border-[#a72a34] text-[#a72a34]" : "border-transparent text-gray-400 hover:text-gray-600"}`}
             >
               <Users size={18} /> Equipos
+            </button>
+            <button
+              onClick={() => setActiveTab("grabaciones")}
+              className={`pb-3 px-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all whitespace-nowrap ${activeTab === "grabaciones" ? "border-[#a72a34] text-[#a72a34]" : "border-transparent text-gray-400 hover:text-gray-600"}`}
+            >
+              <Video size={18} /> Grabaciones
             </button>
             {user.rol === "docente" && (
               <button
@@ -12422,6 +12547,26 @@ const AulaVirtualPage = () => {
               {renderForoList()}
             </div>
           )}
+
+          {/* Pestaña: Grabaciones */}
+          {activeTab === "grabaciones" && (
+            <div className="animate-in fade-in duration-300">
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xl font-bold text-gray-800">
+                  Clases Grabadas
+                </h3>
+                {user.rol === "docente" && (
+                  <button
+                    onClick={() => setShowSubirGrabacionModal(true)}
+                    className="bg-[#a72a34] text-white px-5 py-2.5 rounded-xl font-bold hover:bg-[#802028] shadow-lg shadow-red-900/10 flex items-center gap-2 transition-transform active:scale-95"
+                  >
+                    <Upload size={18} /> Subir Grabación
+                  </button>
+                )}
+              </div>
+              {renderGrabacionesList()}
+            </div>
+          )}
         </div>
       </div>
     );
@@ -12459,6 +12604,14 @@ const AulaVirtualPage = () => {
         grupoId={grupoId}
         asignaturaId={asignaturaId}
         onHiloCreado={fetchHilos}
+      />
+      {/* Modal para subir grabación */}
+      <SubirGrabacionModal
+        show={showSubirGrabacionModal}
+        onClose={() => setShowSubirGrabacionModal(false)}
+        grupoId={grupoId}
+        asignaturaId={asignaturaId}
+        onGrabacionSubida={fetchGrabacionesAula}
       />
     </div>
   );
@@ -13110,7 +13263,7 @@ const CalificarEntregaModal = ({
         <div className="bg-gray-50 p-4 rounded-md my-4 border">
           <h4 className="font-semibold text-gray-700">Archivo del Alumno</h4>
           <a
-            href={`https://api-universidad-c5o8.onrender.com/uploads/tareas/tarea_${entrega.tarea_id}/${entrega.ruta_archivo}`}
+            href={`${API_BASE_URL}/uploads/tareas/tarea_${entrega.tarea_id}/${entrega.ruta_archivo}`}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center text-blue-600 hover:underline my-2"
@@ -13529,7 +13682,546 @@ const NuevoHiloModal = ({
     </div>
   );
 };
-// --- TERMINA NUEVO CÓDIGO ---
+
+// =============================================
+// COMPONENTES DE CLASES GRABADAS
+// =============================================
+
+// Modal para subir grabación (dentro del aula virtual)
+const SubirGrabacionModal = ({ show, onClose, grupoId, asignaturaId, onGrabacionSubida }) => {
+  const [titulo, setTitulo] = useState("");
+  const [descripcion, setDescripcion] = useState("");
+  const [archivo, setArchivo] = useState(null);
+  const [duracionSeg, setDuracionSeg] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!titulo || !archivo) { setError("Título y archivo son requeridos."); return; }
+    setIsSaving(true);
+    setError("");
+    try {
+      const formData = new FormData();
+      formData.append("titulo", titulo);
+      formData.append("descripcion", descripcion);
+      formData.append("archivo", archivo);
+      if (duracionSeg) formData.append("duracion_seg", parseInt(duracionSeg));
+      await api.post(`/docente/aula-virtual/${grupoId}/${asignaturaId}/grabaciones`, formData, { headers: { "Content-Type": "multipart/form-data" } });
+      onGrabacionSubida();
+      onClose();
+    } catch (err) {
+      setError(err.response?.data?.message || "Error al subir grabación.");
+    } finally { setIsSaving(false); }
+  };
+
+  if (!show) return null;
+  return (
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div className="p-6 border-b border-gray-100 flex justify-between items-center">
+          <h2 className="text-xl font-bold">Subir Grabación de Clase</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={24} /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Título *</label>
+            <input type="text" value={titulo} onChange={(e) => setTitulo(e.target.value)} className="w-full px-3 py-2 border rounded-lg" placeholder="Título de la clase grabada" required />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Descripción</label>
+            <textarea value={descripcion} onChange={(e) => setDescripcion(e.target.value)} className="w-full px-3 py-2 border rounded-lg" rows={3} placeholder="Breve descripción de la clase" />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Archivo de video *</label>
+            <input type="file" accept="video/mp4,video/webm" onChange={(e) => setArchivo(e.target.files[0])} className="w-full" required />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Duración (segundos, opcional)</label>
+            <input type="number" value={duracionSeg} onChange={(e) => setDuracionSeg(e.target.value)} className="w-full px-3 py-2 border rounded-lg" placeholder="Ej: 3600" />
+          </div>
+          {error && <p className="text-sm text-red-600">{error}</p>}
+          <div className="flex justify-end gap-3 pt-2">
+            <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300">Cancelar</button>
+            <button type="submit" disabled={isSaving} className="px-4 py-2 bg-[#a72a34] text-white rounded-lg hover:bg-[#802028] disabled:opacity-50 flex items-center gap-2">
+              {isSaving ? "Subiendo..." : "Subir Grabación"} <Upload size={18} />
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// Página principal del docente - lista todas sus grabaciones
+const ListaGrabacionesDocente = () => {
+  const [grabaciones, setGrabaciones] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
+  const { user } = useAuth();
+
+  useEffect(() => {
+    const fetchGrabaciones = async () => {
+      try { const { data } = await api.get("/docente/mis-grabaciones"); setGrabaciones(data || []); }
+      catch (err) { console.error("Error al cargar grabaciones:", err); }
+      finally { setLoading(false); }
+    };
+    fetchGrabaciones();
+  }, []);
+
+  if (loading) return <div className="p-8 flex items-center gap-2"><Loader className="animate-spin" /> Cargando...</div>;
+
+  return (
+    <div className="p-6 max-w-6xl mx-auto">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold">Mis Clases Grabadas</h1>
+      </div>
+      {grabaciones.length === 0 ? (
+        <div className="text-center py-16 bg-white rounded-2xl border">
+          <Video size={48} className="mx-auto text-gray-300 mb-4" />
+          <p className="text-gray-500">No tienes grabaciones aún.</p>
+          <p className="text-gray-400 text-sm mt-1">Las grabaciones aparecerán aquí cuando subas una clase.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {grabaciones.map((g) => (
+            <Link key={g.id} to={`/docente/clases-grabadas/${g.id}`}
+              className="flex items-center justify-between p-4 bg-white rounded-xl border hover:shadow-md transition-all">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-[#a72a34]/10 rounded-lg flex items-center justify-center">
+                  <Video className="w-6 h-6 text-[#a72a34]" />
+                </div>
+                <div>
+                  <p className="font-bold text-gray-800">{g.titulo}</p>
+                  <p className="text-sm text-gray-500">{g.nombre_grupo} · {g.nombre_asignatura}</p>
+                  <p className="text-xs text-gray-400">
+                    {new Date(g.fecha_creacion).toLocaleDateString()}
+                    {g.duracion_seg && ` · ${Math.round(g.duracion_seg / 60)} min`}
+                    {g.tamano_mb && ` · ${g.tamano_mb.toFixed(1)} MB`}
+                  </p>
+                </div>
+              </div>
+              <div className="text-right text-sm text-gray-500">
+                <p>{g.total_alumnos || 0} alumno(s)</p>
+              </div>
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Página de detalle de grabación (docente) - reproductor, notas, accesos
+const DetalleGrabacionDocente = () => {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const [grabacion, setGrabacion] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [alumnos, setAlumnos] = useState([]);
+  const [selectedAlumnos, setSelectedAlumnos] = useState([]);
+  const [notaTitulo, setNotaTitulo] = useState("");
+  const [notaTimestamp, setNotaTimestamp] = useState("");
+  const [notaDescripcion, setNotaDescripcion] = useState("");
+  const [isSavingAcceso, setIsSavingAcceso] = useState(false);
+  const [isSavingNota, setIsSavingNota] = useState(false);
+  const [editandoTitulo, setEditandoTitulo] = useState(false);
+  const [tituloEdit, setTituloEdit] = useState("");
+  const [descripcionEdit, setDescripcionEdit] = useState("");
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const { data } = await api.get(`/docente/aula-virtual/grabacion/${id}`);
+        setGrabacion(data);
+        setTituloEdit(data.titulo);
+        setDescripcionEdit(data.descripcion || "");
+        const { data: alumnosData } = await api.get(`/docente/aula-virtual/grabacion/${id}/alumnos`);
+        setAlumnos(alumnosData || []);
+        setSelectedAlumnos((alumnosData || []).filter(a => a.tiene_acceso).map(a => a.id));
+      } catch (err) { console.error("Error:", err); }
+      finally { setLoading(false); }
+    };
+    load();
+  }, [id]);
+
+  const handleGuardarAccesos = async () => {
+    setIsSavingAcceso(true);
+    try {
+      await api.post(`/docente/aula-virtual/grabacion/${id}/accesos`, { alumno_ids: selectedAlumnos });
+      alert("Accesos guardados y notificaciones enviadas.");
+    } catch (err) { alert("Error al guardar accesos."); }
+    finally { setIsSavingAcceso(false); }
+  };
+
+  const handleAgregarNota = async (e) => {
+    e.preventDefault();
+    if (!notaTitulo || !notaTimestamp) return;
+    setIsSavingNota(true);
+    try {
+      await api.post(`/docente/aula-virtual/grabacion/${id}/notas`, { titulo: notaTitulo, timestamp_seg: parseInt(notaTimestamp), descripcion: notaDescripcion });
+      setNotaTitulo(""); setNotaTimestamp(""); setNotaDescripcion("");
+      const { data } = await api.get(`/docente/aula-virtual/grabacion/${id}`);
+      setGrabacion(data);
+    } catch (err) { alert("Error al agregar nota."); }
+    finally { setIsSavingNota(false); }
+  };
+
+  const handleEliminarNota = async (notaId) => {
+    if (!window.confirm("¿Eliminar esta nota?")) return;
+    try {
+      await api.delete(`/docente/aula-virtual/grabacion/${id}/notas/${notaId}`);
+      const { data } = await api.get(`/docente/aula-virtual/grabacion/${id}`);
+      setGrabacion(data);
+    } catch (err) { alert("Error al eliminar nota."); }
+  };
+
+  const handleGuardarMetadata = async () => {
+    try {
+      await api.put(`/docente/aula-virtual/grabacion/${id}`, { titulo: tituloEdit, descripcion: descripcionEdit });
+      setEditandoTitulo(false);
+      setGrabacion(prev => ({ ...prev, titulo: tituloEdit, descripcion: descripcionEdit }));
+    } catch (err) { alert("Error al guardar."); }
+  };
+
+  const toggleAlumno = (alumnoId) => {
+    setSelectedAlumnos(prev => prev.includes(alumnoId) ? prev.filter(id => id !== alumnoId) : [...prev, alumnoId]);
+  };
+
+  const videoUrl = grabacion ? `${API_BASE_URL}/uploads/grabaciones/${grabacion.nombre_archivo}` : "";
+
+  if (loading) return <div className="p-8 flex items-center gap-2"><Loader className="animate-spin" /> Cargando...</div>;
+  if (!grabacion) return <div className="p-8 text-red-500">Grabación no encontrada.</div>;
+
+  return (
+    <div className="p-6 max-w-6xl mx-auto">
+      <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-gray-600 hover:text-gray-800 mb-4">
+        <ArrowLeft size={18} /> Volver
+      </button>
+      <div className="bg-black rounded-xl overflow-hidden mb-6">
+        <video src={videoUrl} controls className="w-full max-h-[500px]" style={{ outline: "none" }} />
+      </div>
+      <div className="bg-white rounded-xl border p-6 mb-6">
+        {editandoTitulo ? (
+          <div className="space-y-3">
+            <input type="text" value={tituloEdit} onChange={(e) => setTituloEdit(e.target.value)} className="w-full text-xl font-bold border rounded-lg px-3 py-2" />
+            <textarea value={descripcionEdit} onChange={(e) => setDescripcionEdit(e.target.value)} className="w-full border rounded-lg px-3 py-2" rows={2} />
+            <div className="flex gap-2">
+              <button onClick={handleGuardarMetadata} className="px-3 py-1.5 bg-[#a72a34] text-white rounded-lg text-sm">Guardar</button>
+              <button onClick={() => setEditandoTitulo(false)} className="px-3 py-1.5 bg-gray-200 rounded-lg text-sm">Cancelar</button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex justify-between items-start">
+            <div>
+              <h1 className="text-2xl font-bold">{grabacion.titulo}</h1>
+              {grabacion.descripcion && <p className="text-gray-600 mt-1">{grabacion.descripcion}</p>}
+              <p className="text-sm text-gray-400 mt-2">
+                {grabacion.nombre_grupo} · {grabacion.nombre_asignatura} · {new Date(grabacion.fecha_creacion).toLocaleDateString()}
+                {grabacion.duracion_seg && ` · ${Math.round(grabacion.duracion_seg / 60)} min`}
+              </p>
+              {grabacion.stats && (
+                <p className="text-xs text-gray-400 mt-1">
+                  {grabacion.stats.total_vistas || 0} vistas · {Math.round(grabacion.stats.promedio_visto || 0)}% promedio visto
+                </p>
+              )}
+            </div>
+            <button onClick={() => setEditandoTitulo(true)} className="text-gray-400 hover:text-gray-600"><Edit size={18} /></button>
+          </div>
+        )}
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <div className="bg-white rounded-xl border p-6">
+          <h2 className="font-bold text-lg mb-4">Notas / Marcadores</h2>
+          <form onSubmit={handleAgregarNota} className="space-y-3 mb-4 p-4 bg-gray-50 rounded-lg">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-semibold text-gray-600">Título</label>
+                <input type="text" value={notaTitulo} onChange={(e) => setNotaTitulo(e.target.value)} className="w-full px-2 py-1.5 border rounded text-sm" required />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-gray-600">Timestamp (seg)</label>
+                <input type="number" value={notaTimestamp} onChange={(e) => setNotaTimestamp(e.target.value)} className="w-full px-2 py-1.5 border rounded text-sm" required />
+              </div>
+            </div>
+            <input type="text" value={notaDescripcion} onChange={(e) => setNotaDescripcion(e.target.value)} className="w-full px-2 py-1.5 border rounded text-sm" placeholder="Descripción (opcional)" />
+            <button type="submit" disabled={isSavingNota} className="px-3 py-1.5 bg-[#a72a34] text-white rounded-lg text-sm flex items-center gap-1">
+              <Plus size={14} /> Agregar Nota
+            </button>
+          </form>
+          <div className="space-y-2">
+            {(grabacion.notas || []).length === 0 ? (
+              <p className="text-sm text-gray-400">Sin notas aún.</p>
+            ) : (
+              grabacion.notas.map((n) => (
+                <div key={n.id} className="flex items-start justify-between p-3 bg-gray-50 rounded-lg">
+                  <div>
+                    <p className="font-semibold text-sm">{n.titulo}</p>
+                    {n.descripcion && <p className="text-xs text-gray-500">{n.descripcion}</p>}
+                    <p className="text-xs text-[#a72a34] font-mono">{Math.floor(n.timestamp_seg / 60)}:{(n.timestamp_seg % 60).toString().padStart(2, "0")}</p>
+                  </div>
+                  <button onClick={() => handleEliminarNota(n.id)} className="text-red-400 hover:text-red-600"><Trash2 size={14} /></button>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+        <div className="bg-white rounded-xl border p-6">
+          <h2 className="font-bold text-lg mb-4">Asignar Acceso a Alumnos</h2>
+          <p className="text-sm text-gray-500 mb-4">Selecciona los alumnos que podrán ver esta grabación. Recibirán notificación.</p>
+          <div className="max-h-64 overflow-y-auto space-y-2 mb-4">
+            {alumnos.length === 0 ? (
+              <p className="text-sm text-gray-400">No hay alumnos en este grupo.</p>
+            ) : (
+              alumnos.map((a) => (
+                <label key={a.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 cursor-pointer">
+                  <input type="checkbox" checked={selectedAlumnos.includes(a.id)} onChange={() => toggleAlumno(a.id)} className="rounded text-[#a72a34]" />
+                  <span className="text-sm">{a.nombre_completo}</span>
+                </label>
+              ))
+            )}
+          </div>
+          <button onClick={handleGuardarAccesos} disabled={isSavingAcceso}
+            className="px-4 py-2 bg-[#a72a34] text-white rounded-lg text-sm hover:bg-[#802028] disabled:opacity-50">
+            {isSavingAcceso ? "Guardando..." : `Guardar Accesos (${selectedAlumnos.length})`}
+          </button>
+        </div>
+      </div>
+      <div className="bg-white rounded-xl border p-6">
+        <h2 className="font-bold text-lg mb-4">Comentarios de Alumnos</h2>
+        {(grabacion.comentarios || []).length === 0 ? (
+          <p className="text-sm text-gray-400">Sin comentarios aún.</p>
+        ) : (
+          <div className="space-y-3">
+            {grabacion.comentarios.map((c) => (
+              <div key={c.id} className="p-3 bg-gray-50 rounded-lg">
+                <div className="flex justify-between items-start">
+                  <p className="font-semibold text-sm">{c.nombre_usuario}</p>
+                  {c.timestamp_seg != null && (
+                    <span className="text-xs text-[#a72a34] font-mono">
+                      {Math.floor(c.timestamp_seg / 60)}:{(c.timestamp_seg % 60).toString().padStart(2, "0")}
+                    </span>
+                  )}
+                </div>
+                <p className="text-sm text-gray-700 mt-1">{c.comentario}</p>
+                <p className="text-xs text-gray-400 mt-1">{new Date(c.fecha_creacion).toLocaleString()}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// Página del alumno - lista todas las grabaciones a las que tiene acceso
+const ListaGrabacionesAlumno = () => {
+  const [grabaciones, setGrabaciones] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchGrabaciones = async () => {
+      try { const { data } = await api.get("/alumno/mis-grabaciones"); setGrabaciones(data || []); }
+      catch (err) { console.error("Error:", err); }
+      finally { setLoading(false); }
+    };
+    fetchGrabaciones();
+  }, []);
+
+  if (loading) return <div className="p-8 flex items-center gap-2"><Loader className="animate-spin" /> Cargando...</div>;
+
+  return (
+    <div className="p-6 max-w-6xl mx-auto">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold">Clases Grabadas</h1>
+        <p className="text-gray-500 text-sm">Clases que tus maestros han compartido contigo.</p>
+      </div>
+      {grabaciones.length === 0 ? (
+        <div className="text-center py-16 bg-white rounded-2xl border">
+          <Video size={48} className="mx-auto text-gray-300 mb-4" />
+          <p className="text-gray-500">No tienes clases grabadas disponibles.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {grabaciones.map((g) => (
+            <Link key={g.id} to={`/alumno/clases-grabadas/${g.id}`}
+              className="flex items-center justify-between p-4 bg-white rounded-xl border hover:shadow-md transition-all">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-[#a72a34]/10 rounded-lg flex items-center justify-center">
+                  <Video className={`w-6 h-6 ${g.mi_completado ? "text-green-500" : "text-[#a72a34]"}`} />
+                </div>
+                <div>
+                  <p className="font-bold text-gray-800">{g.titulo}</p>
+                  <p className="text-sm text-gray-500">{g.nombre_grupo} · {g.nombre_asignatura}</p>
+                  <p className="text-xs text-gray-400">
+                    {new Date(g.fecha_creacion).toLocaleDateString()}
+                    {g.duracion_seg && ` · ${Math.round(g.duracion_seg / 60)} min`}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                {g.mi_progreso > 0 && (
+                  <div className="text-right">
+                    <div className="w-16 bg-gray-200 rounded-full h-2">
+                      <div className="bg-green-500 h-2 rounded-full" style={{ width: `${Math.min(g.mi_progreso, 100)}%` }} />
+                    </div>
+                    <p className="text-xs text-gray-500 mt-0.5">{Math.round(g.mi_progreso)}%</p>
+                  </div>
+                )}
+                {g.mi_completado ? (
+                  <CheckCircle size={20} className="text-green-500" />
+                ) : (
+                  <div className="w-8 h-8 bg-[#a72a34] rounded-full flex items-center justify-center">
+                    <Video size={14} className="text-white" />
+                  </div>
+                )}
+              </div>
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Página del alumno - reproductor de video de grabación
+const VerGrabacionAlumno = () => {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const [grabacion, setGrabacion] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [comentario, setComentario] = useState("");
+  const [comentarioTimestamp, setComentarioTimestamp] = useState("");
+  const [isPosting, setIsPosting] = useState(false);
+  const videoRef = useRef(null);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const { data } = await api.get(`/alumno/aula-virtual/grabacion/${id}`);
+        setGrabacion(data);
+      } catch (err) {
+        console.error("Error:", err);
+        if (err.response?.status === 403) { alert("No tienes acceso a esta grabación."); navigate(-1); }
+      } finally { setLoading(false); }
+    };
+    load();
+  }, [id, navigate]);
+
+  const handleTimeUpdate = async () => {
+    if (!videoRef.current || !grabacion) return;
+    const pct = (videoRef.current.currentTime / (videoRef.current.duration || 1)) * 100;
+    const completed = videoRef.current.ended;
+    try {
+      await api.put(`/alumno/aula-virtual/grabacion/${id}/progreso`, { porcentaje: Math.round(pct), completado: completed });
+    } catch (e) { /* ignore */ }
+  };
+
+  const handleCapturarTimestamp = () => {
+    if (videoRef.current) setComentarioTimestamp(Math.floor(videoRef.current.currentTime).toString());
+  };
+
+  const handleEnviarComentario = async (e) => {
+    e.preventDefault();
+    if (!comentario) return;
+    setIsPosting(true);
+    try {
+      await api.post(`/alumno/aula-virtual/grabacion/${id}/comentarios`, { comentario, timestamp_seg: comentarioTimestamp ? parseInt(comentarioTimestamp) : null });
+      setComentario(""); setComentarioTimestamp("");
+      const { data } = await api.get(`/alumno/aula-virtual/grabacion/${id}`);
+      setGrabacion(data);
+    } catch (err) { alert("Error al enviar comentario."); }
+    finally { setIsPosting(false); }
+  };
+
+  const videoUrl = grabacion ? `${API_BASE_URL}/uploads/grabaciones/${grabacion.nombre_archivo}` : "";
+
+  if (loading) return <div className="p-8 flex items-center gap-2"><Loader className="animate-spin" /> Cargando...</div>;
+  if (!grabacion) return null;
+
+  return (
+    <div className="p-6 max-w-6xl mx-auto">
+      <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-gray-600 hover:text-gray-800 mb-4">
+        <ArrowLeft size={18} /> Volver
+      </button>
+
+      <div className="bg-black rounded-xl overflow-hidden mb-6">
+        <video ref={videoRef} src={videoUrl} controls onTimeUpdate={handleTimeUpdate} onEnded={handleTimeUpdate} className="w-full max-h-[500px]" style={{ outline: "none" }} />
+      </div>
+
+      <div className="bg-white rounded-xl border p-6 mb-6">
+        <h1 className="text-2xl font-bold">{grabacion.titulo}</h1>
+        {grabacion.descripcion && <p className="text-gray-600 mt-1">{grabacion.descripcion}</p>}
+        <p className="text-sm text-gray-400 mt-2">
+          {grabacion.nombre_grupo} · {grabacion.nombre_asignatura} · {new Date(grabacion.fecha_creacion).toLocaleDateString()}
+          {grabacion.duracion_seg && ` · ${Math.round(grabacion.duracion_seg / 60)} min`}
+        </p>
+      </div>
+
+      {(grabacion.notas || []).length > 0 && (
+        <div className="bg-white rounded-xl border p-6 mb-6">
+          <h2 className="font-bold text-lg mb-4">Notas del Docente</h2>
+          <div className="flex flex-wrap gap-2">
+            {grabacion.notas.map((n) => (
+              <button key={n.id} onClick={() => { if (videoRef.current) videoRef.current.currentTime = n.timestamp_seg; }}
+                className="px-3 py-2 bg-gray-100 rounded-lg text-sm hover:bg-gray-200 text-left">
+                <span className="font-semibold">{n.titulo}</span>
+                <span className="text-xs text-[#a72a34] block font-mono">{Math.floor(n.timestamp_seg / 60)}:{(n.timestamp_seg % 60).toString().padStart(2, "0")}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="bg-white rounded-xl border p-6">
+        <h2 className="font-bold text-lg mb-4">Comentarios</h2>
+        <form onSubmit={handleEnviarComentario} className="flex gap-2 mb-6">
+          <div className="flex-1">
+            <input type="text" value={comentario} onChange={(e) => setComentario(e.target.value)} className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="Escribe un comentario..." />
+          </div>
+          <div className="flex gap-1">
+            <button type="button" onClick={handleCapturarTimestamp} className="px-2 py-2 bg-gray-100 rounded-lg text-xs hover:bg-gray-200" title="Capturar timestamp actual">
+              <Clock size={16} />
+            </button>
+            <button type="submit" disabled={isPosting || !comentario} className="px-3 py-2 bg-[#a72a34] text-white rounded-lg hover:bg-[#802028] disabled:opacity-50">
+              <Send size={16} />
+            </button>
+          </div>
+        </form>
+        {comentarioTimestamp && (
+          <p className="text-xs text-[#a72a34] mb-2 font-mono">
+            Comentario en: {Math.floor(parseInt(comentarioTimestamp) / 60)}:{parseInt(comentarioTimestamp) % 60}
+          </p>
+        )}
+        {(grabacion.comentarios || []).length === 0 ? (
+          <p className="text-sm text-gray-400">No hay comentarios aún. ¡Sé el primero!</p>
+        ) : (
+          <div className="space-y-3">
+            {grabacion.comentarios.map((c) => (
+              <div key={c.id} className="p-3 bg-gray-50 rounded-lg">
+                <div className="flex justify-between items-start">
+                  <p className="font-semibold text-sm">{c.nombre_usuario}</p>
+                  {c.timestamp_seg != null && (
+                    <button onClick={() => { if (videoRef.current) videoRef.current.currentTime = c.timestamp_seg; }}
+                      className="text-xs text-[#a72a34] hover:underline font-mono">
+                      {Math.floor(c.timestamp_seg / 60)}:{(c.timestamp_seg % 60).toString().padStart(2, "0")}
+                    </button>
+                  )}
+                </div>
+                <p className="text-sm text-gray-700 mt-1">{c.comentario}</p>
+                <p className="text-xs text-gray-400 mt-1">{new Date(c.fecha_creacion).toLocaleString()}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// =============================================
+// FIN COMPONENTES DE CLASES GRABADAS
+// =============================================
 
 // --- INICIA NUEVO CÓDIGO (AGREGAR) ---
 
@@ -13837,7 +14529,7 @@ const DetalleTareaDocentePage = () => {
                 <td className="px-4 py-2">
                   {entrega.entrega_id ? (
                     <a
-                      href={`https://api-universidad-c5o8.onrender.com/uploads/tareas/tarea_${tarea.id}/${entrega.ruta_archivo}`}
+                      href={`${API_BASE_URL}/uploads/tareas/tarea_${tarea.id}/${entrega.ruta_archivo}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex items-center text-blue-600 hover:underline"
@@ -14152,7 +14844,7 @@ const MiPerfilPage = () => {
             <div className="w-48 h-48 rounded-full p-1 border-4 border-[#bb9a5a] overflow-hidden bg-gray-100 shadow-xl">
               {user?.foto_perfil ? (
                 <img
-                  src={`https://api-universidad-c5o8.onrender.com/uploads/perfiles/${user.foto_perfil}`}
+                  src={`${API_BASE_URL}/uploads/perfiles/${user.foto_perfil}`}
                   className="w-full h-full object-cover"
                   alt="Perfil"
                 />
@@ -14958,6 +15650,9 @@ function App() {
             }
           />
 
+          {/* Redirección raíz al login */}
+          <Route path="/" element={<Navigate to="/login" replace />} />
+
           {/* Rutas de Administrador */}
           <Route
             element={
@@ -14965,7 +15660,6 @@ function App() {
             }
           >
             <Route element={<AdminLayout />}>
-              <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/admin/anuncios" element={<AnunciosAdminPage />} />
               <Route path="/admin/biblioteca" element={<BibliotecaPage />} />
@@ -15080,11 +15774,19 @@ function App() {
                 path="/docente/examen/revisar/:intentoId"
                 element={<RevisarExamenPage />}
               />
+              <Route
+                path="/docente/clase-en-vivo/:salaName"
+                element={<ClaseEnVivoPage />}
+              />
+              <Route
+                path="/docente/clases-grabadas"
+                element={<ListaGrabacionesDocente />}
+              />
+              <Route
+                path="/docente/clases-grabadas/:id"
+                element={<DetalleGrabacionDocente />}
+              />
             </Route>
-            <Route
-              path="/docente/clase-en-vivo/:salaName"
-              element={<ClaseEnVivoPage />}
-            />
           </Route>
 
           {/* Rutas de Alumno */}
@@ -15123,30 +15825,18 @@ function App() {
               <Route path="/alumno/calendario" element={<CalendarioAlumno />} />
 
               <Route
-                path="/docente/grupo/:grupoId/asignatura/:asignaturaId/muro"
-                element={<MuroDocentePage />}
-              />
-              <Route
                 path="/alumno/clase-en-vivo/:salaName"
                 element={<ClaseEnVivoPage />}
               />
               <Route
-                path="/docente/grupo/:grupoId/asignatura/:asignaturaId/examen/crear"
-                element={<CrearExamenPage />}
+                path="/alumno/clases-grabadas"
+                element={<ListaGrabacionesAlumno />}
               />
               <Route
-                path="/docente/grupo/:grupoId/asignatura/:asignaturaId/examen/editar/:examenId"
-                element={<EditarExamenPage />}
-              />
-              <Route
-                path="/docente/grupo/:grupoId/asignatura/:asignaturaId/analiticas"
-                element={<AnaliticasGrupoPage />}
+                path="/alumno/clases-grabadas/:id"
+                element={<VerGrabacionAlumno />}
               />
             </Route>
-            <Route
-              path="/alumno/clase-en-vivo/:salaName"
-              element={<ClaseEnVivoPage />}
-            />
           </Route>
 
           {/* Rutas de Aspirante */}

@@ -13,10 +13,20 @@ const MailComposer = require("nodemailer/lib/mail-composer");
 const archiver = require("archiver");
 const cron = require("node-cron");
 const https = require("https");
+const rateLimit = require("express-rate-limit");
 require("dotenv").config();
+const XLSX = require("xlsx");
 
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: [
+    "https://universidadsigloxxi.com",
+    "https://www.universidadsigloxxi.com",
+    "http://localhost:3000",
+    "http://localhost:3001",
+  ],
+  credentials: true,
+}));
 app.use(express.json());
 
 // Cron diario para auto-vencer pagos que ya pasaron su fecha
@@ -173,13 +183,79 @@ async function connectToDatabase() {
         console.warn("[MIGRACION] Nota:", migrateErr.message);
       }
     }
+
+    // Migración: crear tablas de clases grabadas
+    const tablasGrabaciones = [
+      `CREATE TABLE IF NOT EXISTS clases_grabadas (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        grupo_id INT NOT NULL,
+        asignatura_id INT NOT NULL,
+        docente_id INT NOT NULL,
+        titulo VARCHAR(255),
+        descripcion TEXT,
+        nombre_archivo VARCHAR(500),
+        tamano_mb DECIMAL(10,2),
+        duracion_seg INT,
+        fecha_grabacion DATETIME,
+        fecha_creacion DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (grupo_id) REFERENCES grupos(id),
+        FOREIGN KEY (asignatura_id) REFERENCES asignaturas(id),
+        FOREIGN KEY (docente_id) REFERENCES usuarios(id)
+      )`,
+      `CREATE TABLE IF NOT EXISTS clase_grabada_accesos (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        clase_grabada_id INT NOT NULL,
+        alumno_id INT NOT NULL,
+        FOREIGN KEY (clase_grabada_id) REFERENCES clases_grabadas(id) ON DELETE CASCADE,
+        FOREIGN KEY (alumno_id) REFERENCES usuarios(id)
+      )`,
+      `CREATE TABLE IF NOT EXISTS clase_grabada_comentarios (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        clase_grabada_id INT NOT NULL,
+        usuario_id INT NOT NULL,
+        comentario TEXT,
+        timestamp_seg INT,
+        fecha_creacion DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (clase_grabada_id) REFERENCES clases_grabadas(id) ON DELETE CASCADE,
+        FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+      )`,
+      `CREATE TABLE IF NOT EXISTS clase_grabada_notas (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        clase_grabada_id INT NOT NULL,
+        titulo VARCHAR(255),
+        timestamp_seg INT NOT NULL,
+        descripcion TEXT,
+        FOREIGN KEY (clase_grabada_id) REFERENCES clases_grabadas(id) ON DELETE CASCADE
+      )`,
+      `CREATE TABLE IF NOT EXISTS clase_grabada_visualizaciones (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        clase_grabada_id INT NOT NULL,
+        alumno_id INT NOT NULL,
+        porcentaje DECIMAL(5,2) DEFAULT 0,
+        ultima_vista DATETIME,
+        completado BOOLEAN DEFAULT FALSE,
+        FOREIGN KEY (clase_grabada_id) REFERENCES clases_grabadas(id) ON DELETE CASCADE,
+        FOREIGN KEY (alumno_id) REFERENCES usuarios(id),
+        UNIQUE KEY unique_vista (clase_grabada_id, alumno_id)
+      )`,
+    ];
+    for (const sql of tablasGrabaciones) {
+      try {
+        await db.query(sql);
+      } catch (e) {
+        if (!e.message.includes("already exists")) {
+          console.warn("[MIGRACION] Nota:", e.message);
+        }
+      }
+    }
+    console.log("[MIGRACION] Tablas de clases grabadas verificadas.");
   } catch (err) {
     console.error("Error al conectar a la base de datos:", err);
     process.exit(1);
   }
 }
 
-const JWT_SECRET = process.env.JWT_SECRET;
+const JWT_SECRET = process.env.JWT_SECRET || "cambio_esto_en_produccion_123!";
 const CURP_REGEX =
   /^[A-Z]{1}[AEIOU]{1}[A-Z]{2}[0-9]{2}(0[1-9]|1[0-2])(0[1-9]|1[0-9]|2[0-9]|3[0-1])[HM]{1}(AS|BC|BS|CC|CS|CH|CL|CM|DF|DG|GT|GR|HG|JC|MC|MN|MS|NT|NL|OC|PL|QT|QR|SP|SL|SR|TC|TS|TL|VZ|YN|ZS|NE)[B-DF-HJ-NP-TV-Z]{3}[A-Z0-9]{1}[0-9]{1}$/;
 
@@ -219,6 +295,13 @@ if (!fs.existsSync(perfilesDir)) {
   fs.mkdirSync(perfilesDir, { recursive: true });
 }
 app.use("/uploads/perfiles", express.static(perfilesDir));
+
+// Directorio de GRABACIONES
+const grabacionesDir = path.join(__dirname, "uploads/grabaciones");
+if (!fs.existsSync(grabacionesDir)) {
+  fs.mkdirSync(grabacionesDir, { recursive: true });
+}
+app.use("/uploads/grabaciones", express.static(grabacionesDir));
 // --- FIN DE SERVIR ARCHIVOS ESTÁTICOS ---
 // --- CONFIGURACIÓN DE MULTER (PARA SUBIDA DE ARCHIVOS) ---
 const storage = multer.diskStorage({
@@ -910,7 +993,26 @@ app.post("/api/public/registro-control-escolar", async (req, res) => {
   }
 });
 
-const upload = multer({ storage: storage });
+const allowedMimes = [
+  "image/jpeg", "image/png", "image/gif", "image/webp",
+  "application/pdf",
+  "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-powerpoint", "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "text/plain", "text/csv",
+  "application/zip", "application/x-zip-compressed",
+  "video/mp4", "video/webm", "audio/mpeg", "audio/mp3",
+];
+
+const generalFileFilter = (req, file, cb) => {
+  if (allowedMimes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error(`Tipo de archivo no permitido: ${file.mimetype}. Solo se permiten documentos, imágenes, PDF, y archivos comunes.`), false);
+  }
+};
+
+const upload = multer({ storage: storage, fileFilter: generalFileFilter, limits: { fileSize: 50 * 1024 * 1024 } });
 
 // --- INICIA NUEVO CÓDIGO (AGREGAR) ---
 // Configuración de Multer para TAREAS
@@ -934,7 +1036,7 @@ const tareasStorage = multer.diskStorage({
   },
 });
 
-const uploadTarea = multer({ storage: tareasStorage });
+const uploadTarea = multer({ storage: tareasStorage, fileFilter: generalFileFilter, limits: { fileSize: 50 * 1024 * 1024 } });
 
 // --- INICIA NUEVO CÓDIGO (AGREGAR) ---
 // Configuración de Multer para RECURSOS
@@ -954,7 +1056,30 @@ const recursosStorage = multer.diskStorage({
   },
 });
 
-const uploadRecurso = multer({ storage: recursosStorage });
+const uploadRecurso = multer({ storage: recursosStorage, fileFilter: generalFileFilter, limits: { fileSize: 100 * 1024 * 1024 } });
+
+// --- INICIA NUEVO CÓDIGO ---
+// Configuración de Multer para GRABACIONES
+const grabacionStorage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, grabacionesDir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    cb(null, `grabacion_${uniqueSuffix}${path.extname(file.originalname)}`);
+  },
+});
+
+const videoFileFilter = (req, file, cb) => {
+  if (file.mimetype.startsWith("video/")) {
+    cb(null, true);
+  } else {
+    cb(new Error("Solo se permiten archivos de video."), false);
+  }
+};
+
+const uploadGrabacion = multer({ storage: grabacionStorage, fileFilter: videoFileFilter, limits: { fileSize: 500 * 1024 * 1024 } });
+// --- FIN MULTER GRABACIONES ---
 
 // --- INICIA NUEVO CÓDIGO (AGREGAR) ---
 // Configuración de Multer para FOTOS DE PERFIL
@@ -1011,7 +1136,7 @@ const bibliotecaStorage = multer.diskStorage({
     cb(null, "biblio_" + uniqueSuffix + path.extname(file.originalname));
   },
 });
-const uploadBiblioteca = multer({ storage: bibliotecaStorage });
+const uploadBiblioteca = multer({ storage: bibliotecaStorage, fileFilter: generalFileFilter, limits: { fileSize: 100 * 1024 * 1024 } });
 // ===============================================
 // --- TERMINA NUEVO CÓDIGO ---
 // --- TERMINA NUEVO CÓDIGO ---
@@ -1035,21 +1160,20 @@ connectToDatabase();
 
 // --- MIDDLEWARE DE AUTENTICACIÓN ---
 // Este middleware verifica el token y adjunta 'req.user' si es válido
-// No bloquea rutas, solo identifica al usuario
+// BLOQUEA peticiones sin token o con token inválido
 const verifyToken = (req, res, next) => {
   const authHeader = req.headers["authorization"];
   const token = authHeader && authHeader.split(" ")[1];
 
   if (!token) {
-    // No hay token, pero continuamos. Las rutas que requieran auth fallarán después.
-    return next();
+    return res.status(401).json({ message: "Token de autenticación requerido" });
   }
 
   jwt.verify(token, JWT_SECRET, (err, decoded) => {
-    if (decoded) {
-      req.user = decoded; // Adjuntamos el usuario si el token es válido
+    if (err) {
+      return res.status(401).json({ message: "Token inválido o expirado" });
     }
-    // Si hay un error (token expirado/inválido), no adjuntamos nada
+    req.user = decoded;
     next();
   });
 };
@@ -1099,8 +1223,17 @@ const isAspirante = (req, res, next) => {
 const apiRouter = express.Router();
 app.use("/api", apiRouter); // Montamos el router principal en /api
 
+// --- RATE LIMITING PARA LOGIN ---
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 10, // máximo 10 intentos por ventana
+  message: { message: "Demasiados intentos de inicio de sesión. Intenta de nuevo en 15 minutos." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // --- RUTA PÚBLICA DE LOGIN ---
-apiRouter.post("/login", async (req, res) => {
+apiRouter.post("/login", loginLimiter, async (req, res) => {
   const { email, password } = req.body;
   try {
     const [results] = await db.query(
@@ -2412,7 +2545,7 @@ adminRouter.get("/email/institucionales", async (req, res) => {
   }
 });
 
-// Obtener contraseña de correo de un usuario específico (admin)
+// Verificar si un usuario tiene contraseña de correo configurada (admin)
 adminRouter.get("/email/institucionales/:id/password", async (req, res) => {
   try {
     const [rows] = await db.query(
@@ -2425,7 +2558,8 @@ adminRouter.get("/email/institucionales/:id/password", async (req, res) => {
       id: rows[0].id,
       nombre: `${rows[0].nombre} ${rows[0].apellido_paterno}`,
       email: rows[0].email,
-      password: rows[0].password_email || "",
+      tiene_password: rows[0].password_email !== null && rows[0].password_email !== "",
+      // Ya no se devuelve la contraseña en texto plano por seguridad
     });
   } catch (error) {
     console.error("Error obteniendo contraseña de correo:", error);
@@ -3677,6 +3811,86 @@ adminRouter.post("/asignaturas", async (req, res) => {
     if (error.code === "ER_DUP_ENTRY")
       return res.status(400).send({ message: "La clave ya existe." });
     res.status(500).send({ message: "Error al crear." });
+  }
+});
+
+// POST: Importar desde Excel
+adminRouter.post("/asignaturas/importar-excel", upload.single("archivo"), async (req, res) => {
+  if (!req.file) {
+    return res.status(400).send({ message: "No se subió ningún archivo." });
+  }
+  try {
+    const wb = XLSX.readFile(req.file.path);
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
+
+    const materias = new Set();
+    for (const row of data) {
+      for (const cell of row) {
+        if (typeof cell === "string" && cell.startsWith("MATERIA:")) {
+          const nombre = cell.replace(/^MATERIA:\s*/i, "").trim();
+          if (nombre) materias.add(nombre);
+        }
+      }
+    }
+
+    if (materias.size === 0) {
+      fs.unlink(req.file.path, () => {});
+      return res.status(400).send({ message: "No se encontraron materias en el archivo (busca celdas con 'MATERIA:')." });
+    }
+
+    const [[planes], [tipos], [grados]] = await Promise.all([
+      db.query("SELECT id FROM planes_estudio WHERE TRIM(nombre_plan) = ?", ["Psicologia"]),
+      db.query("SELECT id FROM tipos_asignatura WHERE tipo = ?", ["Regular"]),
+      db.query("SELECT id FROM grados WHERE nombre_grado = ?", ["Segundo"]),
+    ]);
+
+    if (!planes.length || !tipos.length || !grados.length) {
+      fs.unlink(req.file.path, () => {});
+      return res.status(500).send({ message: "Catálogos no encontrados. Verifica que existan: Plan Psicologia, Tipo Regular, Grado Segundo." });
+    }
+
+    const plan_estudio_id = planes[0].id;
+    const tipo_asignatura_id = tipos[0].id;
+    const grado_id = grados[0].id;
+
+    const creadas = [];
+    const omitidas = [];
+    const errores = [];
+
+    for (const nombre of materias) {
+      const clave = nombre
+        .split(/\s+/)
+        .map(w => /^[IVXLCDM]+$/.test(w) ? w : w.charAt(0).toUpperCase())
+        .join("");
+
+      try {
+        await db.query(
+          `INSERT INTO asignaturas (nombre_asignatura, clave_asignatura, creditos, calificacion_max, calificacion_min, plan_estudio_id, tipo_asignatura_id, grado_id, activo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+          [nombre, clave, 8, 100.0, 70.0, plan_estudio_id, tipo_asignatura_id, grado_id]
+        );
+        creadas.push(nombre);
+      } catch (error) {
+        if (error.code === "ER_DUP_ENTRY") {
+          omitidas.push(nombre);
+        } else {
+          errores.push(`${nombre}: ${error.message}`);
+        }
+      }
+    }
+
+    fs.unlink(req.file.path, () => {});
+
+    res.send({
+      message: `Importación completada. Creadas: ${creadas.length}, Omitidas (ya existen): ${omitidas.length}${errores.length ? `, Errores: ${errores.length}` : ""}`,
+      creadas,
+      omitidas,
+      errores,
+    });
+  } catch (error) {
+    if (req.file) fs.unlink(req.file.path, () => {});
+    console.error("Error importando Excel:", error);
+    res.status(500).send({ message: "Error al procesar el archivo." });
   }
 });
 
@@ -6215,7 +6429,7 @@ const driveStorage = multer.diskStorage({
     cb(null, file.originalname);
   },
 });
-const uploadDrive = multer({ storage: driveStorage });
+const uploadDrive = multer({ storage: driveStorage, fileFilter: generalFileFilter, limits: { fileSize: 100 * 1024 * 1024 } });
 
 driveRouter.post("/upload", uploadDrive.single("archivo"), (req, res) => {
   res.json({ message: "Archivo subido correctamente" });
@@ -7554,6 +7768,267 @@ foroRouter.post("/hilo/:hiloId/respuestas", canAccessForo, async (req, res) => {
   }
 });
 
+// --- RUTAS DE CLASES GRABADAS (DOCENTE) ---
+
+docenteRouter.get("/mis-grabaciones", async (req, res) => {
+  try {
+    const [grabaciones] = await db.query(
+      `SELECT cg.*, g.nombre_grupo, a.nombre_asignatura,
+       (SELECT COUNT(*) FROM clase_grabada_accesos WHERE clase_grabada_id = cg.id) as total_alumnos
+       FROM clases_grabadas cg
+       JOIN grupos g ON cg.grupo_id = g.id
+       JOIN asignaturas a ON cg.asignatura_id = a.id
+       WHERE cg.docente_id = ?
+       ORDER BY cg.fecha_creacion DESC`,
+      [req.user.id]
+    );
+    res.json(grabaciones);
+  } catch (error) {
+    console.error("Error al listar grabaciones:", error);
+    res.status(500).send({ message: "Error en el servidor." });
+  }
+});
+
+docenteRouter.get("/aula-virtual/:grupoId/:asignaturaId/grabaciones", async (req, res) => {
+  try {
+    const { grupoId, asignaturaId } = req.params;
+    const [grabaciones] = await db.query(
+      `SELECT cg.*,
+       (SELECT COUNT(*) FROM clase_grabada_accesos WHERE clase_grabada_id = cg.id) as total_alumnos
+       FROM clases_grabadas cg
+       WHERE cg.grupo_id = ? AND cg.asignatura_id = ? AND cg.docente_id = ?
+       ORDER BY cg.fecha_creacion DESC`,
+      [grupoId, asignaturaId, req.user.id]
+    );
+    res.json(grabaciones);
+  } catch (error) {
+    console.error("Error al listar grabaciones:", error);
+    res.status(500).send({ message: "Error en el servidor." });
+  }
+});
+
+docenteRouter.get("/aula-virtual/grabacion/:id", async (req, res) => {
+  try {
+    const [[grabacion]] = await db.query(
+      `SELECT cg.*, g.nombre_grupo, a.nombre_asignatura
+       FROM clases_grabadas cg
+       JOIN grupos g ON cg.grupo_id = g.id
+       JOIN asignaturas a ON cg.asignatura_id = a.id
+       WHERE cg.id = ? AND cg.docente_id = ?`,
+      [req.params.id, req.user.id]
+    );
+    if (!grabacion) return res.status(404).send({ message: "No encontrada." });
+
+    const [alumnosConAcceso] = await db.query(
+      `SELECT u.id, CONCAT(u.nombre, ' ', u.apellido_paterno, ' ', IFNULL(u.apellido_materno, '')) as nombre_completo
+       FROM clase_grabada_accesos cga
+       JOIN usuarios u ON cga.alumno_id = u.id
+       WHERE cga.clase_grabada_id = ?`,
+      [req.params.id]
+    );
+
+    const [notas] = await db.query(
+      "SELECT * FROM clase_grabada_notas WHERE clase_grabada_id = ? ORDER BY timestamp_seg ASC",
+      [req.params.id]
+    );
+
+    const [comentarios] = await db.query(
+      `SELECT cgc.*, CONCAT(u.nombre, ' ', u.apellido_paterno) as nombre_usuario
+       FROM clase_grabada_comentarios cgc
+       JOIN usuarios u ON cgc.usuario_id = u.id
+       WHERE cgc.clase_grabada_id = ? ORDER BY cgc.fecha_creacion ASC`,
+      [req.params.id]
+    );
+
+    const [[stats]] = await db.query(
+      "SELECT COUNT(*) as total_vistas, AVG(porcentaje) as promedio_visto FROM clase_grabada_visualizaciones WHERE clase_grabada_id = ?",
+      [req.params.id]
+    );
+
+    res.json({ ...grabacion, alumnos_acceso: alumnosConAcceso, notas, comentarios, stats });
+  } catch (error) {
+    console.error("Error al obtener grabación:", error);
+    res.status(500).send({ message: "Error en el servidor." });
+  }
+});
+
+docenteRouter.post(
+  "/aula-virtual/:grupoId/:asignaturaId/grabaciones",
+  uploadGrabacion.single("archivo"),
+  async (req, res) => {
+    try {
+      const { grupoId, asignaturaId } = req.params;
+      const { titulo, descripcion, duracion_seg } = req.body;
+      const docente_id = req.user.id;
+
+      if (!req.file || !titulo) {
+        return res.status(400).send({ message: "Se requiere un título y un archivo." });
+      }
+
+      const [[curso]] = await db.query(
+        "SELECT * FROM grupo_asignaturas_docentes WHERE grupo_id = ? AND asignatura_id = ? AND docente_id = ?",
+        [grupoId, asignaturaId, docente_id]
+      );
+      if (!curso) return res.status(403).send({ message: "No tienes permiso." });
+
+      const nombreArchivo = req.file.filename;
+      const tamanoMB = req.file.size / (1024 * 1024);
+
+      const [result] = await db.query(
+        `INSERT INTO clases_grabadas (grupo_id, asignatura_id, docente_id, titulo, descripcion, nombre_archivo, tamano_mb, duracion_seg, fecha_grabacion)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+        [grupoId, asignaturaId, docente_id, titulo, descripcion || null, nombreArchivo, Math.round(tamanoMB * 100) / 100, duracion_seg || null]
+      );
+
+      res.status(201).json({ message: "Grabación guardada.", id: result.insertId });
+    } catch (error) {
+      console.error("Error al subir grabación:", error);
+      res.status(500).send({ message: "Error en el servidor." });
+    }
+  }
+);
+
+docenteRouter.put("/aula-virtual/grabacion/:id", async (req, res) => {
+  try {
+    const { titulo, descripcion } = req.body;
+    const [[grabacion]] = await db.query("SELECT id FROM clases_grabadas WHERE id = ? AND docente_id = ?", [req.params.id, req.user.id]);
+    if (!grabacion) return res.status(404).send({ message: "No encontrada." });
+
+    await db.query("UPDATE clases_grabadas SET titulo = ?, descripcion = ? WHERE id = ?", [titulo, descripcion, req.params.id]);
+    res.json({ message: "Actualizada." });
+  } catch (error) {
+    console.error("Error al actualizar grabación:", error);
+    res.status(500).send({ message: "Error en el servidor." });
+  }
+});
+
+docenteRouter.delete("/aula-virtual/grabacion/:id", async (req, res) => {
+  try {
+    const [[grabacion]] = await db.query("SELECT nombre_archivo FROM clases_grabadas WHERE id = ? AND docente_id = ?", [req.params.id, req.user.id]);
+    if (!grabacion) return res.status(404).send({ message: "No encontrada." });
+
+    const rutaArchivo = path.join(grabacionesDir, grabacion.nombre_archivo);
+    if (fs.existsSync(rutaArchivo)) fs.unlinkSync(rutaArchivo);
+
+    await db.query("DELETE FROM clases_grabadas WHERE id = ?", [req.params.id]);
+    res.json({ message: "Grabación eliminada." });
+  } catch (error) {
+    console.error("Error al eliminar grabación:", error);
+    res.status(500).send({ message: "Error en el servidor." });
+  }
+});
+
+docenteRouter.get("/aula-virtual/grabacion/:id/alumnos", async (req, res) => {
+  try {
+    const [[grabacion]] = await db.query("SELECT grupo_id FROM clases_grabadas WHERE id = ? AND docente_id = ?", [req.params.id, req.user.id]);
+    if (!grabacion) return res.status(404).send({ message: "No encontrada." });
+
+    const [alumnos] = await db.query(
+      `SELECT u.id, CONCAT(u.nombre, ' ', u.apellido_paterno, ' ', IFNULL(u.apellido_materno, '')) as nombre_completo,
+       CASE WHEN cga.id IS NOT NULL THEN 1 ELSE 0 END as tiene_acceso
+       FROM grupo_alumnos ga
+       JOIN usuarios u ON ga.alumno_id = u.id
+       LEFT JOIN clase_grabada_accesos cga ON cga.alumno_id = u.id AND cga.clase_grabada_id = ?
+       WHERE ga.grupo_id = ?
+       ORDER BY u.apellido_paterno ASC`,
+      [req.params.id, grabacion.grupo_id]
+    );
+    res.json(alumnos);
+  } catch (error) {
+    console.error("Error al listar alumnos:", error);
+    res.status(500).send({ message: "Error en el servidor." });
+  }
+});
+
+docenteRouter.post("/aula-virtual/grabacion/:id/accesos", async (req, res) => {
+  try {
+    const { alumno_ids } = req.body;
+    if (!Array.isArray(alumno_ids)) {
+      return res.status(400).send({ message: "Se requiere un array de alumno_ids." });
+    }
+
+    const [[grabacion]] = await db.query(
+      `SELECT cg.*, g.nombre_grupo, a.nombre_asignatura FROM clases_grabadas cg
+       JOIN grupos g ON cg.grupo_id = g.id
+       JOIN asignaturas a ON cg.asignatura_id = a.id
+       WHERE cg.id = ? AND cg.docente_id = ?`,
+      [req.params.id, req.user.id]
+    );
+    if (!grabacion) return res.status(404).send({ message: "No encontrada." });
+
+    await db.query("DELETE FROM clase_grabada_accesos WHERE clase_grabada_id = ?", [req.params.id]);
+
+    if (alumno_ids.length > 0) {
+      const values = alumno_ids.map(aid => [req.params.id, aid]);
+      await db.query("INSERT INTO clase_grabada_accesos (clase_grabada_id, alumno_id) VALUES ?", [values]);
+    }
+
+    // Notificaciones
+    try {
+      const mensaje = `Nueva clase grabada disponible: "${grabacion.titulo}" en ${grabacion.nombre_asignatura}`;
+      const urlDestino = `/alumno/grupo/${grabacion.grupo_id}/asignatura/${grabacion.asignatura_id}/aula`;
+
+      for (const alumnoId of alumno_ids) {
+        await db.query(
+          "INSERT INTO notificaciones (usuario_id, mensaje, url_destino, leido, fecha, tipo) VALUES (?, ?, ?, 0, NOW(), 'grabacion')",
+          [alumnoId, mensaje, urlDestino]
+        );
+
+        const [tokens] = await db.query("SELECT token FROM push_tokens WHERE user_id = ?", [alumnoId]);
+        if (tokens.length > 0) {
+          fetch("https://exp.host/--/api/v2/push/send", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(tokens.map(t => ({
+              to: t.token, sound: "default", channelId: "default", priority: "high",
+              title: "Nueva Clase Grabada 🎬", body: mensaje, data: { url: urlDestino },
+            }))),
+          }).catch(e => console.error("Error push:", e));
+        }
+      }
+    } catch (notifError) {
+      console.error("Error en notificaciones:", notifError);
+    }
+
+    res.json({ message: `${alumno_ids.length} alumno(s) asignado(s).` });
+  } catch (error) {
+    console.error("Error al asignar accesos:", error);
+    res.status(500).send({ message: "Error en el servidor." });
+  }
+});
+
+docenteRouter.post("/aula-virtual/grabacion/:id/notas", async (req, res) => {
+  try {
+    const { titulo, timestamp_seg, descripcion } = req.body;
+    if (!titulo || timestamp_seg === undefined) {
+      return res.status(400).send({ message: "Se requiere título y timestamp." });
+    }
+
+    const [[grabacion]] = await db.query("SELECT id FROM clases_grabadas WHERE id = ? AND docente_id = ?", [req.params.id, req.user.id]);
+    if (!grabacion) return res.status(404).send({ message: "No encontrada." });
+
+    const [result] = await db.query(
+      "INSERT INTO clase_grabada_notas (clase_grabada_id, titulo, timestamp_seg, descripcion) VALUES (?, ?, ?, ?)",
+      [req.params.id, titulo, timestamp_seg, descripcion || null]
+    );
+    res.status(201).json({ message: "Nota agregada.", id: result.insertId });
+  } catch (error) {
+    console.error("Error al agregar nota:", error);
+    res.status(500).send({ message: "Error en el servidor." });
+  }
+});
+
+docenteRouter.delete("/aula-virtual/grabacion/:id/notas/:notaId", async (req, res) => {
+  try {
+    const [result] = await db.query("DELETE FROM clase_grabada_notas WHERE id = ? AND clase_grabada_id = ?", [req.params.notaId, req.params.id]);
+    if (result.affectedRows === 0) return res.status(404).send({ message: "Nota no encontrada." });
+    res.json({ message: "Nota eliminada." });
+  } catch (error) {
+    console.error("Error al eliminar nota:", error);
+    res.status(500).send({ message: "Error en el servidor." });
+  }
+});
+
 // Aplicar el middleware de protección a todas las rutas del foro y registrar el router
 apiRouter.use("/foro", foroRouter);
 
@@ -8191,6 +8666,165 @@ alumnoRouter.get("/aula-virtual/tareas/:id", async (req, res) => {
     res.json(tarea);
   } catch (error) {
     console.error("Error al obtener detalle de tarea:", error);
+    res.status(500).send({ message: "Error en el servidor." });
+  }
+});
+
+// --- RUTAS DE CLASES GRABADAS (ALUMNO) ---
+
+alumnoRouter.get("/mis-grabaciones", async (req, res) => {
+  try {
+    const [grabaciones] = await db.query(
+      `SELECT cg.*, g.nombre_grupo, a.nombre_asignatura,
+       IFNULL(cv.porcentaje, 0) as mi_progreso,
+       cv.ultima_vista as mi_ultima_vista,
+       cv.completado as mi_completado
+       FROM clase_grabada_accesos cga
+       JOIN clases_grabadas cg ON cga.clase_grabada_id = cg.id
+       JOIN grupos g ON cg.grupo_id = g.id
+       JOIN asignaturas a ON cg.asignatura_id = a.id
+       LEFT JOIN clase_grabada_visualizaciones cv ON cv.clase_grabada_id = cg.id AND cv.alumno_id = ?
+       WHERE cga.alumno_id = ?
+       ORDER BY cg.fecha_creacion DESC`,
+      [req.user.id, req.user.id]
+    );
+    res.json(grabaciones);
+  } catch (error) {
+    console.error("Error al listar grabaciones del alumno:", error);
+    res.status(500).send({ message: "Error en el servidor." });
+  }
+});
+
+alumnoRouter.get("/aula-virtual/:grupoId/:asignaturaId/grabaciones", async (req, res) => {
+  try {
+    const { grupoId, asignaturaId } = req.params;
+    const alumno_id = req.user.id;
+
+    const [[inscripcion]] = await db.query(
+      "SELECT * FROM grupo_alumnos WHERE grupo_id = ? AND alumno_id = ?",
+      [grupoId, alumno_id]
+    );
+    if (!inscripcion) return res.status(403).send({ message: "No estás inscrito." });
+
+    const [grabaciones] = await db.query(
+      `SELECT cg.*,
+       IFNULL(cv.porcentaje, 0) as mi_progreso,
+       cv.ultima_vista as mi_ultima_vista,
+       cv.completado as mi_completado
+       FROM clase_grabada_accesos cga
+       JOIN clases_grabadas cg ON cga.clase_grabada_id = cg.id
+       LEFT JOIN clase_grabada_visualizaciones cv ON cv.clase_grabada_id = cg.id AND cv.alumno_id = ?
+       WHERE cga.alumno_id = ? AND cg.grupo_id = ? AND cg.asignatura_id = ?
+       ORDER BY cg.fecha_creacion DESC`,
+      [alumno_id, alumno_id, grupoId, asignaturaId]
+    );
+    res.json(grabaciones);
+  } catch (error) {
+    console.error("Error al listar grabaciones:", error);
+    res.status(500).send({ message: "Error en el servidor." });
+  }
+});
+
+alumnoRouter.get("/aula-virtual/grabacion/:id", async (req, res) => {
+  try {
+    const alumno_id = req.user.id;
+
+    // Verificar acceso
+    const [[acceso]] = await db.query(
+      "SELECT * FROM clase_grabada_accesos WHERE clase_grabada_id = ? AND alumno_id = ?",
+      [req.params.id, alumno_id]
+    );
+    if (!acceso) return res.status(403).send({ message: "No tienes acceso a esta grabación." });
+
+    const [[grabacion]] = await db.query(
+      `SELECT cg.*, g.nombre_grupo, a.nombre_asignatura
+       FROM clases_grabadas cg
+       JOIN grupos g ON cg.grupo_id = g.id
+       JOIN asignaturas a ON cg.asignatura_id = a.id
+       WHERE cg.id = ?`,
+      [req.params.id]
+    );
+    if (!grabacion) return res.status(404).send({ message: "No encontrada." });
+
+    // Notas del docente
+    const [notas] = await db.query(
+      "SELECT * FROM clase_grabada_notas WHERE clase_grabada_id = ? ORDER BY timestamp_seg ASC",
+      [req.params.id]
+    );
+
+    // Comentarios
+    const [comentarios] = await db.query(
+      `SELECT cgc.*, CONCAT(u.nombre, ' ', u.apellido_paterno) as nombre_usuario
+       FROM clase_grabada_comentarios cgc
+       JOIN usuarios u ON cgc.usuario_id = u.id
+       WHERE cgc.clase_grabada_id = ? ORDER BY cgc.fecha_creacion ASC`,
+      [req.params.id]
+    );
+
+    // Registrar/actualizar visualización
+    await db.query(
+      `INSERT INTO clase_grabada_visualizaciones (clase_grabada_id, alumno_id, ultima_vista)
+       VALUES (?, ?, NOW())
+       ON DUPLICATE KEY UPDATE ultima_vista = NOW()`,
+      [req.params.id, alumno_id]
+    );
+
+    // Obtener progreso actual
+    const [[progreso]] = await db.query(
+      "SELECT porcentaje, completado FROM clase_grabada_visualizaciones WHERE clase_grabada_id = ? AND alumno_id = ?",
+      [req.params.id, alumno_id]
+    );
+
+    res.json({ ...grabacion, notas, comentarios, progreso: progreso || { porcentaje: 0, completado: false } });
+  } catch (error) {
+    console.error("Error al obtener grabación:", error);
+    res.status(500).send({ message: "Error en el servidor." });
+  }
+});
+
+alumnoRouter.post("/aula-virtual/grabacion/:id/comentarios", async (req, res) => {
+  try {
+    const { comentario, timestamp_seg } = req.body;
+    if (!comentario) return res.status(400).send({ message: "El comentario es requerido." });
+
+    const alumno_id = req.user.id;
+    const [[acceso]] = await db.query(
+      "SELECT * FROM clase_grabada_accesos WHERE clase_grabada_id = ? AND alumno_id = ?",
+      [req.params.id, alumno_id]
+    );
+    if (!acceso) return res.status(403).send({ message: "No tienes acceso." });
+
+    await db.query(
+      "INSERT INTO clase_grabada_comentarios (clase_grabada_id, usuario_id, comentario, timestamp_seg) VALUES (?, ?, ?, ?)",
+      [req.params.id, alumno_id, comentario, timestamp_seg || null]
+    );
+    res.status(201).json({ message: "Comentario agregado." });
+  } catch (error) {
+    console.error("Error al comentar:", error);
+    res.status(500).send({ message: "Error en el servidor." });
+  }
+});
+
+alumnoRouter.put("/aula-virtual/grabacion/:id/progreso", async (req, res) => {
+  try {
+    const { porcentaje, completado } = req.body;
+    const alumno_id = req.user.id;
+
+    const [[acceso]] = await db.query(
+      "SELECT * FROM clase_grabada_accesos WHERE clase_grabada_id = ? AND alumno_id = ?",
+      [req.params.id, alumno_id]
+    );
+    if (!acceso) return res.status(403).send({ message: "No tienes acceso." });
+
+    await db.query(
+      `INSERT INTO clase_grabada_visualizaciones (clase_grabada_id, alumno_id, porcentaje, completado, ultima_vista)
+       VALUES (?, ?, ?, ?, NOW())
+       ON DUPLICATE KEY UPDATE porcentaje = VALUES(porcentaje), completado = VALUES(completado), ultima_vista = NOW()`,
+      [req.params.id, alumno_id, porcentaje || 0, completado || false]
+    );
+    res.json({ message: "Progreso actualizado." });
+  } catch (error) {
+    console.error("Error al actualizar progreso:", error);
     res.status(500).send({ message: "Error en el servidor." });
   }
 });
