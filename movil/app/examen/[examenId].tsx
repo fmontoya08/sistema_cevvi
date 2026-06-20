@@ -29,6 +29,7 @@ export default function TomarExamenScreen() {
   const [respuestas, setRespuestas] = useState<Record<number, string>>({});
   const [loading, setLoading] = useState(true);
   const [enviando, setEnviando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     cargarExamen();
@@ -37,10 +38,15 @@ export default function TomarExamenScreen() {
   const cargarExamen = async () => {
     try {
       const res = await api.get(`/examenes/${examenId}/resolver`);
+      if (!res.data?.preguntas) {
+        setError("Error al cargar el examen");
+        return;
+      }
       setExamen(res.data.examen);
       setPreguntas(res.data.preguntas);
     } catch (error) {
       console.error(error);
+      setError("Error al cargar el examen");
     } finally {
       setLoading(false);
     }
@@ -88,6 +94,28 @@ export default function TomarExamenScreen() {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color="#a72a34" />
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.center}>
+        <Text style={{ color: "#a72a34", fontSize: 16, textAlign: "center", marginHorizontal: 20 }}>{error}</Text>
+        <TouchableOpacity onPress={() => router.back()} style={{ marginTop: 15 }}>
+          <Text style={{ color: "#a72a34", fontWeight: "bold", fontSize: 16 }}>Volver</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  if (!preguntas) {
+    return (
+      <View style={styles.center}>
+        <Text style={{ color: "#a72a34", fontSize: 16 }}>Error al cargar el examen</Text>
+        <TouchableOpacity onPress={() => router.back()} style={{ marginTop: 15 }}>
+          <Text style={{ color: "#a72a34", fontWeight: "bold", fontSize: 16 }}>Volver</Text>
+        </TouchableOpacity>
       </View>
     );
   }

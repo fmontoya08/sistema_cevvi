@@ -24,8 +24,13 @@ const HybridClassPanel = ({
   const prevHandsRef = useRef(0);
   const prevChatRef = useRef(null);
 
-  const { virtualStudents, raisedHands, lastChatMessage, connectedCount } =
-    monitor;
+  // Safe destructuring with defaults
+  const {
+    virtualStudents = [],
+    raisedHands = [],
+    lastChatMessage = null,
+    connectedCount = 0,
+  } = monitor || {};
 
   const handleTileView = () => {
     try {
@@ -47,14 +52,11 @@ const HybridClassPanel = ({
 
   useEffect(() => {
     if (raisedHands.length > prevHandsRef.current) {
-      const newHands = raisedHands.filter(
-        (h) => !prevHandsRef.current || true,
-      );
       const latest = raisedHands[raisedHands.length - 1];
       if (latest) {
         setToast({
           type: "hand",
-          message: `${latest.displayName} levantó la mano`,
+          message: `${latest.displayName || "Alguien"} levantó la mano`,
           icon: "✋",
         });
       }
@@ -63,13 +65,11 @@ const HybridClassPanel = ({
   }, [raisedHands]);
 
   useEffect(() => {
-    if (
-      lastChatMessage &&
-      lastChatMessage.message !== prevChatRef.current?.message
-    ) {
+    const chatMsg = lastChatMessage?.message;
+    if (chatMsg && chatMsg !== prevChatRef.current?.message) {
       setToast({
         type: "chat",
-        message: `${lastChatMessage.displayName}: ${lastChatMessage.message}`,
+        message: `${lastChatMessage?.displayName || "Alguien"}: ${chatMsg}`,
         icon: "💬",
       });
     }
@@ -88,9 +88,9 @@ const HybridClassPanel = ({
 
   const displayNames = virtualStudents
     .slice(0, 3)
-    .map((s) => s.displayName.split(" (")[0])
+    .map((s) => (s.displayName || "Invitado").split(" (")[0])
     .join(", ");
-  const moreCount = virtualStudents.length - 3;
+  const moreCount = Math.max(0, virtualStudents.length - 3);
 
   return (
     <div className="fixed top-14 left-0 right-0 z-50 flex justify-center pointer-events-none">
@@ -166,7 +166,7 @@ const HybridClassPanel = ({
 
           {expanded && (
             <div className="border-t border-gray-700/50 px-3 py-3 bg-gray-900/60">
-              <AudioMixerPanel {...audioMixer} />
+              <AudioMixerPanel {...(audioMixer || {})} />
             </div>
           )}
         </div>

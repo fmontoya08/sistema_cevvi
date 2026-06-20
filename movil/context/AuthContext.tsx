@@ -8,12 +8,14 @@ import React, {
 } from "react";
 import * as SecureStore from "expo-secure-store";
 import axios, { AxiosInstance } from "axios";
+import { router } from "expo-router";
 // --- 1. IMPORTACIONES PARA NOTIFICACIONES ---
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 
-// --- IP DEL SERVIDOR (Verifica que sea correcta) ---
-const API_URL = "https://api-universidad-c5o8.onrender.com/api"; // O la IP actual de tu PC
+// --- IP DEL SERVIDOR (Configurable via variable de entorno) ---
+// En desarrollo local, cambiar a tu IP local: "http://192.168.x.x:3001/api"
+const API_URL = process.env.EXPO_PUBLIC_API_URL || "https://api-universidad-c5o8.onrender.com/api";
 
 const api = axios.create({
   baseURL: API_URL,
@@ -26,6 +28,18 @@ api.interceptors.request.use(async (config) => {
   }
   return config;
 });
+
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    if (error.response?.status === 401) {
+      await SecureStore.deleteItemAsync("user");
+      await SecureStore.deleteItemAsync("token");
+      router.replace("/login");
+    }
+    return Promise.reject(error);
+  },
+);
 
 // --- 2. CONFIGURACIÓN DEL HANDLER ---
 // Para notificaciones recibidas mientras la app está abierta

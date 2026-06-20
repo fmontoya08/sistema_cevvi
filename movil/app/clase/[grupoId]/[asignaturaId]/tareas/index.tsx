@@ -33,7 +33,9 @@ export default function ListaTareasScreen() {
       const res = await api.get(
         `/alumno/aula-virtual/${grupoId}/${asignaturaId}/tareas`,
       );
-      setTareas(res.data);
+      if (res.data) {
+        setTareas(res.data);
+      }
     } catch (error) {
       console.error(error);
     } finally {
@@ -55,7 +57,7 @@ export default function ListaTareasScreen() {
   };
 
   const getStatusInfo = (fechaLimite, entregada, calificacion) => {
-    if (calificacion)
+    if (calificacion !== null && calificacion !== undefined)
       return {
         label: "Calificada",
         color: "#16a34a",
@@ -65,6 +67,9 @@ export default function ListaTareasScreen() {
       return { label: "Entregada", color: "#0284c7", icon: "cloud-done" };
 
     const fechaLim = new Date(fechaLimite);
+    if (isNaN(fechaLim.getTime())) {
+      return { label: "Fecha no disponible", color: "#888", icon: "help-circle" };
+    }
     const hoy = new Date();
     if (hoy > fechaLim)
       return { label: "Vencida", color: "#ef4444", icon: "alert-circle" };

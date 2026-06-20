@@ -37,18 +37,28 @@ const PizarraPage = () => {
     if (shapeIds.size === 0) return null;
 
     // 2. Usar el método nativo del editor para obtener el SVG
-    // (Ahora debería funcionar porque quitamos las props conflictivas)
-    const svgElement = await editor.getSvg([...shapeIds], {
-      scale: 1,
-      background: true,
-    });
+    let svgElement;
+    try {
+      svgElement = await editor.getSvg([...shapeIds], {
+        scale: 1,
+        background: true,
+      });
+    } catch (error) {
+      console.error("Error al generar SVG:", error);
+      svgElement = null;
+    }
 
     if (!svgElement) return null;
 
     // 3. Convertir SVG a Blob (Imagen PNG) manualmente
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       const svgString = new XMLSerializer().serializeToString(svgElement);
-      const svg64 = btoa(unescape(encodeURIComponent(svgString)));
+      const utf8Bytes = new TextEncoder().encode(svgString);
+      let binary = "";
+      for (let i = 0; i < utf8Bytes.length; i++) {
+        binary += String.fromCharCode(utf8Bytes[i]);
+      }
+      const svg64 = btoa(binary);
       const image64 = `data:image/svg+xml;base64,${svg64}`;
 
       const img = new Image();
@@ -58,7 +68,6 @@ const PizarraPage = () => {
         canvas.height = img.height;
         const ctx = canvas.getContext("2d");
 
-        // Fondo blanco (opcional, si quieres transparencia quita estas 2 líneas)
         ctx.fillStyle = "#ffffff";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -68,6 +77,7 @@ const PizarraPage = () => {
           resolve(blob);
         }, "image/png");
       };
+      img.onerror = () => reject(new Error("Error al cargar la imagen SVG"));
       img.src = image64;
     });
   };
@@ -107,7 +117,12 @@ const PizarraPage = () => {
       formData.append("rutaActual", "");
       formData.append("archivo", file);
 
-      const token = localStorage.getItem("token");
+      let token;
+      try {
+        token = localStorage.getItem("token");
+      } catch {
+        token = null;
+      }
 
       // Ajusta tu URL según corresponda
       await axios.post(

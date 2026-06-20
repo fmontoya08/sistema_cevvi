@@ -37,8 +37,9 @@ const AulaVirtualPage = () => {
   const fetchAulaConfig = useCallback(async () => {
     try {
       const { data } = await api.get(
-        `/${user.rol}/aula-virtual/${grupoId}/${asignaturaId}/config`,
+        `/${user?.rol}/aula-virtual/${grupoId}/${asignaturaId}/config`,
       );
+      if (!data) return;
       setConfig(data);
       setFormData({
         enlace_videollamada: data.enlace_videollamada || "",
@@ -47,56 +48,57 @@ const AulaVirtualPage = () => {
         evaluacion: data.evaluacion || "",
         horario: data.horario || "",
         contacto_docente: data.contacto_docente || "",
+        notificar_inicio: data.notificar_inicio ? true : false,
       });
     } catch (error) {
       console.error("Error al cargar config", error);
     } finally {
       setLoading(false);
     }
-  }, [user.rol, grupoId, asignaturaId]);
+  }, [user?.rol, grupoId, asignaturaId]);
 
   const fetchTareas = useCallback(async () => {
     setLoadingTareas(true);
     try {
       const { data } = await api.get(
-        `/${user.rol}/aula-virtual/${grupoId}/${asignaturaId}/tareas`,
+        `/${user?.rol}/aula-virtual/${grupoId}/${asignaturaId}/tareas`,
       );
-      setTareas(data);
+      if (data) setTareas(data);
     } catch (error) {
       console.error("Error al cargar tareas", error);
     } finally {
       setLoadingTareas(false);
     }
-  }, [user.rol, grupoId, asignaturaId]);
+  }, [user?.rol, grupoId, asignaturaId]);
 
   const fetchRecursos = useCallback(async () => {
     setLoadingRecursos(true);
     try {
       const { data } = await api.get(
-        `/${user.rol}/aula-virtual/${grupoId}/${asignaturaId}/recursos`,
+        `/${user?.rol}/aula-virtual/${grupoId}/${asignaturaId}/recursos`,
       );
-      setRecursos(data);
+      if (data) setRecursos(data);
     } catch (error) {
       console.error("Error al cargar recursos", error);
     } finally {
       setLoadingRecursos(false);
     }
-  }, [user.rol, grupoId, asignaturaId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user?.rol, grupoId, asignaturaId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchHistorialAsistencia = useCallback(async () => {
-    if (user.rol !== "alumno") return;
+    if (user?.rol !== "alumno") return;
     setLoadingHistorial(true);
     try {
       const { data } = await api.get(
         `/alumno/aula-virtual/${grupoId}/${asignaturaId}/mis-asistencias`,
       );
-      setHistorialAsistencia(data);
+      if (data) setHistorialAsistencia(data);
     } catch (error) {
       console.error("Error al cargar historial", error);
     } finally {
       setLoadingHistorial(false);
     }
-  }, [user.rol, grupoId, asignaturaId]);
+  }, [user?.rol, grupoId, asignaturaId]);
 
   // --- NUEVA FUNCIÓN PARA CARGAR HILOS DEL FORO ---
   const fetchHilos = useCallback(async () => {
@@ -104,7 +106,7 @@ const AulaVirtualPage = () => {
     try {
       // Usamos la ruta /api/foro/... que creamos (accesible por ambos roles)
       const { data } = await api.get(`/foro/${grupoId}/${asignaturaId}/hilos`);
-      setHilosForo(data);
+      if (data) setHilosForo(data);
     } catch (error) {
       console.error("Error al cargar hilos del foro", error);
       setHilosForo([]);
@@ -187,7 +189,7 @@ const AulaVirtualPage = () => {
         },
       );
 
-      const { sesionId } = data; // 3. Obtiene el ID de la sesión
+      const { sesionId } = data || {}; // 3. Obtiene el ID de la sesión
 
       if (sesionId) {
         // 4. Redirige al docente a la página de asistencia con ese ID
@@ -377,7 +379,7 @@ const AulaVirtualPage = () => {
     if (tareas.length === 0) {
       return (
         <p className="text-gray-500">
-          {user.rol === "docente"
+          {user?.rol === "docente"
             ? "Aún no has creado ninguna tarea. ¡Crea la primera!"
             : "Aún no hay tareas publicadas para este curso."}
         </p>
@@ -386,7 +388,7 @@ const AulaVirtualPage = () => {
     return (
       <div className="space-y-4">
         {tareas.map((tarea) => {
-          if (user.rol === "docente") {
+          if (user?.rol === "docente") {
             // El DOCENTE ve un Link a la página de detalles
             return (
               <Link
@@ -470,7 +472,7 @@ const AulaVirtualPage = () => {
     if (recursos.length === 0) {
       return (
         <p className="text-gray-500">
-          {user.rol === "docente"
+          {user?.rol === "docente"
             ? "Aún no has subido ningún recurso."
             : "Aún no hay recursos disponibles."}
         </p>
@@ -503,7 +505,7 @@ const AulaVirtualPage = () => {
                   </span>
                 )}
               </a>
-              {user.rol === "docente" && (
+              {user?.rol === "docente" && (
                 <button
                   onClick={() => handleDeleteRecurso(recurso.id)}
                   className="text-red-500 hover:text-red-700"
@@ -556,7 +558,7 @@ const AulaVirtualPage = () => {
             key={hilo.id}
             // Enlace a la página del hilo (ajustar ruta si es alumno)
             to={
-              user.rol === "docente"
+              user?.rol === "docente"
                 ? `/docente/grupo/${grupoId}/asignatura/${asignaturaId}/foro/hilo/${hilo.id}`
                 : `/alumno/grupo/${grupoId}/asignatura/${asignaturaId}/foro/hilo/${hilo.id}`
             }
@@ -629,7 +631,7 @@ const AulaVirtualPage = () => {
 
         {/* BOTONES DE ACCIÓN DOCENTE (Ahora ROJOS y Estilizados) */}
         <div className="flex items-center gap-3">
-          {user.rol === "docente" && (
+          {user?.rol === "docente" && (
             <>
               {/* Botón Asistencia */}
               <button
@@ -784,7 +786,7 @@ const AulaVirtualPage = () => {
             </div>
 
             {/* Historial Asistencia (Solo Alumno) */}
-            {user.rol === "alumno" && (
+            {user?.rol === "alumno" && (
               <div className="mt-8 pt-8 border-t border-gray-100">
                 <h4 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
                   <History size={20} className="text-gray-400" /> Mi Asistencia
@@ -841,7 +843,7 @@ const AulaVirtualPage = () => {
               <h3 className="text-xl font-bold text-gray-800">
                 Actividades de Aprendizaje
               </h3>
-              {user.rol === "docente" && (
+              {user?.rol === "docente" && (
                 <button
                   onClick={() => setShowCrearTareaModal(true)}
                   className="bg-[#a72a34] text-white px-5 py-2.5 rounded-xl font-bold hover:bg-[#802028] shadow-lg shadow-red-900/10 flex items-center gap-2 transition-transform active:scale-95"
@@ -861,7 +863,7 @@ const AulaVirtualPage = () => {
               <h3 className="text-xl font-bold text-gray-800">
                 Material de Consulta
               </h3>
-              {user.rol === "docente" && (
+              {user?.rol === "docente" && (
                 <button
                   onClick={() => setShowRecursoModal(true)}
                   className="bg-white border-2 border-[#a72a34] text-[#a72a34] px-5 py-2.5 rounded-xl font-bold hover:bg-[#a72a34] hover:text-white transition-all flex items-center gap-2"

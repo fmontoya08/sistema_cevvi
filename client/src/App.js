@@ -16,6 +16,7 @@ import RevisarExamenPage from "./pages/RevisarExamenPage";
 import PizarraPage from "./pages/PizarraPage";
 import ClaseEnVivoPage from "./pages/ClaseEnVivoPage";
 import TutorialGuide from "./components/TutorialGuide"; // Asegúrate de crear la carpeta components
+import AIChatAssistant from "./components/AIChatAssistant";
 import RegistroControlEscolarPage from "./pages/RegistroControlEscolarPage";
 
 import React, {
@@ -837,6 +838,7 @@ const AdminLayout = () => {
   );
 
   return (
+    <>
     <div className="flex h-screen bg-gray-50 font-sans overflow-hidden">
       {sidebarOpen && (
         <div
@@ -959,6 +961,8 @@ const AdminLayout = () => {
         </div>
       </main>
     </div>
+    <AIChatAssistant user={user} />
+    </>
   );
 };
 const DocenteLayout = () => {
@@ -988,6 +992,7 @@ const DocenteLayout = () => {
   ];
 
   return (
+    <>
     <div className="flex h-screen bg-gray-50 font-sans overflow-hidden">
       {/* --- SIDEBAR Y FONDO OSCURO PARA MÓVIL --- */}
 
@@ -1143,6 +1148,8 @@ const DocenteLayout = () => {
         </div>
       </main>
     </div>
+    <AIChatAssistant user={user} />
+    </>
   );
 };
 
@@ -1181,6 +1188,7 @@ const AlumnoLayout = () => {
   ];
 
   return (
+    <>
     <div className="flex h-screen bg-gray-50 font-sans overflow-hidden">
       {/* 1. SOMBRA DE FONDO (Solo visible en móvil al abrir menú) */}
       {sidebarOpen && (
@@ -1339,6 +1347,8 @@ const AlumnoLayout = () => {
         </div>
       </main>
     </div>
+    <AIChatAssistant user={user} />
+    </>
   );
 };
 

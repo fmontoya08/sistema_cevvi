@@ -38,7 +38,9 @@ export default function LoginScreen() {
         );
         return;
       }
-      router.replace("/(tabs)");
+      setTimeout(() => {
+        router.replace("/(tabs)");
+      }, 100);
     } else {
       Alert.alert(
         "Error de Login",

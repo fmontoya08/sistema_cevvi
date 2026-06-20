@@ -68,20 +68,31 @@ export default function CalendarioScreen() {
 
       // Transformamos los datos para react-native-calendars (MarkedDates)
       const marcadores = {};
-      res.data.forEach((evento) => {
-        // Asumiendo que 'start' viene como "YYYY-MM-DD" o similar
-        const fecha = evento.start.split("T")[0];
+      if (res.data) {
+        res.data.forEach((evento) => {
+          if (!evento.start) return;
+          // Asumiendo que 'start' viene como "YYYY-MM-DD" o similar
+          const fecha = evento.start.split("T")[0];
 
-        let color = "#a72a34"; // Rojo (General)
-        if (evento.modalidad === "virtual") color = "#3b82f6"; // Azul
-        if (evento.modalidad === "presencial") color = "#10b981"; // Verde
+          let color = "#a72a34"; // Rojo (General)
+          if (evento.modalidad === "virtual") color = "#3b82f6"; // Azul
+          if (evento.modalidad === "presencial") color = "#10b981"; // Verde
 
-        marcadores[fecha] = {
-          marked: true,
-          dotColor: color,
-          data: evento, // Guardamos todo el evento aquí
-        };
-      });
+          if (marcadores[fecha]) {
+            marcadores[fecha].push({
+              marked: true,
+              dotColor: color,
+              data: evento,
+            });
+          } else {
+            marcadores[fecha] = [{
+              marked: true,
+              dotColor: color,
+              data: evento,
+            }];
+          }
+        });
+      }
 
       setItems(marcadores);
     } catch (error) {
@@ -99,11 +110,9 @@ export default function CalendarioScreen() {
   // Al tocar un día
   const onDayPress = (day) => {
     setSelectedDate(day.dateString);
-    const evento = items[day.dateString];
-    if (evento) {
-      // En este ejemplo simple, asumimos un evento por día,
-      // pero podrías filtrar si tu API devuelve un array
-      setEventosDelDia([evento.data]);
+    const eventos = items[day.dateString];
+    if (eventos && Array.isArray(eventos)) {
+      setEventosDelDia(eventos.map((e: any) => e.data));
     } else {
       setEventosDelDia([]);
     }
@@ -139,14 +148,21 @@ export default function CalendarioScreen() {
 
       <Calendar
         onDayPress={onDayPress}
-        markedDates={{
-          ...items,
-          [selectedDate]: {
-            ...items[selectedDate],
-            selected: true,
-            selectedColor: "#a72a34",
-          },
-        }}
+        markedDates={(() => {
+          const flat: any = {};
+          Object.keys(items).forEach((fecha) => {
+            if (Array.isArray(items[fecha]) && items[fecha].length > 0) {
+              const first = items[fecha][0];
+              flat[fecha] = { marked: true, dotColor: first.dotColor };
+            }
+          });
+          if (selectedDate && flat[selectedDate]) {
+            flat[selectedDate] = { ...flat[selectedDate], selected: true, selectedColor: "#a72a34" };
+          } else if (selectedDate) {
+            flat[selectedDate] = { selected: true, selectedColor: "#a72a34" };
+          }
+          return flat;
+        })()}
         theme={{
           todayTextColor: "#a72a34",
           arrowColor: "#a72a34",

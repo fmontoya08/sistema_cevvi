@@ -16,6 +16,7 @@ const https = require("https");
 const rateLimit = require("express-rate-limit");
 require("dotenv").config();
 const XLSX = require("xlsx");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 const app = express();
 app.use(cors({
@@ -1367,6 +1368,92 @@ apiRouter.post("/recuperar-password", async (req, res) => {
 });
 
 apiRouter.use(verifyToken);
+
+// ==========================================
+// ASISTENTE IA (GEMINI)
+// ==========================================
+apiRouter.post("/ai/ask", async (req, res) => {
+  try {
+    const { pregunta, ruta_actual } = req.body;
+    if (!pregunta) {
+      return res.status(400).json({ message: "La pregunta es requerida." });
+    }
+
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey || apiKey === "AIzaSyAI_API_KEY_AQUI") {
+      return res.status(503).json({
+        message:
+          "El asistente IA no está configurado. Contacta a administración.",
+      });
+    }
+
+    const rol = req.user.rol;
+    const nombre = req.user.nombre || "Usuario";
+
+    const systemPrompt = `Eres un asistente experto en la **Plataforma Universidad Siglo XXI**. Tu única función es ayudar a los usuarios a usar la plataforma.
+
+## INSTRUCCIONES ESTRICTAS:
+1. Responde SIEMPRE en español, claro y amable.
+2. Da instrucciones **paso a paso**, numeradas, como si le explicaras a una persona que no sabe usar la plataforma.
+3. Usa un tono paciente y sencillo.
+4. Si no sabes la respuesta, di honestamente que no tienes esa información y sugiere contactar a soporte.
+
+## CONTEXTO DEL USUARIO:
+- Nombre: ${nombre}
+- Rol: ${rol}
+- Ruta actual: ${ruta_actual || "No especificada"}
+
+## FUNCIONALIDADES DE LA PLATAFORMA POR ROL:
+
+### Para DOCENTES:
+- Dashboard: resumen de grupos, accesos rápidos a correo/calendario/nube
+- Aula Virtual: entrar a cada grupo, configurar clase (enlace videollamada, criterios evaluación), pasar lista de asistencia, dejar tareas con fecha límite, compartir recursos (PDF, enlaces), crear exámenes de opción múltiple, ver muro de novedades
+- Mi Nube: almacenar archivos personales (subir, crear carpetas, descargar)
+- Calendario: ver fechas del ciclo escolar
+- Mi Perfil: cambiar foto, actualizar datos, cambiar contraseña
+
+### Para ALUMNOS:
+- Dashboard: ver perfil, accesos rápidos (pagos, constancias, nube), materias inscritas, avisos
+- Aula Virtual: ver tareas asignadas y subir entregas, descargar material de estudio, participar en foros, resolver exámenes en línea, ver videollamadas
+- Mis Pagos: consultar estado de cuenta, historial
+- Mi Nube: guardar y descargar archivos
+- Calendario: ver fechas importantes
+- Trámites: solicitar constancias o kardex
+- Mi Perfil: actualizar datos, cambiar contraseña
+
+### Para ADMIN / CONTROL ESCOLAR:
+- Dashboard: estadísticas, accesos rápidos
+- Usuarios: CRUD completo (altas, bajas, cambios)
+- Grupos: asignar alumnos y materias
+- Calificaciones: consultar promedios, generar actas
+- Finanzas: gestionar pagos, adeudos, conceptos
+- Catálogos: carreras, materias, sedes, ciclos
+- Calendario: crear eventos institucionales
+- Biblioteca: gestionar biblioteca virtual
+- Email: bandeja de correos institucionales
+
+Responde de forma útil y específica para el rol del usuario.`;
+
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.0-flash",
+      systemInstruction: systemPrompt,
+    });
+
+    const result = await model.generateContent(pregunta);
+    const respuesta =
+      result.response?.candidates?.[0]?.content?.parts?.[0]?.text ||
+      "Lo siento, no pude generar una respuesta. Intenta de nuevo.";
+
+    res.json({ respuesta });
+  } catch (error) {
+    console.error("Error en asistente IA:", error);
+    res.status(500).json({
+      message: "Error al procesar la consulta. Intenta de nuevo.",
+      error: error.message,
+    });
+  }
+});
 
 // ==========================================
 // REGISTRO DE TOKENS PUSH (NOTIFICACIONES ANDROID)

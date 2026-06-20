@@ -7,15 +7,33 @@ const RevisarExamenPage = () => {
   const { intentoId } = useParams();
   const navigate = useNavigate();
   const [data, setData] = useState(null);
+  const [puntosInputs, setPuntosInputs] = useState({});
 
   useEffect(() => {
     cargarIntento();
   }, [intentoId]);
 
+  useEffect(() => {
+    if (data?.respuestas) {
+      const initial = {};
+      data.respuestas.forEach((r) => {
+        initial[r.id] = String(r.puntos_obtenidos ?? 0);
+      });
+      setPuntosInputs(initial);
+    }
+  }, [data]);
+
+  const obtenerToken = () => {
+    try {
+      return localStorage.getItem("token");
+    } catch {
+      return null;
+    }
+  };
+
   const cargarIntento = async () => {
     try {
-      const token = localStorage.getItem("token");
-      // CORRECCIÓN: Ruta correcta "/api/intentos"
+      const token = obtenerToken();
       const res = await axios.get(
         `https://api-universidad-c5o8.onrender.com/api/intentos/${intentoId}`,
         {
@@ -30,16 +48,17 @@ const RevisarExamenPage = () => {
   };
 
   const actualizarPuntos = async (respuestaId, puntosInput, maximos) => {
-    if (puntosInput > maximos)
+    const puntos = parseFloat(puntosInput);
+    if (isNaN(puntos) || puntos > maximos)
       return alert(`No puedes dar más de ${maximos} puntos.`);
 
     try {
-      const token = localStorage.getItem("token");
+      const token = obtenerToken();
       await axios.put(
         `https://api-universidad-c5o8.onrender.com/api/examenes/calificar-pregunta`,
         {
           respuestaId,
-          puntosNuevos: puntosInput,
+          puntosNuevos: puntos,
           intentoId,
         },
         { headers: { Authorization: `Bearer ${token}` } },
@@ -66,9 +85,9 @@ const RevisarExamenPage = () => {
       <div className="bg-white p-6 rounded-xl shadow-sm border-l-4 border-blue-600 mb-6 flex justify-between items-center">
         <div>
           {/* Usamos data.info para acceder a los detalles generales */}
-          <h1 className="text-2xl font-bold">{data.info.titulo}</h1>
+          <h1 className="text-2xl font-bold">{data?.info?.titulo}</h1>
           <p className="text-gray-600">
-            Alumno: {data.info.nombre} {data.info.apellido_paterno}
+            Alumno: {data?.info?.nombre ?? "Desconocido"} {data?.info?.apellido_paterno ?? ""}
           </p>
         </div>
         <div className="text-right">
@@ -76,13 +95,13 @@ const RevisarExamenPage = () => {
             Calificación Final
           </span>
           <span className="text-4xl font-bold text-blue-600">
-            {data.info.calificacion}
+            {data?.info?.calificacion ?? "N/A"}
           </span>
         </div>
       </div>
 
       <div className="space-y-6">
-        {data.respuestas.map((resp, idx) => (
+        {(data?.respuestas ?? []).map((resp, idx) => (
           <div
             key={resp.id}
             className="bg-white p-6 rounded-xl shadow-sm border border-gray-200"
@@ -118,10 +137,12 @@ const RevisarExamenPage = () => {
               <input
                 type="number"
                 className="w-20 p-2 border rounded text-center font-bold"
-                defaultValue={resp.puntos_obtenidos}
-                onBlur={(e) =>
-                  // Nota: resp.puntos es el valor máximo
-                  actualizarPuntos(resp.id, e.target.value, resp.puntos)
+                value={puntosInputs[resp.id] ?? resp.puntos_obtenidos}
+                onChange={(e) =>
+                  setPuntosInputs({ ...puntosInputs, [resp.id]: e.target.value })
+                }
+                onBlur={() =>
+                  actualizarPuntos(resp.id, puntosInputs[resp.id], resp.puntos)
                 }
               />
               <span className="text-gray-400 text-sm">/ {resp.puntos}</span>

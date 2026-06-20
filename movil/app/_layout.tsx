@@ -27,12 +27,17 @@ export default function RootLayoutNav() {
   });
 
   useEffect(() => {
+    const timeout = setTimeout(() => {
+      SplashScreen.hideAsync();
+    }, 5000);
     if (fontsLoaded || fontError) {
       SplashScreen.hideAsync();
+      clearTimeout(timeout);
     }
     if (fontError) {
       console.error("Error cargando fuentes:", fontError);
     }
+    return () => clearTimeout(timeout);
   }, [fontsLoaded, fontError]);
 
   // --- MANEJAR TAP EN NOTIFICACIONES PUSH ---

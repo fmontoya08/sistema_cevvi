@@ -79,9 +79,7 @@ export default function DetalleTareaScreen() {
         `/alumno/aula-virtual/tareas/${tareaId}/entregar`,
         formData,
         {
-          headers: {
-            "Content-Type": "multipart/form-data",
-          },
+          // No establecer Content-Type manualmente; axios lo define automáticamente con el boundary para FormData
         },
       );
 
@@ -106,7 +104,7 @@ export default function DetalleTareaScreen() {
     );
   if (!tarea) return null;
 
-  const yaEntrego = tarea.entrega_alumno !== null;
+  const yaEntrego = tarea.entrega_alumno != null;
 
   return (
     <ScrollView style={styles.container}>
@@ -129,7 +127,7 @@ export default function DetalleTareaScreen() {
           <Text style={styles.sectionTitle}>Instrucciones</Text>
           <Text style={styles.description}>{tarea.descripcion}</Text>
           <Text style={styles.date}>
-            Fecha límite: {tarea.fecha_limite.split("T")[0]}
+            Fecha límite: {tarea.fecha_limite ? tarea.fecha_limite.split("T")[0] : "No disponible"}
           </Text>
 
           {tarea.archivo_adjunto && (
@@ -159,7 +157,7 @@ export default function DetalleTareaScreen() {
               <Ionicons name="checkmark-circle" size={40} color="#16a34a" />
               <Text style={styles.entregadoTitle}>¡Tarea Entregada!</Text>
               <Text style={styles.entregadoDate}>
-                El {tarea.entrega_alumno.fecha_entrega.split("T")[0]}
+                El {tarea.entrega_alumno.fecha_entrega ? tarea.entrega_alumno.fecha_entrega.split("T")[0] : "Fecha no disponible"}
               </Text>
               {tarea.entrega_alumno.calificacion ? (
                 <View style={styles.notaBox}>
