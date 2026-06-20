@@ -303,6 +303,10 @@ if (!fs.existsSync(grabacionesDir)) {
   fs.mkdirSync(grabacionesDir, { recursive: true });
 }
 app.use("/uploads/grabaciones", express.static(grabacionesDir));
+
+// Directorio del BUILD de React (producción)
+const buildDir = path.join(__dirname, "build");
+app.use("/plataforma", express.static(buildDir));
 // --- FIN DE SERVIR ARCHIVOS ESTÁTICOS ---
 // --- CONFIGURACIÓN DE MULTER (PARA SUBIDA DE ARCHIVOS) ---
 const storage = multer.diskStorage({
@@ -10704,6 +10708,13 @@ async function enviarAlertaCorreo(usuarioId, asunto, titulo, mensajeHtml) {
   }
 }
 
+
+// --- Catch-all para SPA (React Router) ---
+// Cualquier ruta /plataforma/* que no coincida con un archivo estático
+// se redirige a index.html para que React Router maneje la ruta.
+app.get("/plataforma/*", (req, res) => {
+  res.sendFile(path.join(buildDir, "index.html"));
+});
 
 app.listen(PORT, () => {
   console.log(`Servidor corriendo en http://localhost:${PORT}`);
