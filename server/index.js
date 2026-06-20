@@ -10712,7 +10712,7 @@ async function enviarAlertaCorreo(usuarioId, asunto, titulo, mensajeHtml) {
 // --- Catch-all para SPA (React Router) ---
 // Cualquier ruta /plataforma/* que no coincida con un archivo estático
 // se redirige a index.html para que React Router maneje la ruta.
-app.get("/plataforma/*", (req, res) => {
+app.get("/plataforma/*path", (req, res) => {
   res.sendFile(path.join(buildDir, "index.html"));
 });
 
