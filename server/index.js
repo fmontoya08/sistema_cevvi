@@ -16,7 +16,7 @@ const https = require("https");
 const rateLimit = require("express-rate-limit");
 require("dotenv").config();
 const XLSX = require("xlsx");
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+// OpenRouter (chat alternativo) reemplaza a @google/generative-ai
 
 const app = express();
 app.use(cors({
@@ -1374,7 +1374,7 @@ apiRouter.post("/recuperar-password", async (req, res) => {
 apiRouter.use(verifyToken);
 
 // ==========================================
-// ASISTENTE IA (GEMINI)
+// ASISTENTE IA (OPENROUTER — sin tarjeta, crédito gratis)
 // ==========================================
 apiRouter.post("/ai/ask", async (req, res) => {
   try {
@@ -1383,8 +1383,8 @@ apiRouter.post("/ai/ask", async (req, res) => {
       return res.status(400).json({ message: "La pregunta es requerida." });
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey || apiKey === "AIzaSyAI_API_KEY_AQUI") {
+    const apiKey = process.env.OPENROUTER_API_KEY;
+    if (!apiKey || apiKey === "sk-or-placeholder") {
       return res.status(503).json({
         message:
           "El asistente IA no está configurado. Contacta a administración.",
@@ -1438,20 +1438,33 @@ apiRouter.post("/ai/ask", async (req, res) => {
 
 Responde de forma útil y específica para el rol del usuario.`;
 
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({
-      model: "gemini-2.0-flash",
-      systemInstruction: systemPrompt,
-    });
+    const response = await axios.post(
+      "https://openrouter.ai/api/v1/chat/completions",
+      {
+        model: "mistralai/mixtral-8x7b-instruct",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: pregunta },
+        ],
+        max_tokens: 1024,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": "https://universidadsigloxxi.com",
+          "X-Title": "Plataforma Siglo XXI",
+        },
+      },
+    );
 
-    const result = await model.generateContent(pregunta);
     const respuesta =
-      result.response?.candidates?.[0]?.content?.parts?.[0]?.text ||
+      response.data?.choices?.[0]?.message?.content ||
       "Lo siento, no pude generar una respuesta. Intenta de nuevo.";
 
     res.json({ respuesta });
   } catch (error) {
-    console.error("Error en asistente IA:", error);
+    console.error("Error en asistente IA:", error.response?.data || error.message);
     res.status(500).json({
       message: "Error al procesar la consulta. Intenta de nuevo.",
       error: error.message,
