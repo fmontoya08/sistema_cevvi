@@ -1441,7 +1441,7 @@ Responde de forma útil y específica para el rol del usuario.`;
     const response = await axios.post(
       "https://openrouter.ai/api/v1/chat/completions",
       {
-        model: "mistralai/mixtral-8x7b-instruct",
+        model: "mistralai/mistral-7b-instruct",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: pregunta },
