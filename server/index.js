@@ -23,6 +23,7 @@ app.use(cors({
   origin: [
     "https://universidadsigloxxi.com",
     "https://www.universidadsigloxxi.com",
+    "https://api.universidadsigloxxi.com",
     "http://localhost:3000",
     "http://localhost:3001",
   ],
@@ -1438,31 +1439,81 @@ apiRouter.post("/ai/ask", async (req, res) => {
 
 Responde de forma útil y específica para el rol del usuario.`;
 
-    const response = await axios.post(
-      "https://openrouter.ai/api/v1/chat/completions",
-      {
-        model: "mistralai/mistral-7b-instruct",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: pregunta },
-        ],
-        max_tokens: 1024,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-          "HTTP-Referer": "https://universidadsigloxxi.com",
-          "X-Title": "Plataforma Siglo XXI",
-        },
-      },
-    );
+    const MODELOS_GRATIS = [
+      "nvidia/nemotron-3-super-120b-a12b:free",
+      "google/gemma-4-31b-it:free",
+      "openrouter/free",
+    ];
 
-    const respuesta =
-      response.data?.choices?.[0]?.message?.content ||
-      "Lo siento, no pude generar una respuesta. Intenta de nuevo.";
+    const headers = {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+      "HTTP-Referer": "https://universidadsigloxxi.com",
+      "X-Title": "Plataforma Siglo XXI",
+    };
 
-    res.json({ respuesta });
+    const mensajes = [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: pregunta },
+    ];
+
+    let respuesta = null;
+    let ultimoError = null;
+
+    for (const modelo of MODELOS_GRATIS) {
+      const reintentos = modelo.includes("gemma-4-31b") ? 2 : 1;
+      for (let intento = 1; intento <= reintentos; intento++) {
+        try {
+          const response = await axios.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            { model: modelo, messages: mensajes, max_tokens: 1024 },
+            { headers },
+          );
+
+          const contenido = response.data?.choices?.[0]?.message?.content;
+          if (contenido) {
+            respuesta = contenido;
+            break;
+          }
+        } catch (err) {
+          const status = err.response?.status;
+          const body = err.response?.data;
+          ultimoError = { modelo, status, body };
+
+          console.error(
+            `Asistente IA: modelo "${modelo}" falló (intento ${intento}):`,
+            body || err.message,
+          );
+
+          if (status === 429 && intento < reintentos) {
+            await new Promise((resolve) => setTimeout(resolve, 2000));
+            continue;
+          }
+
+          if (status === 429) {
+            break;
+          }
+        }
+      }
+      if (respuesta) break;
+    }
+
+    if (respuesta) {
+      return res.json({ respuesta });
+    }
+
+    if (ultimoError?.status === 429) {
+      return res.status(503).json({
+        message:
+          "El asistente IA está saturado en este momento. Intenta de nuevo en unos segundos.",
+      });
+    }
+
+    console.error("Error en asistente IA:", ultimoError || "Sin respuesta útil");
+    res.status(500).json({
+      message: "Error al procesar la consulta. Intenta de nuevo.",
+      error: ultimoError?.body?.error?.message || "Sin respuesta del modelo",
+    });
   } catch (error) {
     console.error("Error en asistente IA:", error.response?.data || error.message);
     res.status(500).json({
