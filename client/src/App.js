@@ -8173,7 +8173,7 @@ const { data } = await api.get(`/admin/alumnos/${id}/finanzas`);
       currency: "MXN",
     }).format(amount);
 
-  const formatDate = (dateString) => {
+const formatDate = (dateString) => {
     if (!dateString || dateString.startsWith("0000-")) return "N/A";
     const parts = dateString.split("T")[0].split("-");
     if (parts.length !== 3) return "Fecha Inválida";
@@ -8181,6 +8181,10 @@ const { data } = await api.get(`/admin/alumnos/${id}/finanzas`);
     if (isNaN(date.getTime())) return "Fecha Inválida";
     return date.toLocaleDateString("es-MX");
   };
+
+  const totalPendiente = movimientos
+    .filter((m) => String(m.estatus_pago).toLowerCase() !== "pagado")
+    .reduce((acc, m) => acc + (Number(m.monto_a_pagar) || 0), 0);
 
   if (loading)
     return (
@@ -8220,13 +8224,41 @@ const { data } = await api.get(`/admin/alumnos/${id}/finanzas`);
         </button>
       </div>
 
-      <div className="bg-white p-6 rounded-lg shadow border border-gray-100">
-        <div className="flex justify-between items-center mb-4 border-b pb-4">
-          <h3 className="text-xl font-bold text-gray-800">
-            Historial de Cuenta
-          </h3>
+{movimientos.length === 0 ? (
+        <div className="bg-white p-8 rounded-lg shadow border border-green-200">
+          <div className="flex items-center gap-4 pb-4 mb-6 border-b border-green-100">
+            <div className="p-3 bg-green-100 text-green-700 rounded-xl">
+              <CheckCircle size={24} />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-gray-800">Al corriente</h3>
+              <p className="text-sm text-gray-500">Sin adeudos pendientes.</p>
+            </div>
+          </div>
+          <div className="flex items-center justify-between gap-6 flex-wrap">
+            <div>
+              <p className="text-xs font-bold uppercase text-gray-400">
+                Saldo pendiente
+              </p>
+              <p className="text-3xl font-bold text-green-600">
+                {formatMoney(0)}
+              </p>
+            </div>
+            <p className="text-gray-400 text-sm">
+              Usa el botón{" "}
+              <span className="font-bold text-gray-600">Nuevo Cargo</span> para
+              registrar un adeudo cuando sea necesario.
+            </p>
+          </div>
         </div>
-        <table className="w-full table-auto text-sm">
+      ) : (
+        <div className="bg-white p-6 rounded-lg shadow border border-gray-100">
+          <div className="flex justify-between items-center mb-4 border-b pb-4">
+            <h3 className="text-xl font-bold text-gray-800">
+              Historial de Cuenta
+            </h3>
+          </div>
+          <table className="w-full table-auto text-sm">
           <thead className="text-left bg-gray-50">
             <tr>
               <th className="px-4 py-3 text-gray-600 font-bold uppercase">
@@ -8301,19 +8333,17 @@ const { data } = await api.get(`/admin/alumnos/${id}/finanzas`);
                 </td>
               </tr>
             ))}
-            {movimientos.length === 0 && (
-              <tr>
-                <td
-                  colSpan="5"
-                  className="text-center text-gray-500 py-10 italic"
-                >
-                  Este alumno no tiene adeudos registrados.
-                </td>
-              </tr>
-            )}
+<tr className="bg-gray-50 font-bold border-t border-gray-200">
+              <td className="px-4 py-4 text-gray-800">Total pendiente</td>
+              <td className="px-4 py-4 text-gray-800">
+                {formatMoney(totalPendiente)}
+              </td>
+              <td colSpan="3" />
+            </tr>
           </tbody>
         </table>
-      </div>
+        </div>
+      )}
 
       {cargoModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">

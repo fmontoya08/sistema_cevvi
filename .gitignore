@@ -11,3 +11,8 @@ CREDENCIALES-VPS.html
 server/scripts/*.json
 server/scripts/*.xlsx
 PAGOS PSICOLOGIA*.xlsx
+build_plataforma.zip
+
+# Carpetas sueltas / temporales
+Nueva carpeta/
+client/build_log.txt
