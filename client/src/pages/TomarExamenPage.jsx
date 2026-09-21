@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
+import API_URL from "../config";
 import {
   Clock,
   Send,
@@ -36,7 +37,7 @@ const TomarExamenPage = () => {
       try {
         const token = localStorage.getItem("token");
         const res = await axios.get(
-          `https://api-universidad-c5o8.onrender.com/api/examenes/${examenId}/resolver`,
+          `${API_URL}/api/examenes/${examenId}/resolver`,
           { headers: { Authorization: `Bearer ${token}` } },
         );
         setExamen(res.data.examen);
@@ -86,7 +87,7 @@ const TomarExamenPage = () => {
       try {
         const token = localStorage.getItem("token");
         await axios.post(
-          `https://api-universidad-c5o8.onrender.com/api/examenes/${examenId}/entregar`,
+          `${API_URL}/api/examenes/${examenId}/entregar`,
           { respuestas: respuestasFormateadas },
           { headers: { Authorization: `Bearer ${token}` } },
         );

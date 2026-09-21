@@ -5,6 +5,7 @@ import {
   Paperclip, FileText, Download, Plus, Loader, PenTool, Lock,
   Reply, Eye, EyeOff, AlertTriangle, CheckCircle
 } from "lucide-react";
+import API_BASE from "../config";
 
 const getInitials = (name) => {
   if (!name) return "?";
@@ -52,7 +53,7 @@ const CorreoPage = () => {
 
   const token = localStorage.getItem("token");
   const authHeaders = { headers: { Authorization: `Bearer ${token}` } };
-  const API_URL = "https://api-universidad-c5o8.onrender.com/api/email";
+  const API_URL = `${API_BASE}/api/email`;
 
   useEffect(() => {
     setError(null);

@@ -485,7 +485,7 @@ const AulaVirtualPage = () => {
           const Icono = isEnlace ? LinkIcon : Paperclip;
           const url = isEnlace
             ? recurso.ruta_o_url
-            : `http://localhost:3001/uploads/recursos/${recurso.ruta_o_url}`;
+            : `${API_URL}/uploads/recursos/${recurso.ruta_o_url}`;
           return (
             <div
               key={recurso.id}

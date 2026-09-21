@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import * as XLSX from "xlsx";
 import axios from "axios";
+import API_URL from "../config";
 import {
   Folder,
   FileText,
@@ -34,7 +35,7 @@ const ExcelEditorModal = ({ archivo, onClose, onSave }) => {
     const leerArchivo = async () => {
       try {
         const response = await axios.get(
-          `https://api-universidad-c5o8.onrender.com${archivo.url}`,
+          `${API_URL}${archivo.url}`,
           { responseType: "arraybuffer" },
         );
         const workbook = XLSX.read(response.data, { type: "array" });
@@ -255,7 +256,7 @@ const MiDrivePage = () => {
       const token = localStorage.getItem("token");
       // Enviamos el ownerActual en la URL
       const res = await axios.get(
-        `https://api-universidad-c5o8.onrender.com/api/drive/list?ruta=${rutaActual}&ownerId=${ownerActual || ""}`,
+        `${API_URL}/api/drive/list?ruta=${rutaActual}&ownerId=${ownerActual || ""}`,
         {
           headers: { Authorization: `Bearer ${token}` },
         },
@@ -280,7 +281,7 @@ const MiDrivePage = () => {
     try {
       const token = localStorage.getItem("token");
       await axios.post(
-        "https://api-universidad-c5o8.onrender.com/api/drive/folder",
+        `${API_URL}/api/drive/folder`,
         { nombre, rutaActual },
         { headers: { Authorization: `Bearer ${token}` } },
       );
@@ -305,7 +306,7 @@ const MiDrivePage = () => {
     try {
       const token = localStorage.getItem("token");
       await axios.post(
-        "https://api-universidad-c5o8.onrender.com/api/drive/upload",
+        `${API_URL}/api/drive/upload`,
         formData,
         {
           headers: {
@@ -350,7 +351,7 @@ const MiDrivePage = () => {
         ["pdf", "jpg", "jpeg", "png", "gif", "txt"].includes(extension)
       ) {
         window.open(
-          `https://api-universidad-c5o8.onrender.com${item.url}`,
+          `${API_URL}${item.url}`,
           "_blank",
         );
       }
@@ -381,7 +382,7 @@ const MiDrivePage = () => {
     try {
       const token = localStorage.getItem("token");
       await axios.post(
-        "https://api-universidad-c5o8.onrender.com/api/drive/upload",
+        `${API_URL}/api/drive/upload`,
         formData,
         {
           headers: {
@@ -403,7 +404,7 @@ const MiDrivePage = () => {
   const handleDescargar = async (item) => {
     try {
       const response = await axios.get(
-        `https://api-universidad-c5o8.onrender.com${item.url}`,
+        `${API_URL}${item.url}`,
         {
           responseType: "blob", // Importante: recibir como archivo binario
         },
@@ -431,7 +432,7 @@ const MiDrivePage = () => {
     try {
       const token = localStorage.getItem("token");
       await axios.delete(
-        `https://api-universidad-c5o8.onrender.com/api/drive/item?ruta=${ruta}&tipo=${tipo}`,
+        `${API_URL}/api/drive/item?ruta=${ruta}&tipo=${tipo}`,
         {
           headers: { Authorization: `Bearer ${token}` },
         },
@@ -456,7 +457,7 @@ const MiDrivePage = () => {
     try {
       const token = localStorage.getItem("token");
       const res = await axios.get(
-        `https://api-universidad-c5o8.onrender.com/api/drive/compartidos?ruta=${item.ruta}&tipo=${item.tipo}`,
+        `${API_URL}/api/drive/compartidos?ruta=${item.ruta}&tipo=${item.tipo}`,
         {
           headers: { Authorization: `Bearer ${token}` },
         },
@@ -470,7 +471,7 @@ const MiDrivePage = () => {
     try {
       const token = localStorage.getItem("token");
       const res = await axios.get(
-        `https://api-universidad-c5o8.onrender.com/api/drive/enlace-publico?ruta=${item.ruta}&tipo=${item.tipo}`,
+        `${API_URL}/api/drive/enlace-publico?ruta=${item.ruta}&tipo=${item.tipo}`,
         {
           headers: { Authorization: `Bearer ${token}` },
         },
@@ -495,7 +496,7 @@ const MiDrivePage = () => {
     try {
       const token = localStorage.getItem("token");
       const res = await axios.get(
-        `https://api-universidad-c5o8.onrender.com/api/drive/buscar-usuarios?q=${query}`,
+        `${API_URL}/api/drive/buscar-usuarios?q=${query}`,
         {
           headers: { Authorization: `Bearer ${token}` },
         },
@@ -514,7 +515,7 @@ const MiDrivePage = () => {
     try {
       const token = localStorage.getItem("token");
       await axios.post(
-        "https://api-universidad-c5o8.onrender.com/api/drive/compartir",
+        `${API_URL}/api/drive/compartir`,
         {
           ruta: itemSeleccionado.ruta,
           tipo: itemSeleccionado.tipo,
@@ -528,7 +529,7 @@ const MiDrivePage = () => {
 
       // Recargar lista de compartidos
       const res = await axios.get(
-        `https://api-universidad-c5o8.onrender.com/api/drive/compartidos?ruta=${itemSeleccionado.ruta}&tipo=${itemSeleccionado.tipo}`,
+        `${API_URL}/api/drive/compartidos?ruta=${itemSeleccionado.ruta}&tipo=${itemSeleccionado.tipo}`,
         {
           headers: { Authorization: `Bearer ${token}` },
         },
@@ -548,7 +549,7 @@ const MiDrivePage = () => {
     try {
       const token = localStorage.getItem("token");
       await axios.delete(
-        `https://api-universidad-c5o8.onrender.com/api/drive/compartir/${compartidoId}`,
+        `${API_URL}/api/drive/compartir/${compartidoId}`,
         {
           headers: { Authorization: `Bearer ${token}` },
         },
@@ -568,7 +569,7 @@ const MiDrivePage = () => {
     try {
       const token = localStorage.getItem("token");
       await axios.put(
-        `https://api-universidad-c5o8.onrender.com/api/drive/compartir/${compartidoId}`,
+        `${API_URL}/api/drive/compartir/${compartidoId}`,
         { permiso: nuevoPermiso },
         {
           headers: { Authorization: `Bearer ${token}` },
@@ -593,7 +594,7 @@ const MiDrivePage = () => {
     try {
       const token = localStorage.getItem("token");
       const res = await axios.post(
-        "https://api-universidad-c5o8.onrender.com/api/drive/enlace-publico",
+        `${API_URL}/api/drive/enlace-publico`,
         {
           ruta: itemSeleccionado.ruta,
           tipo: itemSeleccionado.tipo,
@@ -624,7 +625,7 @@ const MiDrivePage = () => {
     try {
       const token = localStorage.getItem("token");
       await axios.delete(
-        `https://api-universidad-c5o8.onrender.com/api/drive/enlace-publico?ruta=${itemSeleccionado.ruta}&tipo=${itemSeleccionado.tipo}`,
+        `${API_URL}/api/drive/enlace-publico?ruta=${itemSeleccionado.ruta}&tipo=${itemSeleccionado.tipo}`,
         {
           headers: { Authorization: `Bearer ${token}` },
         },
@@ -768,7 +769,7 @@ const MiDrivePage = () => {
                         />
                       ) : item.nombre.match(/\.(jpg|png|jpeg)$/i) ? (
                         <img
-                          src={`https://api-universidad-c5o8.onrender.com${item.url}`}
+                          src={`${API_URL}${item.url}`}
                           className="w-full h-full object-cover rounded shadow-sm"
                           alt={item.nombre}
                         />
@@ -827,7 +828,7 @@ const MiDrivePage = () => {
                         onClick={(e) => {
                           e.stopPropagation();
                           window.open(
-                            `https://api-universidad-c5o8.onrender.com${item.url}`,
+                            `${API_URL}${item.url}`,
                             "_blank",
                           );
                         }}

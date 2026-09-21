@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useContext } from "react";
 import { useParams } from "react-router-dom";
 import axios from "axios";
+import API_URL from "../config";
 import { AuthContext } from "../App"; // Importamos el contexto
 import { Send, Trash2, MessageSquare, Info } from "lucide-react";
 
@@ -13,7 +14,7 @@ const MuroDocentePage = () => {
 
   // Configuración de API local
   const api = axios.create({
-    baseURL: "https://api-universidad-c5o8.onrender.com/api",
+    baseURL: `${API_URL}/api`,
     headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
   });
 
@@ -113,7 +114,7 @@ const MuroDocentePage = () => {
               <div className="shrink-0">
                 {post.foto_perfil ? (
                   <img
-                    src={`https://api-universidad-c5o8.onrender.com/uploads/perfiles/${post.foto_perfil}`}
+                    src={`${API_URL}/uploads/perfiles/${post.foto_perfil}`}
                     alt="Avatar"
                     className="w-12 h-12 rounded-full object-cover border border-gray-200"
                   />

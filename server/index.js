@@ -2757,7 +2757,7 @@ adminRouter.post("/email/institucionales/:id/restablecer-password", async (req, 
 
 adminRouter.get("/alumnos/:id/finanzas", async (req, res) => {
   try {
-    const [rows] = await db.query(
+    const [movimientos] = await db.query(
       `
       SELECT 
         a.id,
@@ -2775,7 +2775,17 @@ adminRouter.get("/alumnos/:id/finanzas", async (req, res) => {
     `,
       [req.params.id],
     );
-    res.json(rows);
+
+    const [[alumno]] = await db.query(
+      "SELECT id, nombre, apellido_paterno, apellido_materno, matricula, email FROM usuarios WHERE id = ? AND rol = 'alumno'",
+      [req.params.id],
+    );
+
+    if (!alumno) {
+      return res.status(404).send({ message: "Alumno no encontrado" });
+    }
+
+    res.json({ alumno, movimientos });
   } catch (error) {
     res.status(500).send({ message: "Error al cargar finanzas" });
   }

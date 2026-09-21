@@ -2,9 +2,9 @@ import React, { useState, useEffect } from "react"; // <--- IMPORTANTE: Agregamo
 import axios from "axios";
 import { UserPlus, CheckCircle, AlertTriangle, Mail } from "lucide-react";
 import { Link } from "react-router-dom";
+import API_URL from "../config";
 
 const RegistroPage = () => {
-  const API_URL = "https://api-universidad-c5o8.onrender.com";
 
   // Estado para guardar las listas que vienen de la BD
   const [catalogos, setCatalogos] = useState({

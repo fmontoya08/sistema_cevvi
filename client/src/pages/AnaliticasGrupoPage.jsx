@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
+import API_URL from "../config";
 import {
   FileText,
   CheckCircle,
@@ -36,7 +37,7 @@ const AnaliticasGrupoPage = () => {
     if (!data) setLoading(true);
     try {
       const res = await axios.get(
-        `https://api-universidad-c5o8.onrender.com/api/analiticas/${grupoId}/${asignaturaId}`,
+        `${API_URL}/api/analiticas/${grupoId}/${asignaturaId}`,
         authHeaders,
       );
       setData(res.data);
@@ -68,7 +69,7 @@ const AnaliticasGrupoPage = () => {
     setIsSavingCell(true);
     try {
       await axios.post(
-        "https://api-universidad-c5o8.onrender.com/api/docente/calificar-criterio-manual",
+        `${API_URL}/api/docente/calificar-criterio-manual`,
         {
           criterio_id: criterioId,
           calificaciones: [{ alumno_id: alumnoId, nota: val }],
@@ -317,7 +318,7 @@ const AnaliticasGrupoPage = () => {
                           className="h-10 w-10 rounded-full object-cover border border-gray-200"
                           src={
                             alumno.foto_perfil
-                              ? `https://api-universidad-c5o8.onrender.com/uploads/perfiles/${alumno.foto_perfil}`
+                              ? `${API_URL}/uploads/perfiles/${alumno.foto_perfil}`
                               : `https://ui-avatars.com/api/?name=${alumno.nombre}&background=random`
                           }
                           alt=""

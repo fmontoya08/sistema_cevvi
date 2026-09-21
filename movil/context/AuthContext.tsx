@@ -15,7 +15,7 @@ import { Platform } from "react-native";
 
 // --- IP DEL SERVIDOR (Configurable via variable de entorno) ---
 // En desarrollo local, cambiar a tu IP local: "http://192.168.x.x:3001/api"
-const API_URL = process.env.EXPO_PUBLIC_API_URL || "https://api-universidad-c5o8.onrender.com/api";
+const API_URL = process.env.EXPO_PUBLIC_API_URL || "https://api.universidadsigloxxi.com/api";
 
 const api = axios.create({
   baseURL: API_URL,

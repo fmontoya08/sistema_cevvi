@@ -1,9 +1,13 @@
 // client/src/config.js
+// ============================================
+// Produccion: VPS Teramont
+// Local: node index.js en /server
+// ============================================
 
 const isLocal = window.location.hostname === "localhost";
 
 const API_URL = isLocal
-  ? "http://localhost:3001" // Si estás en tu PC
-  : "https://api-universidad-c5o8.onrender.com"; // Si estás en Internet
+  ? "http://localhost:3001"
+  : "https://api.universidadsigloxxi.com";
 
 export default API_URL;

@@ -40,6 +40,7 @@ import {
   useParams,
 } from "react-router-dom";
 import axios from "axios";
+import API_URL from "./config";
 import {
   Home,
   Book,
@@ -154,10 +155,8 @@ const BRAND = {
 };
 
 // --- CONFIGURACIÓN DE AXIOS ---
-const API_BASE_URL = "https://api-universidad-c5o8.onrender.com";
-
 const api = axios.create({
-  baseURL: `${API_BASE_URL}/api`,
+  baseURL: `${API_URL}/api`,
 });
 
 api.interceptors.request.use(
@@ -943,7 +942,7 @@ const AdminLayout = () => {
               <div className="w-10 h-10 rounded-full bg-gray-100 border border-gray-200 overflow-hidden group-hover:border-[#a72a34] transition-colors">
                 {user?.foto_perfil ? (
                   <img
-                    src={`${API_BASE_URL}/uploads/perfiles/${user.foto_perfil}`}
+                    src={`${API_URL}/uploads/perfiles/${user.foto_perfil}`}
                     className="w-full h-full object-cover"
                     alt="Perfil"
                   />
@@ -1127,7 +1126,7 @@ const DocenteLayout = () => {
               <div className="w-10 h-10 rounded-full bg-gray-100 border border-gray-200 overflow-hidden group-hover:border-[#a72a34] transition-colors">
                 {user?.foto_perfil ? (
                   <img
-                    src={`${API_BASE_URL}/uploads/perfiles/${user.foto_perfil}`}
+                    src={`${API_URL}/uploads/perfiles/${user.foto_perfil}`}
                     className="w-full h-full object-cover"
                     alt="Perfil"
                   />
@@ -1326,7 +1325,7 @@ const AlumnoLayout = () => {
               <div className="w-10 h-10 rounded-full bg-gray-100 border border-gray-200 overflow-hidden group-hover:border-[#a72a34] transition-colors">
                 {user?.foto_perfil ? (
                   <img
-                    src={`${API_BASE_URL}/uploads/perfiles/${user.foto_perfil}`}
+                    src={`${API_URL}/uploads/perfiles/${user.foto_perfil}`}
                     className="w-full h-full object-cover"
                     alt="Perfil"
                   />
@@ -1517,7 +1516,7 @@ const BibliotecaPage = () => {
               </div>
               <div className="mt-4 pt-4 border-t border-gray-50">
                 <a
-                  href={`${API_BASE_URL}/uploads/biblioteca/${a.ruta_archivo}`}
+                  href={`${API_URL}/uploads/biblioteca/${a.ruta_archivo}`}
                   target="_blank"
                   rel="noreferrer"
                   className="w-full bg-blue-50 text-blue-700 py-2 rounded-lg font-bold flex items-center justify-center gap-2 hover:bg-blue-100 transition-colors"
@@ -1706,7 +1705,7 @@ const AspiranteLayout = () => {
               <div className='w-10 h-10 rounded-full bg-gray-100 border border-gray-200 overflow-hidden group-hover:border-[#a72a34] transition-colors'>
                 {user?.foto_perfil ? (
                   <img
-                    src={`${API_BASE_URL}/uploads/perfiles/${user.foto_perfil}`}
+                    src={`${API_URL}/uploads/perfiles/${user.foto_perfil}`}
                     className='w-full h-full object-cover'
                     alt='Perfil'
                   />
@@ -2257,7 +2256,7 @@ const UserModal = ({
             <div className="w-20 h-20 rounded-full border-2 border-gray-300 overflow-hidden bg-white shrink-0">
               {userToEdit?.foto_perfil ? (
                 <img
-                  src={`${API_BASE_URL}/uploads/perfiles/${userToEdit.foto_perfil}`}
+                  src={`${API_URL}/uploads/perfiles/${userToEdit.foto_perfil}`}
                   className="w-full h-full object-cover"
                   alt="Foto de perfil"
                 />
@@ -2899,7 +2898,7 @@ const UsuariosPage = () => {
                       <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center font-bold overflow-hidden border">
                         {u.foto_perfil ? (
                           <img
-                            src={`${API_BASE_URL}/uploads/perfiles/${u.foto_perfil}`}
+                            src={`${API_URL}/uploads/perfiles/${u.foto_perfil}`}
                             className="w-full h-full object-cover"
                             alt="Foto de perfil"
                           />
@@ -3502,7 +3501,7 @@ const UserDetailModal = ({ user, onClose }) => {
             <div className="w-24 h-24 bg-white rounded-full border-4 border-white/30 flex items-center justify-center text-4xl font-bold text-[#a72a34] shadow-lg overflow-hidden shrink-0">
               {user.foto_perfil ? (
                 <img
-                  src={`${API_BASE_URL}/uploads/perfiles/${user.foto_perfil}`}
+                  src={`${API_URL}/uploads/perfiles/${user.foto_perfil}`}
                   className="w-full h-full object-cover"
                   alt="Perfil"
                 />
@@ -8066,13 +8065,15 @@ const DetalleFinanzasAlumnoPage = () => {
   // Cargar datos
   const fetchData = useCallback(async () => {
     try {
-      const { data } = await api.get(`/admin/alumnos/${id}/finanzas`);
-      setMovimientos(data);
-      if (data.length > 0) {
+const { data } = await api.get(`/admin/alumnos/${id}/finanzas`);
+      setMovimientos(data.movimientos || []);
+      if (data.alumno) {
         setAlumno({
-          nombre: `${data[0].nombre} ${data[0].apellido_paterno} ${data[0].apellido_materno || ""}`,
-          matricula: data[0].matricula,
+          nombre: `${data.alumno.nombre} ${data.alumno.apellido_paterno} ${data.alumno.apellido_materno || ""}`,
+          matricula: data.alumno.matricula,
         });
+      } else {
+        setAlumno(null);
       }
       const resConceptos = await api.get("/admin/conceptos_pago");
       setConceptos(resConceptos.data);
@@ -9586,7 +9587,7 @@ const DocenteDashboardPage = () => {
         <div className="w-24 h-24 rounded-full border-4 border-white/20 overflow-hidden bg-white/10 shrink-0 z-10 flex items-center justify-center text-3xl font-bold">
           {user?.foto_perfil ? (
             <img
-              src={`${API_BASE_URL}/uploads/perfiles/${user.foto_perfil}`}
+              src={`${API_URL}/uploads/perfiles/${user.foto_perfil}`}
               className="w-full h-full object-cover"
               alt="Perfil"
             />
@@ -9794,7 +9795,7 @@ const DetalleCursoDocentePage = () => {
 
       // 1. Obtener Analíticas (Promedios calculados)
       const { data: dataAnaliticas } = await axios.get(
-        `${API_BASE_URL}/api/analiticas/${grupoId}/${asignaturaId}`,
+        `${API_URL}/api/analiticas/${grupoId}/${asignaturaId}`,
         { headers: { Authorization: `Bearer ${token}` } },
       );
 
@@ -9815,7 +9816,7 @@ const DetalleCursoDocentePage = () => {
 
       // 2. Obtener Lista de Alumnos (para ver si ya hay calificación guardada)
       const { data: dataCurso } = await axios.get(
-        `${API_BASE_URL}/api/docente/v2/grupo/${grupoId}/asignatura/${asignaturaId}/alumnos`,
+        `${API_URL}/api/docente/v2/grupo/${grupoId}/asignatura/${asignaturaId}/alumnos`,
         { headers: { Authorization: `Bearer ${token}` } },
       );
 
@@ -9998,7 +9999,7 @@ const DetalleCursoDocentePage = () => {
                           className="h-10 w-10 rounded-full object-cover border border-gray-200"
                           src={
                             alumno.foto_perfil
-                              ? `${API_BASE_URL}/uploads/perfiles/${alumno.foto_perfil}`
+                              ? `${API_URL}/uploads/perfiles/${alumno.foto_perfil}`
                               : `https://ui-avatars.com/api/?name=${alumno.nombre}&background=random&color=fff`
                           }
                           alt=""
@@ -10273,7 +10274,7 @@ const AlumnoDashboardPage = () => {
         <div className="w-24 h-24 rounded-full border-4 border-white/20 overflow-hidden bg-white/10 shrink-0 z-10 flex items-center justify-center text-3xl font-bold">
           {user?.foto_perfil ? (
             <img
-              src={`${API_BASE_URL}/uploads/perfiles/${user.foto_perfil}`}
+              src={`${API_URL}/uploads/perfiles/${user.foto_perfil}`}
               className="w-full h-full object-cover"
               alt="Perfil"
             />
@@ -10567,7 +10568,7 @@ const DetalleAspirantePage = () => {
                 </td>
                 <td className="px-4 py-2">
                   <a
-                    href={`${API_BASE_URL}/uploads/${doc.ruta_archivo}`}
+                    href={`${API_URL}/uploads/${doc.ruta_archivo}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center text-blue-600 hover:underline"
@@ -10754,7 +10755,7 @@ const AspiranteDashboardPage = () => {
                 </td>
                 <td className="px-4 py-2">
                   <a
-                    href={`${API_BASE_URL}/uploads/${doc.ruta_archivo}`}
+                    href={`${API_URL}/uploads/${doc.ruta_archivo}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center text-blue-600 hover:underline"
@@ -10956,7 +10957,7 @@ const RevisionAspirantesPage = () => {
                         <div className="flex items-center gap-3">
                           <img
                             src={a.foto_perfil
-                              ? `${API_BASE_URL}/uploads/perfiles/${a.foto_perfil}`
+                              ? `${API_URL}/uploads/perfiles/${a.foto_perfil}`
                               : "https://ui-avatars.com/api/?name=" + encodeURIComponent(a.nombre) + "+" + encodeURIComponent(a.apellido_paterno || "") + "&background=random&color=fff"
                             }
                             alt=""
@@ -11046,13 +11047,13 @@ const RevisionAspirantesPage = () => {
                       <div className="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden max-h-48">
                         {/\.(jpg|jpeg|png|gif|webp)$/i.test(doc.ruta_archivo) ? (
                           <img
-                            src={`${API_BASE_URL}/uploads/${doc.ruta_archivo}`}
+                            src={`${API_URL}/uploads/${doc.ruta_archivo}`}
                             alt={doc.nombre_original}
                             className="w-full h-48 object-contain bg-white"
                           />
                         ) : /\.pdf$/i.test(doc.ruta_archivo) ? (
                           <iframe
-                            src={`${API_BASE_URL}/uploads/${doc.ruta_archivo}#toolbar=0`}
+                            src={`${API_URL}/uploads/${doc.ruta_archivo}#toolbar=0`}
                             className="w-full h-48 bg-white"
                             title={doc.nombre_original}
                           />
@@ -11067,7 +11068,7 @@ const RevisionAspirantesPage = () => {
                         <span className="text-sm text-gray-600 truncate">{doc.nombre_original}</span>
                         <div className="flex gap-2 shrink-0">
                           <a
-                            href={`${API_BASE_URL}/uploads/${doc.ruta_archivo}`}
+                            href={`${API_URL}/uploads/${doc.ruta_archivo}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="flex items-center gap-1.5 text-sm font-medium text-gray-600 hover:text-gray-800 bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg transition-colors"
@@ -11075,7 +11076,7 @@ const RevisionAspirantesPage = () => {
                             <Eye size={14} /> Ver
                           </a>
                           <a
-                            href={`${API_BASE_URL}/uploads/${doc.ruta_archivo}`}
+                            href={`${API_URL}/uploads/${doc.ruta_archivo}`}
                             download
                             className="flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-colors"
                           >
@@ -11892,7 +11893,7 @@ const AulaVirtualPage = () => {
           const Icono = isEnlace ? LinkIcon : Paperclip;
           const url = isEnlace
             ? recurso.ruta_o_url
-            : `${API_BASE_URL}/uploads/recursos/${recurso.ruta_o_url}`;
+            : `${API_URL}/uploads/recursos/${recurso.ruta_o_url}`;
           return (
             <div
               key={recurso.id}
@@ -13273,7 +13274,7 @@ const CalificarEntregaModal = ({
         <div className="bg-gray-50 p-4 rounded-md my-4 border">
           <h4 className="font-semibold text-gray-700">Archivo del Alumno</h4>
           <a
-            href={`${API_BASE_URL}/uploads/tareas/tarea_${entrega.tarea_id}/${entrega.ruta_archivo}`}
+            href={`${API_URL}/uploads/tareas/tarea_${entrega.tarea_id}/${entrega.ruta_archivo}`}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center text-blue-600 hover:underline my-2"
@@ -13898,7 +13899,7 @@ const DetalleGrabacionDocente = () => {
     setSelectedAlumnos(prev => prev.includes(alumnoId) ? prev.filter(id => id !== alumnoId) : [...prev, alumnoId]);
   };
 
-  const videoUrl = grabacion ? `${API_BASE_URL}/uploads/grabaciones/${grabacion.nombre_archivo}` : "";
+  const videoUrl = grabacion ? `${API_URL}/uploads/grabaciones/${grabacion.nombre_archivo}` : "";
 
   if (loading) return <div className="p-8 flex items-center gap-2"><Loader className="animate-spin" /> Cargando...</div>;
   if (!grabacion) return <div className="p-8 text-red-500">Grabación no encontrada.</div>;
@@ -14144,7 +14145,7 @@ const VerGrabacionAlumno = () => {
     finally { setIsPosting(false); }
   };
 
-  const videoUrl = grabacion ? `${API_BASE_URL}/uploads/grabaciones/${grabacion.nombre_archivo}` : "";
+  const videoUrl = grabacion ? `${API_URL}/uploads/grabaciones/${grabacion.nombre_archivo}` : "";
 
   if (loading) return <div className="p-8 flex items-center gap-2"><Loader className="animate-spin" /> Cargando...</div>;
   if (!grabacion) return null;
@@ -14539,7 +14540,7 @@ const DetalleTareaDocentePage = () => {
                 <td className="px-4 py-2">
                   {entrega.entrega_id ? (
                     <a
-                      href={`${API_BASE_URL}/uploads/tareas/tarea_${tarea.id}/${entrega.ruta_archivo}`}
+                      href={`${API_URL}/uploads/tareas/tarea_${tarea.id}/${entrega.ruta_archivo}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex items-center text-blue-600 hover:underline"
@@ -14854,7 +14855,7 @@ const MiPerfilPage = () => {
             <div className="w-48 h-48 rounded-full p-1 border-4 border-[#bb9a5a] overflow-hidden bg-gray-100 shadow-xl">
               {user?.foto_perfil ? (
                 <img
-                  src={`${API_BASE_URL}/uploads/perfiles/${user.foto_perfil}`}
+                  src={`${API_URL}/uploads/perfiles/${user.foto_perfil}`}
                   className="w-full h-full object-cover"
                   alt="Perfil"
                 />

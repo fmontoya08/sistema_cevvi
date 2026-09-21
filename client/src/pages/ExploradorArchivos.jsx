@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
+import API_URL from "../config";
 
 // Si usas lucide-react para íconos (recomendado):
 import {
@@ -29,7 +30,7 @@ const ExploradorArchivos = () => {
       const token = localStorage.getItem("token");
       // Llamamos a nuestra API nueva
       const res = await axios.get(
-        `https://api-universidad-c5o8.onrender.com/api/admin/archivos/explorar?ruta=${rutaActual}`,
+        `${API_URL}/api/admin/archivos/explorar?ruta=${rutaActual}`,
         {
           headers: { Authorization: `Bearer ${token}` },
         },
@@ -136,7 +137,7 @@ const ExploradorArchivos = () => {
                   } else {
                     // Abrir archivo en nueva pestaña
                     window.open(
-                      `https://api-universidad-c5o8.onrender.com${item.url}`,
+                      `${API_URL}${item.url}`,
                       "_blank",
                     );
                   }
@@ -151,7 +152,7 @@ const ExploradorArchivos = () => {
                     />
                   ) : esImagen(item.nombre) ? (
                     <img
-                      src={`https://api-universidad-c5o8.onrender.com${item.url}`}
+                      src={`${API_URL}${item.url}`}
                       alt="preview"
                       className="w-full h-full object-cover rounded-lg border border-gray-100"
                     />
@@ -173,7 +174,7 @@ const ExploradorArchivos = () => {
                 {/* Botón Descargar (Solo aparece en Hover para archivos) */}
                 {item.tipo === "archivo" && (
                   <a
-                    href={`https://api-universidad-c5o8.onrender.com${item.url}`}
+                    href={`${API_URL}${item.url}`}
                     download
                     onClick={(e) => e.stopPropagation()} // Evita abrir la preview al dar click en descargar
                     className="absolute top-2 right-2 p-1.5 bg-white rounded-full shadow opacity-0 group-hover:opacity-100 transition-opacity text-blue-600 hover:text-blue-800"

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
+import API_URL from "../config";
 import {
   PlusCircle,
   Trash2,
@@ -140,7 +141,7 @@ const CrearExamenPage = () => {
       const token = localStorage.getItem("token");
       // CORRECCIÓN PRINCIPAL: URL sin "/crear"
       await axios.post(
-        `https://api-universidad-c5o8.onrender.com/api/examenes`,
+        `${API_URL}/api/examenes`,
         {
           titulo,
           descripcion,

@@ -1,10 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { X, Send, Trash2, Bot } from "lucide-react";
 import axios from "axios";
-
-const API_BASE_URL = window.location.hostname === "localhost"
-  ? "http://localhost:3001"
-  : "https://api-universidad-c5o8.onrender.com";
+import API_URL from "../config";
 
 const AIChatAssistant = ({ user }) => {
   const [abierto, setAbierto] = useState(false);
@@ -39,7 +36,7 @@ const AIChatAssistant = ({ user }) => {
     try {
       const token = localStorage.getItem("token");
       const res = await axios.post(
-        `${API_BASE_URL}/api/ai/ask`,
+        `${API_URL}/api/ai/ask`,
         {
           pregunta: texto,
           ruta_actual: window.location.pathname,

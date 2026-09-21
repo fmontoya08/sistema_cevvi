@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
+import API_URL from "../config";
 import { ArrowLeft } from "lucide-react";
 
 const RevisarExamenPage = () => {
@@ -35,7 +36,7 @@ const RevisarExamenPage = () => {
     try {
       const token = obtenerToken();
       const res = await axios.get(
-        `https://api-universidad-c5o8.onrender.com/api/intentos/${intentoId}`,
+        `${API_URL}/api/intentos/${intentoId}`,
         {
           headers: { Authorization: `Bearer ${token}` },
         },
@@ -55,7 +56,7 @@ const RevisarExamenPage = () => {
     try {
       const token = obtenerToken();
       await axios.put(
-        `https://api-universidad-c5o8.onrender.com/api/examenes/calificar-pregunta`,
+        `${API_URL}/api/examenes/calificar-pregunta`,
         {
           respuestaId,
           puntosNuevos: puntos,

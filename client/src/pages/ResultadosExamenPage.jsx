@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import axios from "axios";
+import API_URL from "../config";
 import { User, CheckCircle, Clock } from "lucide-react";
 
 const ResultadosExamenPage = () => {
@@ -12,7 +13,7 @@ const ResultadosExamenPage = () => {
       try {
         const token = localStorage.getItem("token");
         const res = await axios.get(
-          `https://api-universidad-c5o8.onrender.com/api/examenes/${examenId}/resultados`,
+          `${API_URL}/api/examenes/${examenId}/resultados`,
           {
             headers: { Authorization: `Bearer ${token}` },
           },

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useContext } from "react";
 import { useParams, Link } from "react-router-dom";
 import axios from "axios";
+import API_URL from "../config";
 import { AuthContext } from "../App";
 import {
   PlusCircle,
@@ -23,7 +24,7 @@ const ExamenesPage = () => {
       try {
         const token = localStorage.getItem("token");
         const res = await axios.get(
-          `https://api-universidad-c5o8.onrender.com/api/examenes/${grupoId}/${asignaturaId}`,
+          `${API_URL}/api/examenes/${grupoId}/${asignaturaId}`,
           {
             headers: { Authorization: `Bearer ${token}` },
           },

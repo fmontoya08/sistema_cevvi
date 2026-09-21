@@ -8,9 +8,9 @@ import {
   Briefcase,
 } from "lucide-react";
 import { Link } from "react-router-dom";
+import API_URL from "../config";
 
 const RegistroDocentePage = () => {
-  const API_URL = "https://api-universidad-c5o8.onrender.com";
 
   const [sedes, setSedes] = useState([]);
   const [form, setForm] = useState({

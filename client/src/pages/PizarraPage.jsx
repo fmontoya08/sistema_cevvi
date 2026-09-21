@@ -4,6 +4,7 @@ import ReactDOM from "react-dom";
 import { Tldraw } from "tldraw";
 import "tldraw/tldraw.css";
 import axios from "axios";
+import API_URL from "../config";
 import { Save, Download, ArrowLeft, Loader } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
@@ -126,7 +127,7 @@ const PizarraPage = () => {
 
       // Ajusta tu URL según corresponda
       await axios.post(
-        "https://api-universidad-c5o8.onrender.com/api/drive/upload",
+        `${API_URL}/api/drive/upload`,
         formData,
         {
           headers: {
