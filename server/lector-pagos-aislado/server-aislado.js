@@ -5,6 +5,7 @@ const cors = require("cors");
 const path = require("path");
 const { leerHoja } = require("./leer");
 const { listarGrupos, detalleHoja, ARCHIVO_DEFAULT } = require("./grupos");
+const { matchHoja } = require("./match");
 
 const app = express();
 app.use(cors());
@@ -43,6 +44,16 @@ app.get("/api/grupos/:hoja", (req, res) => {
   try {
     const limite = Math.min(Number(req.query.limite || 300), 1000);
     const data = detalleHoja(ARCHIVO_DEFAULT, req.params.hoja, limite);
+    res.json({ ok: true, ...data });
+  } catch (e) {
+    res.status(404).json({ ok: false, error: e.message });
+  }
+});
+
+// Match Excel <-> BD con semáforo (solo lectura: SELECT + Excel local)
+app.get("/api/match/:hoja", async (req, res) => {
+  try {
+    const data = await matchHoja(req.params.hoja);
     res.json({ ok: true, ...data });
   } catch (e) {
     res.status(404).json({ ok: false, error: e.message });

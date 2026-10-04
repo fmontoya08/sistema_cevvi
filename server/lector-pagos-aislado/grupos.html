@@ -17,19 +17,33 @@ tr:hover td{background:#f7faff;cursor:pointer}
 .wrap{overflow:auto;max-height:55vh;margin:0 18px 30px;background:#fff;border:1px solid #ddd}
 .wrap table{width:max-content;min-width:100%;margin:0}
 .wrap td{white-space:nowrap;font-size:12px;padding:5px 9px}
+.wrap td.v{background:#e2f5e2}
+.wrap td.a{background:#fff4d6}
+.wrap td.r{background:#fde4e4}
+.dot{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:6px;vertical-align:baseline}
+.dot.v{background:#1a9e1a}.dot.a{background:#d99a00}.dot.r{background:#d33}
+#resumen{margin:0 18px 8px;font-size:14px;font-weight:700}
 h3{margin:14px 18px 6px;font-size:15px}
 #detalleMeta{margin:0 18px 6px;font-size:13px;color:#555}
+.filtros{margin:0 18px 8px;font-size:13px}
+.filtros label{margin-right:12px;cursor:pointer}
 </style>
 </head>
 <body>
-<header><b>Grupos del Excel</b> <small>11 pestañas · solo ver e identificar de qué pestaña son</small></header>
+<header><b>Grupos del Excel vs BD</b> <small>11 pestañas · verde=en su grupo · amarillo=en otro grupo · rojo=falta en BD</small></header>
 <div id="estado">Cargando pestañas...</div>
 <table id="tabla"><thead><tr>
 <th>#</th><th>Pestaña</th><th>Nombre grupo (F1/F2 del Excel)</th>
 <th>Encabezado fila</th><th>Col. nombre</th><th>Alumnos</th><th>Rango</th>
 </tr></thead><tbody></tbody></table>
-<h3 id="tituloDetalle">Selecciona una pestaña para verla tal cual</h3>
+<h3 id="tituloDetalle">Selecciona una pestaña para ver el match con BD</h3>
 <div id="detalleMeta"></div>
+<div id="resumen"></div>
+<div class="filtros" id="filtros" style="display:none">
+<label><input type="checkbox" id="fV" checked> Verdes</label>
+<label><input type="checkbox" id="fA" checked> Amarillos</label>
+<label><input type="checkbox" id="fR" checked> Rojos</label>
+</div>
 <div class="wrap"><table id="detalle"></table></div>
 <script>
 let grupos=[];
@@ -49,18 +63,42 @@ tb.querySelectorAll('tr').forEach(tr=>tr.onclick=()=>verDetalle(Number(tr.datase
 }catch(e){est.textContent='Error de red: '+e.message}
 }
 function esc(s){return String(s??'').replace(/</g,'&lt;')}
+let matchActual=null;
 async function verDetalle(i,tr){
 document.querySelectorAll('#tabla tbody tr').forEach(x=>x.classList.remove('sel'));
 tr.classList.add('sel');
 const g=grupos[i];
-document.getElementById('tituloDetalle').textContent=`Pestaña: ${g.pestana} — ${g.totalAlumnos} alumnos`;
-document.getElementById('detalleMeta').textContent=`De ${esc(g.primerAlumno)} … hasta ${esc(g.ultimoAlumno)}`;
-const det=document.getElementById('detalle');det.innerHTML='<tr><td>Cargando...</td></tr>';
-const r=await fetch(`api/grupos/${encodeURIComponent(g.pestana)}?limite=120`);
+const grupoTxt=g.pestana;
+document.getElementById('tituloDetalle').textContent=`Pestaña: ${grupoTxt} — comparando con BD...`;
+document.getElementById('detalleMeta').textContent='';
+document.getElementById('resumen').textContent='';
+document.getElementById('filtros').style.display='none';
+const det=document.getElementById('detalle');det.innerHTML='<tr><td>Comparando Excel vs BD...</td></tr>';
+try{
+const r=await fetch(`api/match/${encodeURIComponent(grupoTxt)}`);
 const j=await r.json();
 if(!j.ok){det.innerHTML='<tr><td>'+esc(j.error)+'</td></tr>';return}
-det.innerHTML=j.filas.map(f=>`<tr>${f.map(c=>`<td>${esc(c)}</td>`).join('')}</tr>`).join('');
+matchActual=j;
+const gb=j.grupoBD?` → grupo BD: ${esc(j.grupoBD)}`:' (sin grupo en BD: se busca en todos los alumnos)';
+document.getElementById('tituloDetalle').textContent=`Pestaña: ${j.pestana}${gb}`;
+document.getElementById('detalleMeta').textContent=`${j.total} alumnos en Excel`;
+document.getElementById('resumen').innerHTML=
+`<span class="dot v"></span>Verdes: ${j.verdes} &nbsp; <span class="dot a"></span>Amarillos: ${j.amarillos} &nbsp; <span class="dot r"></span>Rojos (faltan): ${j.rojos}`;
+document.getElementById('filtros').style.display='block';
+pintarMatch();
+}catch(e){det.innerHTML='<tr><td>Error: '+esc(e.message)+'</td></tr>'}
 }
+function pintarMatch(){
+const j=matchActual;if(!j)return;
+const mv=document.getElementById('fV').checked,ma=document.getElementById('fA').checked,mr=document.getElementById('fR').checked;
+const filas=j.alumnos.filter(a=>(a.estado==='verde'&&mv)||(a.estado==='amarillo'&&ma)||(a.estado==='rojo'&&mr));
+document.getElementById('detalle').innerHTML=
+`<tr><td><b>#</b></td><td><b>Nombre (Excel)</b></td><td><b>Estado</b></td><td><b>Nombre en BD</b></td><td><b>Matrícula</b></td><td><b>Grupo BD</b></td></tr>`+
+filas.map((a,k)=>`<tr><td>${k+1}</td><td class="${a.estado}">${esc(a.nombreExcel)}</td>`+
+`<td class="${a.estado}">${a.estado==='verde'?'En su grupo':a.estado==='amarillo'?'En otro grupo':'Falta en BD'}</td>`+
+`<td>${esc(a.nombreBD)}</td><td>${esc(a.matricula)}</td><td>${esc(a.grupoBD)}</td></tr>`).join('');
+}
+['fV','fA','fR'].forEach(id=>document.getElementById(id).onchange=pintarMatch);
 init();
 </script>
 </body>

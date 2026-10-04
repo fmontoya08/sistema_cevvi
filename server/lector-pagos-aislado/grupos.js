@@ -39,21 +39,10 @@ function identificarHoja(wb, sheet) {
 
   // Contar alumnos: desde hRow+1, columna nameCol con texto, saltando
   // sub-encabezados y secciones BAJA/FUSIONADOS
-  let totalAlumnos = 0;
-  let primerAlumno = "";
-  let ultimoAlumno = "";
-  if (hRow > -1) {
-    for (let i = hRow + 1; i < rows.length; i++) {
-      const r = rows[i] || [];
-      const nombre = String(r[nameCol] || "").trim();
-      if (!nombre || !/[A-Za-zÁÉÍÓÚÑ]/i.test(nombre)) continue;
-      if (/NOMBRE\s+DEL\s+ALUMNO/i.test(nombre)) continue;
-      if (/^FUSIONADOS/i.test(nombre) || /^\s*BAJAS?\b/i.test(nombre)) continue;
-      totalAlumnos++;
-      if (!primerAlumno) primerAlumno = `${nombre} (fila ${i + 1})`;
-      ultimoAlumno = `${nombre} (fila ${i + 1})`;
-    }
-  }
+  const alumnos = listarNombres(rows, hRow, nameCol);
+  const totalAlumnos = alumnos.length;
+  const primerAlumno = totalAlumnos ? `${alumnos[0].nombre} (fila ${alumnos[0].fila})` : "";
+  const ultimoAlumno = totalAlumnos ? `${alumnos[totalAlumnos - 1].nombre} (fila ${alumnos[totalAlumnos - 1].fila})` : "";
 
   const letraCol = nameCol > -1 ? String.fromCharCode(65 + nameCol) : "-";
   return {
@@ -68,6 +57,38 @@ function identificarHoja(wb, sheet) {
   };
 }
 
+function listarNombres(rows, hRow, nameCol) {
+  const alumnos = [];
+  if (hRow < 0 || nameCol < 0) return alumnos;
+  for (let i = hRow + 1; i < rows.length; i++) {
+    const r = rows[i] || [];
+    const nombre = String(r[nameCol] || "").trim();
+    if (!nombre || !/[A-Za-zÁÉÍÓÚÑ]/i.test(nombre)) continue;
+    if (/NOMBRE\s+DEL\s+ALUMNO/i.test(nombre)) continue;
+    if (/^FUSIONADOS/i.test(nombre) || /^\s*BAJAS?\b/i.test(nombre)) continue;
+    alumnos.push({ nombre, fila: i + 1 });
+  }
+  return alumnos;
+}
+
+function listaAlumnos(archivo, sheet) {
+  const wb = XLSX.readFile(archivo || ARCHIVO_DEFAULT);
+  if (!wb.SheetNames.includes(sheet)) throw new Error(`Hoja inexistente: ${sheet}`);
+  const ws = wb.Sheets[sheet];
+  const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+  let hRow = -1;
+  let nameCol = -1;
+  for (let i = 0; i < Math.min(rows.length, 12); i++) {
+    const idx = (rows[i] || []).findIndex((c) => /NOMBRE\s+DEL\s+ALUMNO/i.test(String(c || "")));
+    if (idx > -1) {
+      hRow = i;
+      nameCol = idx;
+      break;
+    }
+  }
+  return listarNombres(rows, hRow, nameCol);
+}
+
 function detalleHoja(archivo, sheet, limite = 300) {
   const wb = XLSX.readFile(archivo);
   if (!wb.SheetNames.includes(sheet)) throw new Error(`Hoja inexistente: ${sheet}`);
@@ -76,4 +97,4 @@ function detalleHoja(archivo, sheet, limite = 300) {
   return { pestana: sheet, ref: ws["!ref"] || "", totalFilas: filas.length, filas: filas.slice(0, limite) };
 }
 
-module.exports = { listarGrupos, detalleHoja, identificarHoja, ARCHIVO_DEFAULT };
+module.exports = { listarGrupos, detalleHoja, identificarHoja, listaAlumnos, ARCHIVO_DEFAULT };
