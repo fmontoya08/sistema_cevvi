@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Grupos del Excel (pestañas)</title>
+<style>
+body{font-family:system-ui,Arial,sans-serif;margin:0;background:#f4f4f4;color:#222}
+header{background:#1a1a1a;color:#fff;padding:14px 18px}
+header small{color:#bbb}
+#estado{padding:10px 18px;font-size:14px}
+table{border-collapse:collapse;width:calc(100% - 36px);margin:0 18px 10px;background:#fff}
+td,th{border:1px solid #ddd;padding:8px 10px;font-size:13px;text-align:left;vertical-align:top}
+th{background:#fafafa}
+tr:hover td{background:#f7faff;cursor:pointer}
+.sel{background:#e8f0ff !important}
+.wrap{overflow:auto;max-height:55vh;margin:0 18px 30px;background:#fff;border:1px solid #ddd}
+.wrap table{width:max-content;min-width:100%;margin:0}
+.wrap td{white-space:nowrap;font-size:12px;padding:5px 9px}
+h3{margin:14px 18px 6px;font-size:15px}
+#detalleMeta{margin:0 18px 6px;font-size:13px;color:#555}
+</style>
+</head>
+<body>
+<header><b>Grupos del Excel</b> <small>11 pestañas · solo ver e identificar de qué pestaña son</small></header>
+<div id="estado">Cargando pestañas...</div>
+<table id="tabla"><thead><tr>
+<th>#</th><th>Pestaña</th><th>Nombre grupo (F1/F2 del Excel)</th>
+<th>Encabezado fila</th><th>Col. nombre</th><th>Alumnos</th><th>Rango</th>
+</tr></thead><tbody></tbody></table>
+<h3 id="tituloDetalle">Selecciona una pestaña para verla tal cual</h3>
+<div id="detalleMeta"></div>
+<div class="wrap"><table id="detalle"></table></div>
+<script>
+let grupos=[];
+async function init(){
+const est=document.getElementById('estado');
+try{
+const r=await fetch('api/grupos');const j=await r.json();
+if(!j.ok){est.textContent='Error: '+j.error;return}
+grupos=j.grupos;
+est.textContent=`Archivo: PAGOS PSICOLOGIA Y PEDAGOGIA SIGLO XXI...xlsx · ${j.total} pestañas · conteo excluye BAJA/FUSIONADOS`;
+const tb=document.querySelector('#tabla tbody');
+tb.innerHTML=j.grupos.map((g,i)=>`<tr data-i="${i}">
+<td>${i+1}</td><td><b>${g.pestana}</b></td><td>${esc(g.nombreGrupo)}</td>
+<td>${g.filaEncabezado??'-'}</td><td>${g.colNombre}</td><td>${g.totalAlumnos}</td><td>${g.ref}</td>
+</tr>`).join('');
+tb.querySelectorAll('tr').forEach(tr=>tr.onclick=()=>verDetalle(Number(tr.dataset.i),tr));
+}catch(e){est.textContent='Error de red: '+e.message}
+}
+function esc(s){return String(s??'').replace(/</g,'&lt;')}
+async function verDetalle(i,tr){
+document.querySelectorAll('#tabla tbody tr').forEach(x=>x.classList.remove('sel'));
+tr.classList.add('sel');
+const g=grupos[i];
+document.getElementById('tituloDetalle').textContent=`Pestaña: ${g.pestana} — ${g.totalAlumnos} alumnos`;
+document.getElementById('detalleMeta').textContent=`De ${esc(g.primerAlumno)} … hasta ${esc(g.ultimoAlumno)}`;
+const det=document.getElementById('detalle');det.innerHTML='<tr><td>Cargando...</td></tr>';
+const r=await fetch(`api/grupos/${encodeURIComponent(g.pestana)}?limite=120`);
+const j=await r.json();
+if(!j.ok){det.innerHTML='<tr><td>'+esc(j.error)+'</td></tr>';return}
+det.innerHTML=j.filas.map(f=>`<tr>${f.map(c=>`<td>${esc(c)}</td>`).join('')}</tr>`).join('');
+}
+init();
+</script>
+</body>
+</html>
