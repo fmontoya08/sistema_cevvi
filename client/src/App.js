@@ -71,6 +71,7 @@ import {
   UploadCloud, // <-- NUEVO
   Check, // <-- NUEVO
   Download, // <-- NUEVO
+  Printer, // <-- NUEVO (reportes)
   Award, // <-- NUEVO
   Link as LinkIcon, // <-- NUEVO (con alias para no chocar con <Link> de react-router)
   Paperclip, // <-- NUEVO
@@ -813,6 +814,12 @@ const AdminLayout = () => {
       icon: DollarSign,
       label: "Caja y Finanzas",
       path: "/admin/finanzas",
+      roles: ["admin", "control_escolar"],
+    },
+    {
+      icon: FileText,
+      label: "Reportes de Pagos",
+      path: "/admin/reportes-pagos",
       roles: ["admin", "control_escolar"],
     },
     {
@@ -7993,6 +8000,194 @@ const CorreosInstitucionalesPage = () => {
               </div>
             </div>
           )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// --- PÁGINA REPORTES DE PAGOS (cuadrícula estilo Excel + imprimir a PDF) ---
+const MESES_REPORTE = [
+  { n: 2, nombre: "Feb" },
+  { n: 3, nombre: "Mar" },
+  { n: 4, nombre: "Abr" },
+  { n: 5, nombre: "May" },
+  { n: 6, nombre: "Jun" },
+  { n: 7, nombre: "Jul" },
+  { n: 8, nombre: "Ago" },
+  { n: 9, nombre: "Sep" },
+  { n: 10, nombre: "Oct" },
+  { n: 11, nombre: "Nov" },
+  { n: 12, nombre: "Dic" },
+];
+
+const ReportesPagosPage = () => {
+  const [filas, setFilas] = useState([]);
+  const [grupos, setGrupos] = useState([]);
+  const [grupoSel, setGrupoSel] = useState("todos");
+  const [busqueda, setBusqueda] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  const cargar = useCallback(async (grupo) => {
+    try {
+      setLoading(true);
+      const res = await api.get("/admin/finanzas/cuadricula", {
+        params: { grupo },
+      });
+      setFilas(res.data.filas || []);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    api
+      .get("/admin/grupos")
+      .then((r) => setGrupos(r.data || []))
+      .catch(() => {});
+    cargar("todos");
+  }, [cargar]);
+
+  const cambiarGrupo = (g) => {
+    setGrupoSel(g);
+    cargar(g);
+  };
+
+  const filasFiltradas = filas.filter(
+    (f) =>
+      f.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
+      (f.matricula && f.matricula.includes(busqueda)),
+  );
+
+  const totCol = (mes) =>
+    filasFiltradas.reduce((s, f) => s + (f.meses[String(mes)]?.monto || 0), 0);
+  const totAdeudos = filasFiltradas.reduce((s, f) => s + f.adeudos, 0);
+  const totPend = filasFiltradas.reduce((s, f) => s + f.pendiente, 0);
+
+  const celdaColor = (c) =>
+    !c
+      ? "text-gray-300"
+      : c.estatus === "pagado"
+        ? "text-green-700 bg-green-50 font-semibold"
+        : c.estatus === "vencido"
+          ? "text-red-700 bg-red-50 font-bold"
+          : "text-amber-700 bg-amber-50 font-semibold";
+
+  const fmt = (v) =>
+    v ? "$" + Number(v).toLocaleString("es-MX", { maximumFractionDigits: 0 }) : "-";
+
+  return (
+    <div className="space-y-6">
+      <div className="no-print bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-800">
+            Reporte general de pagos 2026
+          </h1>
+          <p className="text-gray-500 text-sm mt-1">
+            Cuadrícula por alumno como el Excel: meses + ADEUDOS + total.
+          </p>
+        </div>
+        <div className="flex gap-2 flex-wrap items-center">
+          <select
+            value={grupoSel}
+            onChange={(e) => cambiarGrupo(e.target.value)}
+            className="px-4 py-2 border border-gray-200 rounded-xl text-sm font-bold"
+          >
+            <option value="todos">Todos los grupos</option>
+            {grupos.map((g) => (
+              <option key={g.id} value={g.nombre_grupo}>
+                {g.nombre_grupo}
+              </option>
+            ))}
+          </select>
+          <input
+            type="text"
+            placeholder="Buscar alumno..."
+            className="px-4 py-2 border border-gray-200 rounded-xl text-sm"
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+          />
+          <button
+            onClick={() => window.print()}
+            className="bg-[#a72a34] text-white px-5 py-2 rounded-xl font-bold flex items-center gap-2"
+          >
+            <Printer size={16} /> Imprimir / PDF
+          </button>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="text-center py-20 text-gray-400">
+          Cargando cuadrícula...
+        </div>
+      ) : (
+        <div className="print-area bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="p-4 border-b border-gray-100 print-header">
+            <div className="font-bold text-gray-800">
+              Reporte general de pagos 2026 —{" "}
+              {grupoSel === "todos" ? "Todos los grupos" : grupoSel}
+            </div>
+            <div className="text-xs text-gray-500">
+              {filasFiltradas.length} alumnos · Generado{" "}
+              {new Date().toLocaleDateString("es-MX")}
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-xs reporte-tabla">
+              <thead className="bg-gray-50 text-gray-500 uppercase font-bold border-b border-gray-100">
+                <tr>
+                  <th className="p-2">Alumno</th>
+                  {MESES_REPORTE.map((m) => (
+                    <th key={m.n} className="p-2 text-right">
+                      {m.nombre}
+                    </th>
+                  ))}
+                  <th className="p-2 text-right">Adeudos</th>
+                  <th className="p-2 text-right">Total pend.</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {filasFiltradas.map((f) => (
+                  <tr key={f.alumno_id} className="hover:bg-gray-50/50">
+                    <td className="p-2 font-bold text-gray-800 whitespace-nowrap">
+                      {f.nombre}
+                      <div className="text-[10px] text-gray-400 font-mono font-normal">
+                        {f.matricula} · {f.grupo}
+                      </div>
+                    </td>
+                    {MESES_REPORTE.map((m) => {
+                      const c = f.meses[String(m.n)];
+                      return (
+                        <td key={m.n} className={`p-2 text-right ${celdaColor(c)}`}>
+                          {c ? fmt(c.monto) : "-"}
+                        </td>
+                      );
+                    })}
+                    <td className="p-2 text-right font-bold text-red-700">
+                      {f.adeudos ? fmt(f.adeudos) : "-"}
+                    </td>
+                    <td className="p-2 text-right font-bold">
+                      {fmt(f.pendiente)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot className="bg-gray-50 font-bold border-t-2 border-gray-200">
+                <tr>
+                  <td className="p-2">TOTALES ({filasFiltradas.length})</td>
+                  {MESES_REPORTE.map((m) => (
+                    <td key={m.n} className="p-2 text-right">
+                      {fmt(totCol(m.n))}
+                    </td>
+                  ))}
+                  <td className="p-2 text-right">{fmt(totAdeudos)}</td>
+                  <td className="p-2 text-right">{fmt(totPend)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
         </div>
       )}
     </div>
@@ -15954,6 +16149,10 @@ function App() {
               <Route path="/admin/migracion" element={<MigracionPage />} />
               <Route path="/migrar-grupos" element={<MigracionGruposPage />} />
               <Route path="/admin/finanzas" element={<CajaPage />} />
+              <Route
+                path="/admin/reportes-pagos"
+                element={<ReportesPagosPage />}
+              />
               <Route
                 path="/admin/finanzas/alumno/:id"
                 element={<DetalleFinanzasAlumnoPage />}

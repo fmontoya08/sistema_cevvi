@@ -2916,6 +2916,77 @@ adminRouter.get("/finanzas/movimientos", async (req, res) => {
   }
 });
 
+// 2B. CUADRÍCULA DE PAGOS ESTILO EXCEL (vista general para reportes)
+// Columnas mensuales = adeudos 2026 por mes de vencimiento (excepto "Adeudo YYYY").
+// ADEUDOS = bolsa anual "Adeudo YYYY" pendiente + mensualidades de otros años.
+adminRouter.get("/finanzas/cuadricula", async (req, res) => {
+  try {
+    const { grupo } = req.query;
+    const filtro = grupo && grupo !== "todos" ? "AND g.nombre_grupo = ?" : "";
+    const params = grupo && grupo !== "todos" ? [grupo] : [];
+    const [als] = await db.query(
+      `SELECT u.id, u.nombre, u.apellido_paterno, u.apellido_materno, u.matricula,
+              COALESCE(g.nombre_grupo, 'Sin grupo') AS grupo
+       FROM usuarios u LEFT JOIN grupos g ON g.id = u.grupo_id
+       WHERE u.rol = 'alumno' AND u.activo = 1 ${filtro}
+       ORDER BY u.apellido_paterno, u.apellido_materno, u.nombre`,
+      params,
+    );
+    const [movs] = await db.query(
+      `SELECT a.alumno_id, a.monto_a_pagar, a.estatus_pago,
+              MONTH(a.fecha_vencimiento) AS mes, YEAR(a.fecha_vencimiento) AS anio,
+              TRIM(c.nombre_concepto) AS concepto
+       FROM adeudos_alumnos a
+       INNER JOIN conceptos_pago c ON c.id = a.concepto_id
+       INNER JOIN usuarios u ON u.id = a.alumno_id
+       LEFT JOIN grupos g ON g.id = u.grupo_id
+       WHERE u.rol = 'alumno' AND u.activo = 1 AND a.estatus_pago != 'cancelado' ${filtro}`,
+      params,
+    );
+    const rank = (e) => (e === "vencido" ? 0 : e === "pendiente" ? 1 : 2);
+    const porAlumno = new Map();
+    for (const m of movs) {
+      if (!porAlumno.has(m.alumno_id)) porAlumno.set(m.alumno_id, []);
+      porAlumno.get(m.alumno_id).push(m);
+    }
+    const filas = als.map((al) => {
+      const meses = {};
+      let adeudos = 0;
+      let pagado = 0;
+      let pendiente = 0;
+      for (const m of porAlumno.get(al.id) || []) {
+        const monto = Number(m.monto_a_pagar);
+        if (m.estatus_pago === "pagado") pagado += monto;
+        else pendiente += monto;
+        if (/^Adeudo \d{4}$/.test(m.concepto)) {
+          if (m.estatus_pago !== "pagado") adeudos += monto;
+        } else if (m.anio === 2026 && m.mes >= 2 && m.mes <= 12) {
+          const cur = meses[m.mes] || { monto: 0, estatus: "pagado" };
+          cur.monto = Math.round((cur.monto + monto) * 100) / 100;
+          if (rank(m.estatus_pago) < rank(cur.estatus)) cur.estatus = m.estatus_pago;
+          meses[m.mes] = cur;
+        } else if (m.estatus_pago !== "pagado") {
+          adeudos += monto;
+        }
+      }
+      return {
+        alumno_id: al.id,
+        nombre: `${al.apellido_paterno} ${al.apellido_materno || ""} ${al.nombre}`.replace(/\s+/g, " ").trim(),
+        matricula: al.matricula || "-",
+        grupo: al.grupo,
+        meses,
+        adeudos: Math.round(adeudos * 100) / 100,
+        pagado: Math.round(pagado * 100) / 100,
+        pendiente: Math.round(pendiente * 100) / 100,
+      };
+    });
+    res.json({ filas });
+  } catch (error) {
+    console.error("Error en cuadrícula:", error.message);
+    res.status(500).send({ message: "Error al obtener cuadrícula de pagos" });
+  }
+});
+
 // 3. REGISTRAR PAGO (Cobrar)
 adminRouter.put("/finanzas/pagar/:adeudoId", async (req, res) => {
   try {
