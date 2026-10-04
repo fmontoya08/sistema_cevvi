@@ -5,7 +5,7 @@
 //   rojo     = no existe en BD (es quien falta)
 // Pestañas sin grupo en BD (PSIC-1/2, PSCI-3, FORMATO): verde = existe en BD.
 const { normalizar, tokens, levenshtein } = require("../scripts/import-parse");
-const { listaAlumnos, ARCHIVO_DEFAULT } = require("./grupos");
+const { listaAlumnos, obsDeHoja, ARCHIVO_DEFAULT } = require("./grupos");
 const { createPool } = require("../scripts/db");
 
 // Pestaña Excel -> nombre_grupo en BD (idénticos: grupos renombrados a la pestaña)
@@ -130,9 +130,10 @@ async function matchHoja(sheet) {
   let amarillos = 0;
   let rojos = 0;
 
-  for (const { nombre } of nombres) {
+  for (const { nombre, fila } of nombres) {
     const norm = normalizar(nombre);
-    let f = { nombreExcel: nombre, estado: "rojo", nombreBD: "-", matricula: "-", grupoBD: "-", cobertura: 0, exact: 0 };
+    const obs = obsDeHoja(sheet, fila);
+    let f = { nombreExcel: nombre, estado: "rojo", nombreBD: "-", matricula: "-", grupoBD: "-", cobertura: 0, exact: 0, obs };
 
     if (grupoBD) {
       const m = mejorEn(norm, enGrupo);

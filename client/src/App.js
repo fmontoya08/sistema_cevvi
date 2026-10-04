@@ -20,6 +20,7 @@ import AIChatAssistant from "./components/AIChatAssistant";
 import RegistroControlEscolarPage from "./pages/RegistroControlEscolarPage";
 
 import React, {
+  Fragment,
   useState,
   useEffect,
   createContext,
@@ -112,6 +113,8 @@ import {
   AlertOctagon,
   UserCheck,
   XCircle,
+  ChevronDown, // <-- AÑADIR PARA CAJA
+  ChevronRight, // <-- AÑADIR PARA CAJA
 } from "lucide-react";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
@@ -2656,6 +2659,8 @@ const UsuariosPage = () => {
   const [carreras, setCarreras] = useState([]);
   const [sedes, setSedes] = useState([]);
   const [verEliminados, setVerEliminados] = useState(false);
+  const [noRegistrados, setNoRegistrados] = useState([]);
+  const [loadingNR, setLoadingNR] = useState(false);
 
   // Formularios
   const formInicial = {
@@ -2726,6 +2731,19 @@ const UsuariosPage = () => {
     fetchData();
   }, [fetchData]);
 
+  const fetchNoRegistrados = async () => {
+    if (noRegistrados.length) return;
+    try {
+      setLoadingNR(true);
+      const res = await api.get("/admin/usuarios/no-registrados");
+      setNoRegistrados(res.data);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingNR(false);
+    }
+  };
+
   const handleCrear = async (e, tipo) => {
     e.preventDefault();
     const form = tipo === "aspirante" ? formAspirante : formDocente;
@@ -2784,13 +2802,20 @@ const UsuariosPage = () => {
     }
   };
 
-  const filteredUsers = usuarios.filter(
-    (u) =>
-      (activeTab === "todos" || u.rol === activeTab.replace(/s$/, "")) &&
-      (u.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        u.apellido_paterno.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (u.matricula && u.matricula.includes(searchTerm))),
-  );
+  const esTabNR = activeTab === "no_registrados";
+  const filteredUsers = esTabNR
+    ? noRegistrados.filter(
+        (u) =>
+          u.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          u.grupo.toLowerCase().includes(searchTerm.toLowerCase()),
+      )
+    : usuarios.filter(
+        (u) =>
+          (activeTab === "todos" || u.rol === activeTab.replace(/s$/, "")) &&
+          (u.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            u.apellido_paterno.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (u.matricula && u.matricula.includes(searchTerm))),
+      );
 
   const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
   const currentUsers = filteredUsers.slice(
@@ -2848,16 +2873,17 @@ const UsuariosPage = () => {
       {/* TABS Y BUSCADOR */}
       <div className="flex flex-col md:flex-row justify-between items-center gap-4">
         <div className="flex bg-gray-100 p-1 rounded-xl overflow-x-auto max-w-full">
-          {["todos", "aspirantes", "docentes", "alumnos"].map((tab) => (
+          {["todos", "aspirantes", "docentes", "alumnos", "no_registrados"].map((tab) => (
             <button
               key={tab}
               onClick={() => {
                 setActiveTab(tab);
                 setCurrentPage(1);
+                if (tab === "no_registrados") fetchNoRegistrados();
               }}
               className={`px-6 py-2 rounded-lg text-sm font-bold capitalize whitespace-nowrap ${activeTab === tab ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"}`}
             >
-              {tab}
+              {tab === "no_registrados" ? "No registrados" : tab}
             </button>
           ))}
         </div>
@@ -2874,22 +2900,56 @@ const UsuariosPage = () => {
       </div>
 
       {/* TABLA */}
-      {loading ? (
-        <div className="text-center py-20 text-gray-400">Cargando...</div>
+      {loading || (esTabNR && loadingNR) ? (
+        <div className="text-center py-20 text-gray-400">
+          {esTabNR ? "Comparando Excel con sistema..." : "Cargando..."}
+        </div>
       ) : (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse min-w-[800px]">
               <thead className="bg-gray-50 text-gray-500 uppercase text-xs font-bold border-b border-gray-100">
                 <tr>
-                  <th className="p-5">Usuario</th>
-                  <th className="p-5">Rol</th>
-                  <th className="p-5">Contacto</th>
-                  <th className="p-5 text-right">Acciones</th>
+                  {esTabNR ? (
+                    <>
+                      <th className="p-5">Nombre (Excel)</th>
+                      <th className="p-5">Grupo</th>
+                      <th className="p-5">Observación</th>
+                      <th className="p-5 text-right">Origen</th>
+                    </>
+                  ) : (
+                    <>
+                      <th className="p-5">Usuario</th>
+                      <th className="p-5">Rol</th>
+                      <th className="p-5">Contacto</th>
+                      <th className="p-5 text-right">Acciones</th>
+                    </>
+                  )}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {currentUsers.map((u) => (
+                {currentUsers.map((u, i) =>
+                  esTabNR ? (
+                    <tr key={`nr-${i}`} className="hover:bg-gray-50/50">
+                      <td className="p-5">
+                        <div className="font-bold text-gray-800">{u.nombre}</div>
+                        <div className="text-xs text-red-500 font-bold">
+                          Sin cuenta en sistema
+                        </div>
+                      </td>
+                      <td className="p-5">
+                        <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase bg-red-100 text-red-700">
+                          {u.grupo}
+                        </span>
+                      </td>
+                      <td className="p-5 text-sm text-gray-500">
+                        {u.obs || "-"}
+                      </td>
+                      <td className="p-5 text-right text-xs text-gray-400">
+                        Excel
+                      </td>
+                    </tr>
+                  ) : (
                   <tr
                     key={u.id}
                     className={`hover:bg-gray-50/50 ${verEliminados ? "grayscale opacity-70" : ""}`}
@@ -7941,30 +8001,99 @@ const CorreosInstitucionalesPage = () => {
 
 // --- COMPONENTE CAJA (DISEÑO CLEAN DASHBOARD) ---
 const CajaPage = () => {
-  const [usuarios, setUsuarios] = useState([]);
+  const [alumnos, setAlumnos] = useState([]);
+  const [movimientosByAlumno, setMovimientosByAlumno] = useState({});
+  const [expandidos, setExpandidos] = useState({});
+  const [loading, setLoading] = useState(true);
   const [filtro, setFiltro] = useState("");
   const navigate = useNavigate();
 
   useEffect(() => {
-    const fetchUsuarios = async () => {
+    const fetchFinanzas = async () => {
       try {
-        const { data } = await api.get("/admin/usuarios");
-        setUsuarios(
-          data.filter((u) => u.rol === "alumno" || u.rol === "aspirante"),
-        );
+        const [resAlumnos, resMovimientos] = await Promise.all([
+          api.get("/admin/finanzas/resumen"),
+          api.get("/admin/finanzas/movimientos"),
+        ]);
+        setAlumnos(resAlumnos.data);
+
+        const agrupados = {};
+        for (const mov of resMovimientos.data) {
+          if (!agrupados[mov.alumno_id]) agrupados[mov.alumno_id] = [];
+          agrupados[mov.alumno_id].push(mov);
+        }
+        setMovimientosByAlumno(agrupados);
       } catch (error) {
         console.error("Error", error);
+      } finally {
+        setLoading(false);
       }
     };
-    fetchUsuarios();
+    fetchFinanzas();
   }, []);
 
-  const alumnosFiltrados = usuarios.filter(
+  const alumnosFiltrados = alumnos.filter(
     (u) =>
-      u.nombre.toLowerCase().includes(filtro.toLowerCase()) ||
-      u.apellido_paterno.toLowerCase().includes(filtro.toLowerCase()) ||
+      `${u.nombre} ${u.apellido_paterno} ${u.apellido_materno || ""}`
+        .toLowerCase()
+        .includes(filtro.toLowerCase()) ||
       (u.matricula && u.matricula.includes(filtro)),
   );
+
+  const toggleExpandir = (id) =>
+    setExpandidos((prev) => ({ ...prev, [id]: !prev[id] }));
+
+  const formatMoney = (amount) =>
+    new Intl.NumberFormat("es-MX", {
+      style: "currency",
+      currency: "MXN",
+    }).format(Number(amount) || 0);
+
+  const formatDate = (dateString) => {
+    if (!dateString || dateString.startsWith("0000-")) return "-";
+    const d = new Date(dateString);
+    if (isNaN(d.getTime())) return "-";
+    return d.toLocaleDateString("es-MX", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  };
+
+  const getEstatusPago = (a) => {
+    if (Number(a.adeudos_vencidos) > 0) {
+      return {
+        label: "Adeudo vencido",
+        badge: "bg-red-100 text-red-700",
+        dot: "bg-red-500",
+      };
+    }
+    if (Number(a.total_pendiente) > 0) {
+      return {
+        label: "Con adeudo",
+        badge: "bg-yellow-100 text-yellow-700",
+        dot: "bg-yellow-500",
+      };
+    }
+    return {
+      label: "Al corriente",
+      badge: "bg-green-100 text-green-700",
+      dot: "bg-green-500",
+    };
+  };
+
+  const getMovBadge = (estatus) => {
+    switch (estatus?.toLowerCase()) {
+      case "pagado":
+        return "bg-green-100 text-green-700";
+      case "vencido":
+        return "bg-red-100 text-red-700";
+      case "pendiente":
+        return "bg-yellow-100 text-yellow-700";
+      default:
+        return "bg-gray-100 text-gray-700";
+    }
+  };
 
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
@@ -7975,7 +8104,7 @@ const CajaPage = () => {
             Caja y Finanzas
           </h1>
           <p className="text-gray-500 mt-2 text-lg">
-            Gestión de pagos y estados de cuenta.
+            Pagos realizados, alumnos al corriente y adeudos pendientes.
           </p>
         </div>
         <div className="relative w-full md:w-96">
@@ -7995,47 +8124,154 @@ const CajaPage = () => {
         <table className="w-full text-left">
           <thead className="bg-gray-50 text-gray-500 uppercase text-xs font-bold border-b border-gray-100">
             <tr>
+              <th className="p-5 w-12"></th>
               <th className="p-5">Alumno</th>
               <th className="p-5">Matrícula</th>
-              <th className="p-5">Estatus</th>
+              <th className="p-5">Estatus de Pago</th>
+              <th className="p-5 text-right">Total Pagado</th>
+              <th className="p-5 text-right">Saldo Pendiente</th>
               <th className="p-5 text-right">Acción</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
-            {alumnosFiltrados.map((user) => (
-              <tr
-                key={user.id}
-                className="hover:bg-green-50/30 transition-colors"
-              >
-                <td className="p-5 font-bold text-gray-800">
-                  {user.nombre} {user.apellido_paterno}{" "}
-                  {user.apellido_materno || ""}
-                </td>
-                <td className="p-5 font-mono text-gray-500">
-                  {user.matricula || "---"}
-                </td>
-                <td className="p-5">
-                  <span
-                    className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${user.rol === "aspirante" ? "bg-orange-100 text-orange-700" : "bg-green-100 text-green-700"}`}
-                  >
-                    {user.rol}
-                  </span>
-                </td>
-                <td className="p-5 text-right">
-                  <button
-                    onClick={() =>
-                      navigate(`/admin/finanzas/alumno/${user.id}`)
-                    }
-                    className="text-sm font-bold text-green-700 hover:text-green-900 hover:underline flex items-center justify-end gap-1"
-                  >
-                    <DollarSign size={16} /> Ver Cuenta
-                  </button>
+            {loading ? (
+              <tr>
+                <td colSpan="7" className="p-10 text-center text-gray-400">
+                  Cargando información financiera...
                 </td>
               </tr>
-            ))}
+            ) : (
+              alumnosFiltrados.map((user) => {
+                const id = user.alumno_id || user.id;
+                const estatus = getEstatusPago(user);
+                const movimientos = movimientosByAlumno[id] || [];
+                const expandido = !!expandidos[id];
+                return (
+                  <Fragment key={id}>
+                    <tr
+                      onClick={() => toggleExpandir(id)}
+                      className="hover:bg-green-50/30 transition-colors cursor-pointer"
+                    >
+                      <td className="p-5 text-gray-400">
+                        {expandido ? (
+                          <ChevronDown size={18} />
+                        ) : (
+                          <ChevronRight size={18} />
+                        )}
+                      </td>
+                      <td className="p-5 font-bold text-gray-800">
+                        {user.nombre} {user.apellido_paterno}{" "}
+                        {user.apellido_materno || ""}
+                      </td>
+                      <td className="p-5 font-mono text-gray-500">
+                        {user.matricula || "---"}
+                      </td>
+                      <td className="p-5">
+                        <span className="flex items-center gap-2">
+                          <span
+                            className={`w-2 h-2 rounded-full ${estatus.dot}`}
+                          ></span>
+                          <span
+                            className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${estatus.badge}`}
+                          >
+                            {estatus.label}
+                          </span>
+                        </span>
+                      </td>
+                      <td className="p-5 text-right font-bold text-green-600">
+                        {formatMoney(user.total_pagado)}
+                      </td>
+                      <td
+                        className={`p-5 text-right font-bold ${Number(user.total_pendiente) > 0 ? "text-[#a72a34]" : "text-gray-900"}`}
+                      >
+                        {formatMoney(user.total_pendiente)}
+                      </td>
+                      <td className="p-5 text-right">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/admin/finanzas/alumno/${id}`);
+                          }}
+                          className="text-sm font-bold text-green-700 hover:text-green-900 hover:underline flex items-center justify-end gap-1"
+                        >
+                          <DollarSign size={16} /> Ver Cuenta
+                        </button>
+                      </td>
+                    </tr>
+
+                    {/* FILA EXPANDIDA: HISTORIAL DE PAGOS */}
+                    {expandido && (
+                      <tr className="bg-gray-50/70">
+                        <td colSpan="7" className="p-0">
+                          <div className="px-6 py-4 border-l-4 border-green-400 ml-3 my-3 rounded-r-lg bg-white shadow-sm">
+                            <div className="flex items-center gap-2 mb-3">
+                              <History size={18} className="text-green-600" />
+                              <h4 className="font-bold text-gray-700">
+                                Historial de pagos y movimientos
+                              </h4>
+                              <span className="text-xs text-gray-400">
+                                ({movimientos.length}{" "}
+                                {movimientos.length === 1
+                                  ? "movimiento"
+                                  : "movimientos"})
+                              </span>
+                            </div>
+
+                            {movimientos.length === 0 ? (
+                              <p className="text-sm text-gray-400 py-4 text-center">
+                                Sin movimientos registrados.
+                              </p>
+                            ) : (
+                              <table className="w-full text-sm">
+                                <thead>
+                                  <tr className="text-left text-gray-500 uppercase text-[10px] font-bold border-b border-gray-100">
+                                    <th className="py-2 pr-4">Concepto</th>
+                                    <th className="py-2 pr-4">Monto</th>
+                                    <th className="py-2 pr-4">Vencimiento</th>
+                                    <th className="py-2 pr-4">Estatus</th>
+                                    <th className="py-2">Fecha de Pago</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                  {movimientos.map((mov) => (
+                                    <tr key={mov.id}>
+                                      <td className="py-2 pr-4 font-medium text-gray-800">
+                                        {mov.nombre_concepto}
+                                      </td>
+                                      <td className="py-2 pr-4 text-gray-700">
+                                        {formatMoney(mov.monto_a_pagar)}
+                                      </td>
+                                      <td className="py-2 pr-4 text-gray-500">
+                                        {formatDate(mov.fecha_vencimiento)}
+                                      </td>
+                                      <td className="py-2 pr-4">
+                                        <span
+                                          className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${getMovBadge(mov.estatus_pago)}`}
+                                        >
+                                          {mov.estatus_pago}
+                                        </span>
+                                      </td>
+                                      <td className="py-2 text-green-700 font-semibold">
+                                        {mov.fecha_pago
+                                          ? formatDate(mov.fecha_pago)
+                                          : "-"}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })
+            )}
           </tbody>
         </table>
-        {alumnosFiltrados.length === 0 && (
+        {!loading && alumnosFiltrados.length === 0 && (
           <div className="p-10 text-center text-gray-400">
             No se encontraron alumnos.
           </div>

@@ -2866,6 +2866,56 @@ adminRouter.post("/finanzas/cargo", async (req, res) => {
   }
 });
 
+// 2.5 RESUMEN DE FINANZAS POR ALUMNO (PARA CAJA ADMIN)
+adminRouter.get("/finanzas/resumen", async (req, res) => {
+  try {
+    const sql = `
+      SELECT
+        u.id AS alumno_id,
+        u.nombre, u.apellido_paterno, u.apellido_materno, u.matricula, u.rol,
+        COUNT(a.id) AS total_adeudos,
+        COALESCE(SUM(CASE WHEN a.estatus_pago = 'pagado' THEN a.monto_a_pagar ELSE 0 END), 0) AS total_pagado,
+        COALESCE(SUM(CASE WHEN a.estatus_pago IN ('pendiente','vencido') THEN a.monto_a_pagar ELSE 0 END), 0) AS total_pendiente,
+        COALESCE(SUM(CASE WHEN a.estatus_pago = 'pendiente' THEN 1 ELSE 0 END), 0) AS adeudos_pendientes,
+        COALESCE(SUM(CASE WHEN a.estatus_pago = 'vencido' THEN 1 ELSE 0 END), 0) AS adeudos_vencidos,
+        COALESCE(SUM(CASE WHEN a.estatus_pago = 'pagado' THEN 1 ELSE 0 END), 0) AS adeudos_pagados
+      FROM usuarios u
+      LEFT JOIN adeudos_alumnos a ON a.alumno_id = u.id
+      WHERE u.rol IN ('alumno','aspirante') AND u.activo = 1
+      GROUP BY u.id
+      ORDER BY u.id DESC
+    `;
+    const [rows] = await db.query(sql);
+    res.json(rows);
+  } catch (error) {
+    console.error("Error al cargar resumen de finanzas:", error);
+    res.status(500).send({ message: "Error al obtener resumen de finanzas" });
+  }
+});
+
+// 2.6 HISTORIAL DE MOVIMIENTOS (PARA CAJA ADMIN)
+adminRouter.get("/finanzas/movimientos", async (req, res) => {
+  try {
+    const sql = `
+      SELECT
+        a.id, a.alumno_id, a.monto_a_pagar, a.estatus_pago,
+        a.fecha_vencimiento, a.fecha_pago,
+        c.nombre_concepto
+      FROM adeudos_alumnos a
+      INNER JOIN conceptos_pago c ON a.concepto_id = c.id
+      WHERE a.alumno_id IN (
+        SELECT id FROM usuarios WHERE rol IN ('alumno','aspirante') AND activo = 1
+      )
+      ORDER BY a.fecha_vencimiento DESC, a.id DESC
+    `;
+    const [rows] = await db.query(sql);
+    res.json(rows);
+  } catch (error) {
+    console.error("Error al cargar historial de pagos:", error);
+    res.status(500).send({ message: "Error al obtener historial de pagos" });
+  }
+});
+
 // 3. REGISTRAR PAGO (Cobrar)
 adminRouter.put("/finanzas/pagar/:adeudoId", async (req, res) => {
   try {
@@ -4745,6 +4795,33 @@ adminRouter.get("/usuarios", async (req, res) => {
   } catch (error) {
     console.error("Error al cargar usuarios:", error);
     res.status(500).send({ message: "Error al obtener usuarios" });
+  }
+});
+
+// --- RUTA: ALUMNOS DEL EXCEL SIN CUENTA EN EL SISTEMA (solo lectura) ---
+// Compara cada pestaña del Excel contra usuarios y devuelve los rojos + grupo.
+let _cacheNoReg = { ts: 0, data: [] };
+adminRouter.get("/usuarios/no-registrados", async (req, res) => {
+  try {
+    if (Date.now() - _cacheNoReg.ts < 5 * 60 * 1000 && _cacheNoReg.data.length) {
+      return res.json(_cacheNoReg.data);
+    }
+    const { matchHoja } = require("./lector-pagos-aislado/match");
+    const hojas = ["PSIC-1", "PSIC-2", "PSCI-3", "PSIC-4", "PSICO-5", "PSICO VIR-6", "PEDA VIR-6", "PEDA-4", "PEDA-5", "PEDA-6"];
+    const faltantes = [];
+    for (const h of hojas) {
+      const m = await matchHoja(h);
+      for (const a of m.alumnos) {
+        if (a.estado === "rojo") {
+          faltantes.push({ nombre: a.nombreExcel, grupo: h, obs: a.obs || "" });
+        }
+      }
+    }
+    _cacheNoReg = { ts: Date.now(), data: faltantes };
+    res.json(faltantes);
+  } catch (error) {
+    console.error("Error en no-registrados:", error.message);
+    res.status(500).send({ message: "Error al obtener no registrados" });
   }
 });
 

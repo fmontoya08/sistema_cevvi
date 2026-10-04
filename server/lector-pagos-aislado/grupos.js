@@ -89,6 +89,24 @@ function listaAlumnos(archivo, sheet) {
   return listarNombres(rows, hRow, nameCol);
 }
 
+let _wbCache = null;
+function obsDeHoja(sheet, fila1based) {
+  if (!_wbCache) _wbCache = XLSX.readFile(ARCHIVO_DEFAULT);
+  const rows = XLSX.utils.sheet_to_json(_wbCache.Sheets[sheet], { header: 1, defval: "" });
+  let nameCol = -1;
+  let obsCol = -1;
+  for (let i = 0; i < Math.min(rows.length, 12); i++) {
+    const idx = (rows[i] || []).findIndex((c) => /NOMBRE\s+DEL\s+ALUMNO/i.test(String(c || "")));
+    if (idx > -1) {
+      nameCol = idx;
+      obsCol = (rows[i] || []).findIndex((c) => /OBS/i.test(String(c || "")));
+      break;
+    }
+  }
+  if (obsCol < 0) obsCol = nameCol - 1;
+  return String(((rows[fila1based - 1] || [])[obsCol] || "")).trim();
+}
+
 function detalleHoja(archivo, sheet, limite = 300) {
   const wb = XLSX.readFile(archivo);
   if (!wb.SheetNames.includes(sheet)) throw new Error(`Hoja inexistente: ${sheet}`);
@@ -97,4 +115,4 @@ function detalleHoja(archivo, sheet, limite = 300) {
   return { pestana: sheet, ref: ws["!ref"] || "", totalFilas: filas.length, filas: filas.slice(0, limite) };
 }
 
-module.exports = { listarGrupos, detalleHoja, identificarHoja, listaAlumnos, ARCHIVO_DEFAULT };
+module.exports = { listarGrupos, detalleHoja, identificarHoja, listaAlumnos, obsDeHoja, ARCHIVO_DEFAULT };
