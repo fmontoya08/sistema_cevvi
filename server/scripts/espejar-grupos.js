@@ -234,8 +234,8 @@ async function aplicar(plan) {
     const conceptoIds = new Map((await conn.query("SELECT * FROM conceptos_pago"))[0].map((c) => [c.nombre_concepto, c.id]));
     for (const nombre of plan.conceptosCrear) {
       const [r] = await conn.query(
-        "INSERT INTO conceptos_pago (nombre_concepto,monto_default,tipo,es_concepto_inscripcion,activo,monto) VALUES (?,0.00,'UNICO',0,1,0.00)",
-        [nombre]
+        "INSERT INTO conceptos_pago (nombre_concepto,monto_default,tipo,es_concepto_inscripcion,activo,monto) VALUES (?,?,?,?,?,?)",
+        [nombre, 0.0, "UNICO", 0, 1, 0.0]
       );
       conceptoIds.set(nombre, r.insertId);
       console.log(` + concepto ${r.insertId}: ${nombre}`);
@@ -245,8 +245,8 @@ async function aplicar(plan) {
     for (const g of g0) grupoIds[normalizar(g.nombre_grupo)] = g.id;
     for (const g of plan.gruposCrear) {
       const [r] = await conn.query(
-        "INSERT INTO grupos (nombre_grupo,cupo,ciclo_id,sede_id,plan_estudio_id,grado_id,estatus,modalidad,activo) VALUES (?,?,40,?,?,?,?,'activo',?,1)",
-        [g.nombre, g.ciclo_id, g.sede_id, g.plan_estudio_id, g.grado_id, g.modalidad]
+        "INSERT INTO grupos (nombre_grupo,cupo,ciclo_id,sede_id,plan_estudio_id,grado_id,estatus,modalidad,activo) VALUES (?,?,?,?,?,?,?,?,?)",
+        [g.nombre, 40, g.ciclo_id, g.sede_id, g.plan_estudio_id, g.grado_id, "activo", g.modalidad, 1]
       );
       grupoIds[normalizar(g.nombre)] = r.insertId;
       console.log(` + grupo ${r.insertId}: ${g.nombre}`);
@@ -259,14 +259,14 @@ async function aplicar(plan) {
       const carreraId = /psicolog/i.test(a.grupo) ? 7 : 1;
       const [r] = await conn.query(
         `INSERT INTO usuarios (email,password,rol,nombre,apellido_paterno,apellido_materno,matricula,carrera_id,sede_id,grupo_id,activo,estado_academico,modalidad,sede_interes_id,carrera_interes_id)
-         VALUES (?,?,'alumno',?,?,?,?,?,?,?,1,'activo','presencial',?,?)`,
-        [a.email, pass, a.nombres, a.ap, a.am, a.matricula, carreraId, 6, gid, 6, carreraId]
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [a.email, pass, "alumno", a.nombres, a.ap, a.am, a.matricula, carreraId, 6, gid, 1, "activo", "presencial", 6, carreraId]
       );
       await conn.query("INSERT INTO grupo_alumnos (grupo_id,alumno_id) VALUES (?,?)", [gid, r.insertId]);
       for (const ad of a.adeudos || []) {
         await conn.query(
-          "INSERT INTO adeudos_alumnos (alumno_id,concepto_id,monto_a_pagar,estatus_pago,fecha_vencimiento,registrado_por_usuario_id) VALUES (?,?,?,'pendiente',?,?)",
-          [r.insertId, conceptoIds.get(ad.concepto), ad.monto, `${ad.anio}-12-31`, ADMIN_ID]
+          "INSERT INTO adeudos_alumnos (alumno_id,concepto_id,monto_a_pagar,estatus_pago,fecha_vencimiento,registrado_por_usuario_id) VALUES (?,?,?,?,?,?)",
+          [r.insertId, conceptoIds.get(ad.concepto), ad.monto, "pendiente", `${ad.anio}-12-31`, ADMIN_ID]
         );
       }
       creados.push({ id: r.insertId, ...a });
