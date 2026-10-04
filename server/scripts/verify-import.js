@@ -11,10 +11,10 @@ const planJson = require("./cambios_previstos.json");
   const [gdet] = await p.query(
     `SELECT g.nombre_grupo, COUNT(ga.id) n FROM grupos g
      LEFT JOIN grupo_alumnos ga ON ga.grupo_id = g.id
-     WHERE g.nombre_grupo IN ('Psicología IV','PEDAGOGÍA XXI-1-A','Psicología 5','Psicología 6 Virtual','Pedagogía 6 Virtual','Pedagogía 5','Pedagogía 6')
+     WHERE g.nombre_grupo IN ('PSIC-4','PEDA-4','PSICO-5','PSICO VIR-6','PEDA VIR-6','PEDA-5','PEDA-6','PSIC-1','PSIC-2','PSCI-3')
      GROUP BY g.nombre_grupo`
   );
-  const expect = { "Psicología IV": 22, "PEDAGOGÍA XXI-1-A": 28, "Psicología 5": 15, "Psicología 6 Virtual": 5, "Pedagogía 6 Virtual": 8, "Pedagogía 5": 16, "Pedagogía 6": 13 };
+  const expect = { "PSIC-4": 32, "PEDA-4": 35, "PSICO-5": 15, "PSICO VIR-6": 5, "PEDA VIR-6": 8, "PEDA-5": 17, "PEDA-6": 13, "PSIC-1": 34, "PSIC-2": 20, "PSCI-3": 27 };
   const got = {};
   for (const r of gdet) got[r.nombre_grupo] = r.n;
   for (const k of Object.keys(expect)) ok(got[k] === expect[k], `grupo ${k}: ${got[k]} alumnos (esperado ${expect[k]})`);

@@ -8,15 +8,18 @@ const { normalizar, tokens, levenshtein } = require("../scripts/import-parse");
 const { listaAlumnos, ARCHIVO_DEFAULT } = require("./grupos");
 const { createPool } = require("../scripts/db");
 
-// Pestaña Excel -> nombre_grupo en BD
+// Pestaña Excel -> nombre_grupo en BD (idénticos: grupos renombrados a la pestaña)
 const MAPEO_GRUPO = {
-  "PSIC-4": "Psicología IV",
-  "PEDA-4": "PEDAGOGÍA XXI-1-A",
-  "PSICO-5": "Psicología 5",
-  "PSICO VIR-6": "Psicología 6 Virtual",
-  "PEDA VIR-6": "Pedagogía 6 Virtual",
-  "PEDA-5": "Pedagogía 5",
-  "PEDA-6": "Pedagogía 6",
+  "PSIC-4": "PSIC-4",
+  "PEDA-4": "PEDA-4",
+  "PSICO-5": "PSICO-5",
+  "PSICO VIR-6": "PSICO VIR-6",
+  "PEDA VIR-6": "PEDA VIR-6",
+  "PEDA-5": "PEDA-5",
+  "PEDA-6": "PEDA-6",
+  "PSIC-1": "PSIC-1",
+  "PSIC-2": "PSIC-2",
+  "PSCI-3": "PSCI-3",
 };
 
 const UMBRAL_COBERTURA = 0.6;

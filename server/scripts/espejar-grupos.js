@@ -33,9 +33,9 @@ const DOMINIO = "universidadsigloxxi.com";
 const ADMIN_ID = 1;
 
 const GRUPOS_NUEVOS = [
-  { sheet: "PSIC-1", nombre: "Psicología 1", grado: "Primero" },
-  { sheet: "PSIC-2", nombre: "Psicología 2", grado: "Segundo" },
-  { sheet: "PSCI-3", nombre: "Psicología 3", grado: "Tercero" },
+  { sheet: "PSIC-1", nombre: "PSIC-1", grado: "Primero" },
+  { sheet: "PSIC-2", nombre: "PSIC-2", grado: "Segundo" },
+  { sheet: "PSCI-3", nombre: "PSCI-3", grado: "Tercero" },
 ];
 const HOJAS_VIEJAS = new Set(GRUPOS_NUEVOS.map((g) => g.sheet));
 // PSIC-2 no trae columnas de año con encabezado: años en cols 40-43 (2025-2028)
