@@ -8078,7 +8078,7 @@ const ReportesPagosPage = () => {
         body.push([
           f.grupo,
           f.matricula,
-          f.nombre,
+          f.becado ? `${f.nombre} (BECADO)` : f.nombre,
           ...MESES_REPORTE.map((m) => f.meses[String(m.n)]?.monto || 0),
           f.adeudos,
           f.recargos || 0,
@@ -8102,6 +8102,11 @@ const ReportesPagosPage = () => {
     <tr key={f.alumno_id} className="hover:bg-gray-50/50">
       <td className="p-2 font-bold text-gray-800 whitespace-nowrap">
         {f.nombre}
+        {f.becado && (
+          <span className="ml-2 px-2 py-0.5 rounded-full text-[10px] font-black bg-green-600 text-white">
+            BECADO
+          </span>
+        )}
         <div className="text-[10px] text-gray-400 font-mono font-normal">
           {f.matricula}
         </div>
@@ -8233,7 +8238,7 @@ const ReportesPagosPage = () => {
             <div className="text-xs text-gray-500">
               {filasFiltradas.length} alumnos · Generado{" "}
               {new Date().toLocaleDateString("es-MX")} · Solo meses vencidos ·
-              Recargo $100 por mes de retraso
+              Recargo $50 por adeudo vencido · Becados al corriente
             </div>
           </div>
           <div className="overflow-x-auto">

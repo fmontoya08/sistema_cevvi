@@ -2945,15 +2945,33 @@ adminRouter.get("/finanzas/cuadricula", async (req, res) => {
     );
     const rank = (e) => (e === "vencido" ? 0 : e === "pendiente" ? 1 : 2);
     // Regla de reporte: solo son exigibles los meses vencidos al mes actual.
-    // Los meses futuros se ocultan (no suman). Recargo: $100 por mes de retraso.
+    // Los meses futuros se ocultan (no suman). Recargo: $50 por cada adeudo vencido.
+    // Becados del Excel (OBS con BECA total, no parcial de inscripción) se muestran al corriente.
     const ahora = new Date();
     const mesActual = ahora.getMonth() + 1;
     const anioActual = ahora.getFullYear();
-    const RECARGO_MES = 100;
+    const RECARGO_ADEUDO = 50;
     const esExigible = (anio, mes) =>
       anio < anioActual || (anio === anioActual && mes <= mesActual);
-    const mesesAtraso = (anio, mes) =>
-      Math.max(0, (anioActual - anio) * 12 + (mesActual - mes));
+    // Alumnos becados al 100% según el Excel (solo lectura del archivo local)
+    const { normalizar: normExcel } = require("./scripts/import-parse");
+    // Beca total: "BECADOS 100%" o beca de mensualidad completa
+    // (no parcial: solo-inscripción o "dos mensualidades").
+    const esBecaTotal = (obs) =>
+      /beca/i.test(obs) &&
+      (/100\s*%/.test(obs) ||
+        (/mensual/i.test(obs) && !/dos\s+mens/i.test(obs)));
+    let becados = new Set();
+    try {
+      const g = require("./lector-pagos-aislado/grupos");
+      for (const h of ["PSIC-1", "PSIC-2", "PSCI-3", "PSIC-4", "PSICO-5", "PSICO VIR-6", "PEDA VIR-6", "PEDA-4", "PEDA-5", "PEDA-6"]) {
+        for (const a of g.listaAlumnos(undefined, h)) {
+          if (esBecaTotal(g.obsDeHoja(h, a.fila))) becados.add(normExcel(a.nombre));
+        }
+      }
+    } catch (e) {
+      console.error("Aviso becados:", e.message);
+    }
     const porAlumno = new Map();
     for (const m of movs) {
       if (!porAlumno.has(m.alumno_id)) porAlumno.set(m.alumno_id, []);
@@ -2984,9 +3002,8 @@ adminRouter.get("/finanzas/cuadricula", async (req, res) => {
           if (m.estatus_pago === "pagado") pagado += monto;
           else {
             pendiente += monto;
-            const r = RECARGO_MES * mesesAtraso(m.anio, m.mes);
-            cur.recargo += r;
-            recargos += r;
+            cur.recargo += RECARGO_ADEUDO;
+            recargos += RECARGO_ADEUDO;
           }
         } else if (m.estatus_pago === "pagado") {
           pagado += monto;
@@ -2995,9 +3012,21 @@ adminRouter.get("/finanzas/cuadricula", async (req, res) => {
           adeudos += monto;
         }
       }
+      const nombre = `${al.apellido_paterno} ${al.apellido_materno || ""} ${al.nombre}`.replace(/\s+/g, " ").trim();
+      const becado = becados.has(normExcel(nombre));
+      if (becado) {
+        for (const k of Object.keys(meses)) {
+          meses[k].estatus = "pagado";
+          meses[k].recargo = 0;
+        }
+        pendiente = 0;
+        adeudos = 0;
+        recargos = 0;
+      }
       return {
         alumno_id: al.id,
-        nombre: `${al.apellido_paterno} ${al.apellido_materno || ""} ${al.nombre}`.replace(/\s+/g, " ").trim(),
+        nombre,
+        becado,
         matricula: al.matricula || "-",
         grupo: al.grupo,
         meses,
