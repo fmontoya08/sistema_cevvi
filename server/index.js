@@ -2951,6 +2951,8 @@ adminRouter.get("/finanzas/cuadricula", async (req, res) => {
     const mesActual = ahora.getMonth() + 1;
     const anioActual = ahora.getFullYear();
     const RECARGO_ADEUDO = 50;
+    const tipoDe = (concepto) =>
+      /reinscrip/i.test(concepto) ? "REINSC" : /inscrip/i.test(concepto) ? "INSC" : /mensual/i.test(concepto) ? "MENS" : "OTRO";
     const esExigible = (anio, mes) =>
       anio < anioActual || (anio === anioActual && mes <= mesActual);
     // Alumnos becados al 100% según el Excel (solo lectura del archivo local)
@@ -2995,8 +2997,9 @@ adminRouter.get("/finanzas/cuadricula", async (req, res) => {
           if (!esExigible(m.anio, m.mes) && m.estatus_pago !== "pagado") {
             continue; // mes futuro: aún no exigible, no se muestra ni suma
           }
-          const cur = meses[m.mes] || { monto: 0, estatus: "pagado", recargo: 0 };
+          const cur = meses[m.mes] || { monto: 0, estatus: "pagado", recargo: 0, items: [] };
           cur.monto = Math.round((cur.monto + monto) * 100) / 100;
+          cur.items.push({ monto, estatus: m.estatus_pago, tipo: tipoDe(m.concepto) });
           if (rank(m.estatus_pago) < rank(cur.estatus)) cur.estatus = m.estatus_pago;
           meses[m.mes] = cur;
           if (m.estatus_pago === "pagado") pagado += monto;

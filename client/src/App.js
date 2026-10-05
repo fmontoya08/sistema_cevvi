@@ -8070,6 +8070,15 @@ const ReportesPagosPage = () => {
       : [grupoSel];
   const filasPorGrupo = (g) => filasFiltradas.filter((f) => f.grupo === g);
 
+  const celdaExcel = (f, m) => {
+    const c = f.meses[String(m)];
+    if (!c) return 0;
+    if (c.items && c.items.length > 1) {
+      return c.items.map((it) => `${it.monto}${it.tipo[0]}`).join("+");
+    }
+    return c.monto;
+  };
+
   const exportarExcel = () => {
     const head = ["Grupo", "Matrícula", "Alumno", ...MESES_REPORTE.map((m) => m.nombre), "Adeudos", "Recargos", "Pagado", "Total"];
     const body = [];
@@ -8079,7 +8088,7 @@ const ReportesPagosPage = () => {
           f.grupo,
           f.matricula,
           f.becado ? `${f.nombre} (BECADO)` : f.nombre,
-          ...MESES_REPORTE.map((m) => f.meses[String(m.n)]?.monto || 0),
+          ...MESES_REPORTE.map((m) => celdaExcel(f, m.n)),
           f.adeudos,
           f.recargos || 0,
           f.pagado,
@@ -8113,13 +8122,27 @@ const ReportesPagosPage = () => {
       </td>
       {MESES_REPORTE.map((m) => {
         const c = f.meses[String(m.n)];
+        if (!c) {
+          return (
+            <td key={m.n} className="p-2 text-right text-gray-300">
+              -
+            </td>
+          );
+        }
         return (
           <td
             key={m.n}
-            title={c && c.recargo ? `Recargo por retraso: $${c.recargo}` : undefined}
-            className={`p-2 text-right ${celdaColor(c)}`}
+            className="p-2 text-right"
+            title={c.recargo ? `Recargo por retraso: $${c.recargo}` : undefined}
           >
-            {c ? fmt(c.monto) : "-"}
+            {(c.items || [{ monto: c.monto, estatus: c.estatus, tipo: "?" }]).map((it, k) => (
+              <div key={k} className={celdaColor(it)}>
+                {fmt(it.monto)}{" "}
+                <span className="text-[9px] font-black px-1 rounded bg-gray-200 text-gray-700">
+                  {it.tipo[0]}
+                </span>
+              </div>
+            ))}
           </td>
         );
       })}
@@ -8239,6 +8262,10 @@ const ReportesPagosPage = () => {
               {filasFiltradas.length} alumnos · Generado{" "}
               {new Date().toLocaleDateString("es-MX")} · Solo meses vencidos ·
               Recargo $50 por adeudo vencido · Becados al corriente
+            </div>
+            <div className="text-xs text-gray-500 mt-1">
+              Tipos: <b>M</b>=Mensualidad · <b>R</b>=Reinscripción ·{" "}
+              <b>I</b>=Inscripción · <b>O</b>=Otro
             </div>
           </div>
           <div className="overflow-x-auto">
