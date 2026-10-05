@@ -817,12 +817,6 @@ const AdminLayout = () => {
       roles: ["admin", "control_escolar"],
     },
     {
-      icon: FileText,
-      label: "Reportes de Pagos",
-      path: "/admin/reportes-pagos",
-      roles: ["admin", "control_escolar"],
-    },
-    {
       icon: ClipboardEdit,
       label: "Solicitudes",
       path: "/admin/solicitudes",
@@ -8201,6 +8195,7 @@ const CajaPage = () => {
   const [expandidos, setExpandidos] = useState({});
   const [loading, setLoading] = useState(true);
   const [filtro, setFiltro] = useState("");
+  const [vista, setVista] = useState("caja");
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -8302,6 +8297,7 @@ const CajaPage = () => {
             Pagos realizados, alumnos al corriente y adeudos pendientes.
           </p>
         </div>
+        {vista === "caja" && (
         <div className="relative w-full md:w-96">
           <Search className="absolute left-4 top-3.5 text-gray-400" size={20} />
           <input
@@ -8312,8 +8308,29 @@ const CajaPage = () => {
             onChange={(e) => setFiltro(e.target.value)}
           />
         </div>
+        )}
       </div>
 
+      {/* TABS CAJA / REPORTE */}
+      <div className="no-print flex bg-gray-100 p-1 rounded-xl w-fit">
+        {[
+          { id: "caja", label: "Caja" },
+          { id: "reporte", label: "Reporte general" },
+        ].map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setVista(t.id)}
+            className={`px-6 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${vista === t.id ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"}`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {vista === "reporte" ? (
+        <ReportesPagosPage />
+      ) : (
+      <>
       {/* TABLA DE RESULTADOS */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <table className="w-full text-left">
@@ -8472,6 +8489,8 @@ const CajaPage = () => {
           </div>
         )}
       </div>
+      </>
+      )}
     </div>
   );
 };
@@ -16149,10 +16168,6 @@ function App() {
               <Route path="/admin/migracion" element={<MigracionPage />} />
               <Route path="/migrar-grupos" element={<MigracionGruposPage />} />
               <Route path="/admin/finanzas" element={<CajaPage />} />
-              <Route
-                path="/admin/reportes-pagos"
-                element={<ReportesPagosPage />}
-              />
               <Route
                 path="/admin/finanzas/alumno/:id"
                 element={<DetalleFinanzasAlumnoPage />}
