@@ -18,6 +18,7 @@ import ClaseEnVivoPage from "./pages/ClaseEnVivoPage";
 import TutorialGuide from "./components/TutorialGuide"; // Asegúrate de crear la carpeta components
 import AIChatAssistant from "./components/AIChatAssistant";
 import RegistroControlEscolarPage from "./pages/RegistroControlEscolarPage";
+import * as XLSX from "xlsx"; // reportes Excel
 
 import React, {
   Fragment,
@@ -8055,10 +8056,80 @@ const ReportesPagosPage = () => {
       (f.matricula && f.matricula.includes(busqueda)),
   );
 
-  const totCol = (mes) =>
-    filasFiltradas.reduce((s, f) => s + (f.meses[String(mes)]?.monto || 0), 0);
-  const totAdeudos = filasFiltradas.reduce((s, f) => s + f.adeudos, 0);
-  const totPend = filasFiltradas.reduce((s, f) => s + f.pendiente, 0);
+  const totCol = (lista, mes) =>
+    lista.reduce((s, f) => s + (f.meses[String(mes)]?.monto || 0), 0);
+  const totAdeudos = (lista) => lista.reduce((s, f) => s + f.adeudos, 0);
+  const totPend = (lista) => lista.reduce((s, f) => s + f.pendiente, 0);
+  const totPag = (lista) => lista.reduce((s, f) => s + f.pagado, 0);
+
+  const gruposVista =
+    grupoSel === "todos"
+      ? [...new Set(filasFiltradas.map((f) => f.grupo))]
+      : [grupoSel];
+  const filasPorGrupo = (g) => filasFiltradas.filter((f) => f.grupo === g);
+
+  const exportarExcel = () => {
+    const head = ["Grupo", "Matrícula", "Alumno", ...MESES_REPORTE.map((m) => m.nombre), "Adeudos", "Pagado", "Pendiente"];
+    const body = [];
+    for (const g of gruposVista) {
+      for (const f of filasPorGrupo(g)) {
+        body.push([
+          f.grupo,
+          f.matricula,
+          f.nombre,
+          ...MESES_REPORTE.map((m) => f.meses[String(m.n)]?.monto || 0),
+          f.adeudos,
+          f.pagado,
+          f.pendiente,
+        ]);
+      }
+      const lg = filasPorGrupo(g);
+      body.push([
+        `SUBTOTAL ${g} (${lg.length})`, "", "",
+        ...MESES_REPORTE.map((m) => totCol(lg, m.n)),
+        totAdeudos(lg), totPag(lg), totPend(lg),
+      ]);
+    }
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([head, ...body]), "Reporte");
+    XLSX.writeFile(wb, `Reporte_Pagos_${grupoSel}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
+  const filaAlumno = (f) => (
+    <tr key={f.alumno_id} className="hover:bg-gray-50/50">
+      <td className="p-2 font-bold text-gray-800 whitespace-nowrap">
+        {f.nombre}
+        <div className="text-[10px] text-gray-400 font-mono font-normal">
+          {f.matricula}
+        </div>
+      </td>
+      {MESES_REPORTE.map((m) => {
+        const c = f.meses[String(m.n)];
+        return (
+          <td key={m.n} className={`p-2 text-right ${celdaColor(c)}`}>
+            {c ? fmt(c.monto) : "-"}
+          </td>
+        );
+      })}
+      <td className="p-2 text-right font-bold text-red-700">
+        {f.adeudos ? fmt(f.adeudos) : "-"}
+      </td>
+      <td className="p-2 text-right font-bold">{fmt(f.pendiente)}</td>
+    </tr>
+  );
+
+  const filaSubtotal = (g, lg) => (
+    <tr key={`sub-${g}`} className="bg-gray-100 font-bold border-y-2 border-gray-300">
+      <td className="p-2">SUBTOTAL {g} ({lg.length})</td>
+      {MESES_REPORTE.map((m) => (
+        <td key={m.n} className="p-2 text-right">
+          {fmt(totCol(lg, m.n))}
+        </td>
+      ))}
+      <td className="p-2 text-right">{fmt(totAdeudos(lg))}</td>
+      <td className="p-2 text-right">{fmt(totPend(lg))}</td>
+    </tr>
+  );
 
   const celdaColor = (c) =>
     !c
@@ -8109,8 +8180,30 @@ const ReportesPagosPage = () => {
           >
             <Printer size={16} /> Imprimir / PDF
           </button>
+          <button
+            onClick={exportarExcel}
+            className="bg-green-700 text-white px-5 py-2 rounded-xl font-bold flex items-center gap-2"
+          >
+            <Download size={16} /> Excel
+          </button>
         </div>
       </div>
+
+      {!loading && (
+        <div className="no-print grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[
+            { label: "Alumnos", valor: filasFiltradas.length, cls: "text-gray-800" },
+            { label: "Pagado", valor: fmt(totPag(filasFiltradas)), cls: "text-green-700" },
+            { label: "Pendiente", valor: fmt(totPend(filasFiltradas)), cls: "text-amber-700" },
+            { label: "Adeudos", valor: fmt(totAdeudos(filasFiltradas)), cls: "text-red-700" },
+          ].map((t) => (
+            <div key={t.label} className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+              <div className="text-xs text-gray-500 uppercase font-bold">{t.label}</div>
+              <div className={`text-2xl font-black ${t.cls}`}>{t.valor}</div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {loading ? (
         <div className="text-center py-20 text-gray-400">
@@ -8143,41 +8236,30 @@ const ReportesPagosPage = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {filasFiltradas.map((f) => (
-                  <tr key={f.alumno_id} className="hover:bg-gray-50/50">
-                    <td className="p-2 font-bold text-gray-800 whitespace-nowrap">
-                      {f.nombre}
-                      <div className="text-[10px] text-gray-400 font-mono font-normal">
-                        {f.matricula} · {f.grupo}
-                      </div>
-                    </td>
-                    {MESES_REPORTE.map((m) => {
-                      const c = f.meses[String(m.n)];
-                      return (
-                        <td key={m.n} className={`p-2 text-right ${celdaColor(c)}`}>
-                          {c ? fmt(c.monto) : "-"}
+                {gruposVista.map((g) => (
+                  <Fragment key={g}>
+                    {grupoSel === "todos" && (
+                      <tr className="bg-gray-800 text-white">
+                        <td className="p-2 font-black tracking-wide" colSpan={14}>
+                          GRUPO {g} ({filasPorGrupo(g).length} alumnos)
                         </td>
-                      );
-                    })}
-                    <td className="p-2 text-right font-bold text-red-700">
-                      {f.adeudos ? fmt(f.adeudos) : "-"}
-                    </td>
-                    <td className="p-2 text-right font-bold">
-                      {fmt(f.pendiente)}
-                    </td>
-                  </tr>
+                      </tr>
+                    )}
+                    {filasPorGrupo(g).map((f) => filaAlumno(f))}
+                    {filaSubtotal(g, filasPorGrupo(g))}
+                  </Fragment>
                 ))}
               </tbody>
               <tfoot className="bg-gray-50 font-bold border-t-2 border-gray-200">
                 <tr>
-                  <td className="p-2">TOTALES ({filasFiltradas.length})</td>
+                  <td className="p-2">TOTAL GENERAL ({filasFiltradas.length})</td>
                   {MESES_REPORTE.map((m) => (
                     <td key={m.n} className="p-2 text-right">
-                      {fmt(totCol(m.n))}
+                      {fmt(totCol(filasFiltradas, m.n))}
                     </td>
                   ))}
-                  <td className="p-2 text-right">{fmt(totAdeudos)}</td>
-                  <td className="p-2 text-right">{fmt(totPend)}</td>
+                  <td className="p-2 text-right">{fmt(totAdeudos(filasFiltradas))}</td>
+                  <td className="p-2 text-right">{fmt(totPend(filasFiltradas))}</td>
                 </tr>
               </tfoot>
             </table>
