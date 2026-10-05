@@ -2944,6 +2944,16 @@ adminRouter.get("/finanzas/cuadricula", async (req, res) => {
       params,
     );
     const rank = (e) => (e === "vencido" ? 0 : e === "pendiente" ? 1 : 2);
+    // Regla de reporte: solo son exigibles los meses vencidos al mes actual.
+    // Los meses futuros se ocultan (no suman). Recargo: $100 por mes de retraso.
+    const ahora = new Date();
+    const mesActual = ahora.getMonth() + 1;
+    const anioActual = ahora.getFullYear();
+    const RECARGO_MES = 100;
+    const esExigible = (anio, mes) =>
+      anio < anioActual || (anio === anioActual && mes <= mesActual);
+    const mesesAtraso = (anio, mes) =>
+      Math.max(0, (anioActual - anio) * 12 + (mesActual - mes));
     const porAlumno = new Map();
     for (const m of movs) {
       if (!porAlumno.has(m.alumno_id)) porAlumno.set(m.alumno_id, []);
@@ -2954,18 +2964,34 @@ adminRouter.get("/finanzas/cuadricula", async (req, res) => {
       let adeudos = 0;
       let pagado = 0;
       let pendiente = 0;
+      let recargos = 0;
       for (const m of porAlumno.get(al.id) || []) {
         const monto = Number(m.monto_a_pagar);
-        if (m.estatus_pago === "pagado") pagado += monto;
-        else pendiente += monto;
         if (/^Adeudo \d{4}$/.test(m.concepto)) {
-          if (m.estatus_pago !== "pagado") adeudos += monto;
+          if (m.estatus_pago === "pagado") pagado += monto;
+          else {
+            pendiente += monto;
+            adeudos += monto;
+          }
         } else if (m.anio === 2026 && m.mes >= 2 && m.mes <= 12) {
-          const cur = meses[m.mes] || { monto: 0, estatus: "pagado" };
+          if (!esExigible(m.anio, m.mes) && m.estatus_pago !== "pagado") {
+            continue; // mes futuro: aún no exigible, no se muestra ni suma
+          }
+          const cur = meses[m.mes] || { monto: 0, estatus: "pagado", recargo: 0 };
           cur.monto = Math.round((cur.monto + monto) * 100) / 100;
           if (rank(m.estatus_pago) < rank(cur.estatus)) cur.estatus = m.estatus_pago;
           meses[m.mes] = cur;
-        } else if (m.estatus_pago !== "pagado") {
+          if (m.estatus_pago === "pagado") pagado += monto;
+          else {
+            pendiente += monto;
+            const r = RECARGO_MES * mesesAtraso(m.anio, m.mes);
+            cur.recargo += r;
+            recargos += r;
+          }
+        } else if (m.estatus_pago === "pagado") {
+          pagado += monto;
+        } else {
+          pendiente += monto;
           adeudos += monto;
         }
       }
@@ -2976,6 +3002,7 @@ adminRouter.get("/finanzas/cuadricula", async (req, res) => {
         grupo: al.grupo,
         meses,
         adeudos: Math.round(adeudos * 100) / 100,
+        recargos: Math.round(recargos * 100) / 100,
         pagado: Math.round(pagado * 100) / 100,
         pendiente: Math.round(pendiente * 100) / 100,
       };

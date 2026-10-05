@@ -8061,6 +8061,8 @@ const ReportesPagosPage = () => {
   const totAdeudos = (lista) => lista.reduce((s, f) => s + f.adeudos, 0);
   const totPend = (lista) => lista.reduce((s, f) => s + f.pendiente, 0);
   const totPag = (lista) => lista.reduce((s, f) => s + f.pagado, 0);
+  const totRec = (lista) => lista.reduce((s, f) => s + (f.recargos || 0), 0);
+  const totTotal = (lista) => totPend(lista) + totRec(lista);
 
   const gruposVista =
     grupoSel === "todos"
@@ -8069,7 +8071,7 @@ const ReportesPagosPage = () => {
   const filasPorGrupo = (g) => filasFiltradas.filter((f) => f.grupo === g);
 
   const exportarExcel = () => {
-    const head = ["Grupo", "Matrícula", "Alumno", ...MESES_REPORTE.map((m) => m.nombre), "Adeudos", "Pagado", "Pendiente"];
+    const head = ["Grupo", "Matrícula", "Alumno", ...MESES_REPORTE.map((m) => m.nombre), "Adeudos", "Recargos", "Pagado", "Total"];
     const body = [];
     for (const g of gruposVista) {
       for (const f of filasPorGrupo(g)) {
@@ -8079,15 +8081,16 @@ const ReportesPagosPage = () => {
           f.nombre,
           ...MESES_REPORTE.map((m) => f.meses[String(m.n)]?.monto || 0),
           f.adeudos,
+          f.recargos || 0,
           f.pagado,
-          f.pendiente,
+          f.pendiente + (f.recargos || 0),
         ]);
       }
       const lg = filasPorGrupo(g);
       body.push([
         `SUBTOTAL ${g} (${lg.length})`, "", "",
         ...MESES_REPORTE.map((m) => totCol(lg, m.n)),
-        totAdeudos(lg), totPag(lg), totPend(lg),
+        totAdeudos(lg), totRec(lg), totPag(lg), totTotal(lg),
       ]);
     }
     const wb = XLSX.utils.book_new();
@@ -8106,7 +8109,11 @@ const ReportesPagosPage = () => {
       {MESES_REPORTE.map((m) => {
         const c = f.meses[String(m.n)];
         return (
-          <td key={m.n} className={`p-2 text-right ${celdaColor(c)}`}>
+          <td
+            key={m.n}
+            title={c && c.recargo ? `Recargo por retraso: $${c.recargo}` : undefined}
+            className={`p-2 text-right ${celdaColor(c)}`}
+          >
             {c ? fmt(c.monto) : "-"}
           </td>
         );
@@ -8114,7 +8121,12 @@ const ReportesPagosPage = () => {
       <td className="p-2 text-right font-bold text-red-700">
         {f.adeudos ? fmt(f.adeudos) : "-"}
       </td>
-      <td className="p-2 text-right font-bold">{fmt(f.pendiente)}</td>
+      <td className="p-2 text-right font-bold text-orange-700">
+        {f.recargos ? fmt(f.recargos) : "-"}
+      </td>
+      <td className="p-2 text-right font-bold">
+        {fmt(f.pendiente + (f.recargos || 0))}
+      </td>
     </tr>
   );
 
@@ -8127,7 +8139,8 @@ const ReportesPagosPage = () => {
         </td>
       ))}
       <td className="p-2 text-right">{fmt(totAdeudos(lg))}</td>
-      <td className="p-2 text-right">{fmt(totPend(lg))}</td>
+      <td className="p-2 text-right">{fmt(totRec(lg))}</td>
+      <td className="p-2 text-right">{fmt(totTotal(lg))}</td>
     </tr>
   );
 
@@ -8190,11 +8203,12 @@ const ReportesPagosPage = () => {
       </div>
 
       {!loading && (
-        <div className="no-print grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="no-print grid grid-cols-2 md:grid-cols-5 gap-3">
           {[
             { label: "Alumnos", valor: filasFiltradas.length, cls: "text-gray-800" },
             { label: "Pagado", valor: fmt(totPag(filasFiltradas)), cls: "text-green-700" },
             { label: "Pendiente", valor: fmt(totPend(filasFiltradas)), cls: "text-amber-700" },
+            { label: "Recargos", valor: fmt(totRec(filasFiltradas)), cls: "text-orange-700" },
             { label: "Adeudos", valor: fmt(totAdeudos(filasFiltradas)), cls: "text-red-700" },
           ].map((t) => (
             <div key={t.label} className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
@@ -8218,7 +8232,8 @@ const ReportesPagosPage = () => {
             </div>
             <div className="text-xs text-gray-500">
               {filasFiltradas.length} alumnos · Generado{" "}
-              {new Date().toLocaleDateString("es-MX")}
+              {new Date().toLocaleDateString("es-MX")} · Solo meses vencidos ·
+              Recargo $100 por mes de retraso
             </div>
           </div>
           <div className="overflow-x-auto">
@@ -8232,6 +8247,7 @@ const ReportesPagosPage = () => {
                     </th>
                   ))}
                   <th className="p-2 text-right">Adeudos</th>
+                  <th className="p-2 text-right">Recargos</th>
                   <th className="p-2 text-right">Total pend.</th>
                 </tr>
               </thead>
@@ -8240,7 +8256,7 @@ const ReportesPagosPage = () => {
                   <Fragment key={g}>
                     {grupoSel === "todos" && (
                       <tr className="bg-gray-800 text-white">
-                        <td className="p-2 font-black tracking-wide" colSpan={14}>
+                        <td className="p-2 font-black tracking-wide" colSpan={15}>
                           GRUPO {g} ({filasPorGrupo(g).length} alumnos)
                         </td>
                       </tr>
@@ -8259,7 +8275,8 @@ const ReportesPagosPage = () => {
                     </td>
                   ))}
                   <td className="p-2 text-right">{fmt(totAdeudos(filasFiltradas))}</td>
-                  <td className="p-2 text-right">{fmt(totPend(filasFiltradas))}</td>
+                  <td className="p-2 text-right">{fmt(totRec(filasFiltradas))}</td>
+                  <td className="p-2 text-right">{fmt(totTotal(filasFiltradas))}</td>
                 </tr>
               </tfoot>
             </table>
