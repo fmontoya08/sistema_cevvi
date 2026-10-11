@@ -2490,6 +2490,57 @@ app.post(
 // REPORTE GENERAL DE PAGOS COMPARTIBLE (Caja y Finanzas)
 // Fuente única de la cuadrícula estilo Excel + enlaces públicos con token.
 // ==============================================================
+// Pestañas del Excel de pagos (una por grupo). Fuente única para becados y bajas.
+const HOJAS_PAGOS = ["PSIC-1", "PSIC-2", "PSCI-3", "PSIC-4 y 5", "PSICO-6", "PSICO VIR-6", "PEDA VIR-6", "PEDA-4", "PEDA-5", "PEDA-6"];
+
+let _cacheBajas = null;
+// Nombres en secciones BAJA/BAJAS del Excel que NUNCA aparecen como activos
+// en ninguna pestaña (los duplicados activo-en-una/baja-en-otra cuentan como activos).
+function getNombresBaja() {
+  if (_cacheBajas) return _cacheBajas;
+  const { normalizar: norm } = require("./scripts/import-parse");
+  const XLSX = require("xlsx");
+  const { ARCHIVO_DEFAULT } = require("./lector-pagos-aislado/grupos");
+  const activos = new Set();
+  const bajas = new Set();
+  try {
+    const wb = XLSX.readFile(ARCHIVO_DEFAULT);
+    for (const h of HOJAS_PAGOS) {
+      const ws = wb.Sheets[h];
+      if (!ws || !ws["!ref"]) continue;
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+      let hRow = -1;
+      let nameCol = -1;
+      for (let i = 0; i < Math.min(rows.length, 12); i++) {
+        const idx = (rows[i] || []).findIndex((c) => /NOMBRE\s+DEL\s+ALUMNO/i.test(String(c || "")));
+        if (idx > -1) {
+          hRow = i;
+          nameCol = idx;
+          break;
+        }
+      }
+      if (hRow < 0) continue;
+      let sec = "";
+      for (let i = hRow + 1; i < rows.length; i++) {
+        const n = String((rows[i] || [])[nameCol] || "").trim();
+        if (!n || !/[A-Za-zÁÉÍÓÚÑ]/i.test(n)) continue;
+        if (/NOMBRE\s+DEL\s+ALUMNO/i.test(n)) continue;
+        if (/^FUSIONADOS/i.test(n) || /^\s*BAJAS?\b/i.test(n)) {
+          sec = n;
+          continue;
+        }
+        if (/baja/i.test(sec)) bajas.add(norm(n));
+        else activos.add(norm(n));
+      }
+    }
+  } catch (e) {
+    console.error("Aviso bajas:", e.message);
+  }
+  for (const n of activos) bajas.delete(n);
+  _cacheBajas = bajas;
+  return bajas;
+}
+
 const crypto = require("crypto");
 
 // Construye las filas de la cuadrícula de pagos (misma lógica para admin y vista pública).
@@ -10511,57 +10562,6 @@ apiRouter.post("/drive/enlace-publico", verifyToken, async (req, res) => {
 
   try {
 const crypto = require("crypto");
-
-// Pestañas del Excel de pagos (una por grupo). Fuente única para becados y bajas.
-const HOJAS_PAGOS = ["PSIC-1", "PSIC-2", "PSCI-3", "PSIC-4 y 5", "PSICO-6", "PSICO VIR-6", "PEDA VIR-6", "PEDA-4", "PEDA-5", "PEDA-6"];
-
-let _cacheBajas = null;
-// Nombres en secciones BAJA/BAJAS del Excel que NUNCA aparecen como activos
-// en ninguna pestaña (los duplicados activo-en-una/baja-en-otra cuentan como activos).
-function getNombresBaja() {
-  if (_cacheBajas) return _cacheBajas;
-  const { normalizar: norm } = require("./scripts/import-parse");
-  const XLSX = require("xlsx");
-  const { ARCHIVO_DEFAULT } = require("./lector-pagos-aislado/grupos");
-  const activos = new Set();
-  const bajas = new Set();
-  try {
-    const wb = XLSX.readFile(ARCHIVO_DEFAULT);
-    for (const h of HOJAS_PAGOS) {
-      const ws = wb.Sheets[h];
-      if (!ws || !ws["!ref"]) continue;
-      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
-      let hRow = -1;
-      let nameCol = -1;
-      for (let i = 0; i < Math.min(rows.length, 12); i++) {
-        const idx = (rows[i] || []).findIndex((c) => /NOMBRE\s+DEL\s+ALUMNO/i.test(String(c || "")));
-        if (idx > -1) {
-          hRow = i;
-          nameCol = idx;
-          break;
-        }
-      }
-      if (hRow < 0) continue;
-      let sec = "";
-      for (let i = hRow + 1; i < rows.length; i++) {
-        const n = String((rows[i] || [])[nameCol] || "").trim();
-        if (!n || !/[A-Za-zÁÉÍÓÚÑ]/i.test(n)) continue;
-        if (/NOMBRE\s+DEL\s+ALUMNO/i.test(n)) continue;
-        if (/^FUSIONADOS/i.test(n) || /^\s*BAJAS?\b/i.test(n)) {
-          sec = n;
-          continue;
-        }
-        if (/baja/i.test(sec)) bajas.add(norm(n));
-        else activos.add(norm(n));
-      }
-    }
-  } catch (e) {
-    console.error("Aviso bajas:", e.message);
-  }
-  for (const n of activos) bajas.delete(n);
-  _cacheBajas = bajas;
-  return bajas;
-}
     const token = crypto.randomBytes(32).toString("hex");
 
     let fechaExpiracion = null;
