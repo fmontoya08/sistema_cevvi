@@ -10,8 +10,8 @@ module.exports = {
   // Pestañas vigentes 2026 (las únicas a cargar)
   // NOTA: grupos en BD renombrados al nombre exacto de la pestaña (2026-10-04)
   sheets: [
-    { sheet: "PSIC-4",      nombreGrupo: "PSIC-4",      carrera: "Psicología", modalidad: "presencial", grado: "Cuarto", grupoExistente: "PSIC-4" },
-    { sheet: "PSICO-5",     nombreGrupo: "PSICO-5",     carrera: "Psicología", modalidad: "presencial", grado: "Quinto" },
+    { sheet: "PSIC-4 y 5",    nombreGrupo: "PSIC-4",      carrera: "Psicología", modalidad: "presencial", grado: "Cuarto", grupoExistente: "PSIC-4" },
+    { sheet: "PSICO-6",       nombreGrupo: "PSICO-5",     carrera: "Psicología", modalidad: "presencial", grado: "Quinto" },
     { sheet: "PSICO VIR-6", nombreGrupo: "PSICO VIR-6", carrera: "Psicología", modalidad: "virtual", grado: "Sexto" },
     { sheet: "PEDA VIR-6",  nombreGrupo: "PEDA VIR-6",  carrera: "Pedagogía",  modalidad: "virtual", grado: "Sexto" },
     { sheet: "PEDA-4",      nombreGrupo: "PEDA-4",      carrera: "Pedagogía",  modalidad: "presencial", grado: "Cuarto", grupoExistente: "PEDA-4" },

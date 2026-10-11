@@ -2538,7 +2538,7 @@ async function getCuadriculaPagos(grupo) {
   let becados = new Set();
   try {
     const g = require("./lector-pagos-aislado/grupos");
-    for (const h of ["PSIC-1", "PSIC-2", "PSCI-3", "PSIC-4", "PSICO-5", "PSICO VIR-6", "PEDA VIR-6", "PEDA-4", "PEDA-5", "PEDA-6"]) {
+      for (const h of ["PSIC-1", "PSIC-2", "PSCI-3", "PSIC-4 y 5", "PSICO-6", "PSICO VIR-6", "PEDA VIR-6", "PEDA-4", "PEDA-5", "PEDA-6"]) {
       for (const a of g.listaAlumnos(undefined, h)) {
         if (esBecaTotal(g.obsDeHoja(h, a.fila))) becados.add(normExcel(a.nombre));
       }
