@@ -8057,6 +8057,10 @@ const ReportesPagosPage = () => {
       (f.matricula && f.matricula.includes(busqueda)),
   );
 
+  // Bajas (sección BAJA del Excel): se muestran marcadas en rojo pero NO suman a totales.
+  const filasActivas = filasFiltradas.filter((f) => !f.baja);
+  const numBajas = filasFiltradas.length - filasActivas.length;
+
   const totCol = (lista, mes) =>
     lista.reduce((s, f) => s + (f.meses[String(mes)]?.monto || 0), 0);
   const totAdeudos = (lista) => lista.reduce((s, f) => s + f.adeudos, 0);
@@ -8070,6 +8074,8 @@ const ReportesPagosPage = () => {
       ? [...new Set(filasFiltradas.map((f) => f.grupo))]
       : [grupoSel];
   const filasPorGrupo = (g) => filasFiltradas.filter((f) => f.grupo === g);
+  const activasPorGrupo = (g) => filasPorGrupo(g).filter((f) => !f.baja);
+  const bajasPorGrupo = (g) => filasPorGrupo(g).length - activasPorGrupo(g).length;
 
   const celdaExcel = (f, m) => {
     const c = f.meses[String(m)];
@@ -8088,7 +8094,7 @@ const ReportesPagosPage = () => {
         body.push([
           f.grupo,
           f.matricula,
-          f.becado ? `${f.nombre} (BECADO)` : f.nombre,
+          f.baja ? `${f.nombre} (BAJA)` : (f.becado ? `${f.nombre} (BECADO)` : f.nombre),
           ...MESES_REPORTE.map((m) => celdaExcel(f, m.n)),
           f.adeudos,
           f.recargos || 0,
@@ -8096,9 +8102,10 @@ const ReportesPagosPage = () => {
           f.pendiente + (f.recargos || 0),
         ]);
       }
-      const lg = filasPorGrupo(g);
+      const lg = activasPorGrupo(g);
+      const nb = bajasPorGrupo(g);
       body.push([
-        `SUBTOTAL ${g} (${lg.length})`, "", "",
+        `SUBTOTAL ${g} (${lg.length}${nb ? ` + ${nb} bajas excl.` : ""})`, "", "",
         ...MESES_REPORTE.map((m) => totCol(lg, m.n)),
         totAdeudos(lg), totRec(lg), totPag(lg), totTotal(lg),
       ]);
@@ -8109,12 +8116,17 @@ const ReportesPagosPage = () => {
   };
 
   const filaAlumno = (f) => (
-    <tr key={f.alumno_id} className="hover:bg-gray-50/50">
+    <tr key={f.alumno_id} className={f.baja ? "bg-red-50/40 hover:bg-red-50/70" : "hover:bg-gray-50/50"}>
       <td className="p-2 font-bold text-gray-800 whitespace-nowrap">
         {f.nombre}
         {f.becado && (
           <span className="ml-2 px-2 py-0.5 rounded-full text-[10px] font-black bg-green-600 text-white">
             BECADO
+          </span>
+        )}
+        {f.baja && (
+          <span className="ml-2 px-2 py-0.5 rounded-full text-[10px] font-black bg-red-600 text-white">
+            BAJA
           </span>
         )}
         <div className="text-[10px] text-gray-400 font-mono font-normal">
@@ -8159,9 +8171,12 @@ const ReportesPagosPage = () => {
     </tr>
   );
 
-  const filaSubtotal = (g, lg) => (
+  const filaSubtotal = (g) => {
+    const lg = activasPorGrupo(g);
+    const nb = bajasPorGrupo(g);
+    return (
     <tr key={`sub-${g}`} className="bg-gray-100 font-bold border-y-2 border-gray-300">
-      <td className="p-2">SUBTOTAL {g} ({lg.length})</td>
+      <td className="p-2">SUBTOTAL {g} ({lg.length}{nb ? ` + ${nb} bajas excl.` : ""})</td>
       {MESES_REPORTE.map((m) => (
         <td key={m.n} className="p-2 text-right">
           {fmt(totCol(lg, m.n))}
@@ -8171,7 +8186,8 @@ const ReportesPagosPage = () => {
       <td className="p-2 text-right">{fmt(totRec(lg))}</td>
       <td className="p-2 text-right">{fmt(totTotal(lg))}</td>
     </tr>
-  );
+    );
+  };
 
   const celdaColor = (c) =>
     !c
@@ -8243,13 +8259,14 @@ const ReportesPagosPage = () => {
       )}
 
       {!loading && (
-        <div className="no-print grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div className="no-print grid grid-cols-2 md:grid-cols-6 gap-3">
           {[
-            { label: "Alumnos", valor: filasFiltradas.length, cls: "text-gray-800" },
-            { label: "Pagado", valor: fmt(totPag(filasFiltradas)), cls: "text-green-700" },
-            { label: "Pendiente", valor: fmt(totPend(filasFiltradas)), cls: "text-amber-700" },
-            { label: "Recargos", valor: fmt(totRec(filasFiltradas)), cls: "text-orange-700" },
-            { label: "Adeudos", valor: fmt(totAdeudos(filasFiltradas)), cls: "text-red-700" },
+            { label: "Alumnos", valor: filasActivas.length, cls: "text-gray-800" },
+            { label: "Pagado", valor: fmt(totPag(filasActivas)), cls: "text-green-700" },
+            { label: "Pendiente", valor: fmt(totPend(filasActivas)), cls: "text-amber-700" },
+            { label: "Recargos", valor: fmt(totRec(filasActivas)), cls: "text-orange-700" },
+            { label: "Adeudos", valor: fmt(totAdeudos(filasActivas)), cls: "text-red-700" },
+            { label: "Bajas (excl.)", valor: numBajas, cls: "text-red-600" },
           ].map((t) => (
             <div key={t.label} className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
               <div className="text-xs text-gray-500 uppercase font-bold">{t.label}</div>
@@ -8271,7 +8288,7 @@ const ReportesPagosPage = () => {
               {grupoSel === "todos" ? "Todos los grupos" : grupoSel}
             </div>
             <div className="text-xs text-gray-500">
-              {filasFiltradas.length} alumnos · Generado{" "}
+              {filasActivas.length} alumnos{numBajas ? ` + ${numBajas} bajas excluidas del total` : ""} · Generado{" "}
               {new Date().toLocaleDateString("es-MX")} · Solo meses vencidos ·
               Recargo $50 por adeudo vencido · Becados al corriente
             </div>
@@ -8301,26 +8318,26 @@ const ReportesPagosPage = () => {
                     {grupoSel === "todos" && (
                       <tr className="bg-gray-800 text-white">
                         <td className="p-2 font-black tracking-wide" colSpan={15}>
-                          GRUPO {g} ({filasPorGrupo(g).length} alumnos)
+                          GRUPO {g} ({activasPorGrupo(g).length} alumnos{bajasPorGrupo(g) ? ` + ${bajasPorGrupo(g)} bajas` : ""})
                         </td>
                       </tr>
                     )}
                     {filasPorGrupo(g).map((f) => filaAlumno(f))}
-                    {filaSubtotal(g, filasPorGrupo(g))}
+                    {filaSubtotal(g)}
                   </Fragment>
                 ))}
               </tbody>
               <tfoot className="bg-gray-50 font-bold border-t-2 border-gray-200">
                 <tr>
-                  <td className="p-2">TOTAL GENERAL ({filasFiltradas.length})</td>
+                  <td className="p-2">TOTAL GENERAL ({filasActivas.length}{numBajas ? ` + ${numBajas} bajas excl.` : ""})</td>
                   {MESES_REPORTE.map((m) => (
                     <td key={m.n} className="p-2 text-right">
-                      {fmt(totCol(filasFiltradas, m.n))}
+                      {fmt(totCol(filasActivas, m.n))}
                     </td>
                   ))}
-                  <td className="p-2 text-right">{fmt(totAdeudos(filasFiltradas))}</td>
-                  <td className="p-2 text-right">{fmt(totRec(filasFiltradas))}</td>
-                  <td className="p-2 text-right">{fmt(totTotal(filasFiltradas))}</td>
+                  <td className="p-2 text-right">{fmt(totAdeudos(filasActivas))}</td>
+                  <td className="p-2 text-right">{fmt(totRec(filasActivas))}</td>
+                  <td className="p-2 text-right">{fmt(totTotal(filasActivas))}</td>
                 </tr>
               </tfoot>
             </table>
@@ -8516,6 +8533,11 @@ const PublicReportePagosPage = () => {
   const vista = grupoSel === "todos" ? base : base.filter((f) => f.grupo === grupoSel);
   const gruposVista = [...new Set(base.map((f) => f.grupo))].sort();
   const filasPorGrupo = (g) => vista.filter((f) => f.grupo === g);
+  // Bajas (sección BAJA del Excel): se muestran marcadas en rojo pero NO suman a totales.
+  const vistaActiva = vista.filter((f) => !f.baja);
+  const numBajasVista = vista.length - vistaActiva.length;
+  const activasPorGrupo = (g) => filasPorGrupo(g).filter((f) => !f.baja);
+  const totMesPub = (l, n) => l.reduce((s, f) => s + (f.meses[String(n)]?.monto || 0), 0);
 
   const totPag = (l) => l.reduce((s, f) => s + (f.pagado || 0), 0);
   const totPend = (l) => l.reduce((s, f) => s + (f.pendiente || 0), 0);
@@ -8524,7 +8546,7 @@ const PublicReportePagosPage = () => {
   const totCobrar = (l) => totPend(l) + totRec(l);
 
   const morosos = vista
-    .filter((f) => !f.becado && (f.pendiente || 0) + (f.recargos || 0) > 0)
+    .filter((f) => !f.becado && !f.baja && (f.pendiente || 0) + (f.recargos || 0) > 0)
     .map((f) => ({
       ...f,
       total: (f.pendiente || 0) + (f.recargos || 0),
@@ -8532,14 +8554,17 @@ const PublicReportePagosPage = () => {
     }))
     .sort((a, b) => b.total - a.total);
 
-  const pctMorosidad = vista.length ? Math.round((morosos.length / vista.length) * 100) : 0;
+  const pctMorosidad = vistaActiva.length ? Math.round((morosos.length / vistaActiva.length) * 100) : 0;
 
   const filaAlumnoPub = (f) => (
-    <tr key={f.idx} className="hover:bg-gray-50/50">
+    <tr key={f.idx} className={f.baja ? "bg-red-50/40 hover:bg-red-50/70" : "hover:bg-gray-50/50"}>
       <td className="p-2 font-bold text-gray-800 whitespace-nowrap">
         {f.nombre}
         {f.becado && (
           <span className="ml-2 px-2 py-0.5 rounded-full text-[10px] font-black bg-green-600 text-white">BECADO</span>
+        )}
+        {f.baja && (
+          <span className="ml-2 px-2 py-0.5 rounded-full text-[10px] font-black bg-red-600 text-white">BAJA</span>
         )}
         <div className="text-[10px] text-gray-400 font-mono font-normal">{f.matricula}</div>
       </td>
@@ -8590,7 +8615,7 @@ const PublicReportePagosPage = () => {
           <div className="text-xs font-black uppercase tracking-widest text-[#a72a34]">Centro Universitario Siglo XXI · Caja y Finanzas</div>
           <h1 className="text-2xl md:text-3xl font-bold text-gray-800 mt-1">Reporte general de pagos</h1>
           <p className="text-gray-500 text-sm mt-1">
-            Vista general de todos los grupos · {vista.length} alumnos · Solo meses vencidos · Recargo $50 por adeudo vencido · Becados al corriente
+            Vista general de todos los grupos · {vistaActiva.length} alumnos{numBajasVista ? ` + ${numBajasVista} bajas (en rojo, excluidas del total)` : ""} · Solo meses vencidos · Recargo $50 por adeudo vencido · Becados al corriente
             {vigencia ? ` · Vigente hasta ${new Date(vigencia).toLocaleDateString("es-MX")}` : " · Sin fecha de vencimiento"}
           </p>
           <div className="flex gap-2 flex-wrap items-center mt-4">
@@ -8607,13 +8632,14 @@ const PublicReportePagosPage = () => {
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {[
-            { label: "Alumnos", valor: vista.length, cls: "text-gray-800" },
-            { label: "Pagado", valor: fmt(totPag(vista)), cls: "text-green-700" },
-            { label: "Por cobrar", valor: fmt(totCobrar(vista)), cls: "text-[#a72a34]" },
+            { label: "Alumnos", valor: vistaActiva.length, cls: "text-gray-800" },
+            { label: "Pagado", valor: fmt(totPag(vistaActiva)), cls: "text-green-700" },
+            { label: "Por cobrar", valor: fmt(totCobrar(vistaActiva)), cls: "text-[#a72a34]" },
             { label: "Con retraso", valor: `${morosos.length} (${pctMorosidad}%)`, cls: "text-orange-700" },
-            { label: "Pendiente", valor: fmt(totPend(vista)), cls: "text-amber-700" },
-            { label: "Recargos", valor: fmt(totRec(vista)), cls: "text-orange-700" },
-            { label: "Adeudos", valor: fmt(totAde(vista)), cls: "text-red-700" },
+            { label: "Pendiente", valor: fmt(totPend(vistaActiva)), cls: "text-amber-700" },
+            { label: "Recargos", valor: fmt(totRec(vistaActiva)), cls: "text-orange-700" },
+            { label: "Adeudos", valor: fmt(totAde(vistaActiva)), cls: "text-red-700" },
+            { label: "Bajas (excl.)", valor: numBajasVista, cls: "text-red-600" },
             { label: "Grupos", valor: gruposVista.length, cls: "text-gray-800" },
           ].map((t) => (
             <div key={t.label} className="bg-white p-4 rounded-2xl shadow-sm border border-gray-200">
@@ -8626,7 +8652,7 @@ const PublicReportePagosPage = () => {
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
           <div className="p-4 border-b border-gray-100">
             <div className="font-bold text-gray-800">Alumnos con retraso ({morosos.length})</div>
-            <div className="text-xs text-gray-500">Pendiente + recargos, ordenados de mayor a menor. Tipos: <b>M</b>=Mensualidad · <b>R</b>=Reinscripción · <b>I</b>=Inscripción · <b>O</b>=Otro</div>
+            <div className="text-xs text-gray-500">Pendiente + recargos, ordenados de mayor a menor{numBajasVista ? ` · ${numBajasVista} bajas excluidas` : ""}. Tipos: <b>M</b>=Mensualidad · <b>R</b>=Reinscripción · <b>I</b>=Inscripción · <b>O</b>=Otro</div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
@@ -8666,7 +8692,7 @@ const PublicReportePagosPage = () => {
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
           <div className="p-4 border-b border-gray-100">
             <div className="font-bold text-gray-800">Cuadrícula general por grupo — {grupoSel === "todos" ? "Todos los grupos" : grupoSel}</div>
-            <div className="text-xs text-gray-500">{vista.length} alumnos · Generado {new Date().toLocaleDateString("es-MX")}</div>
+            <div className="text-xs text-gray-500">{vistaActiva.length} alumnos{numBajasVista ? ` + ${numBajasVista} bajas excl.` : ""} · Generado {new Date().toLocaleDateString("es-MX")}</div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-xs">
@@ -8684,31 +8710,31 @@ const PublicReportePagosPage = () => {
                   <Fragment key={g}>
                     {grupoSel === "todos" && (
                       <tr className="bg-gray-800 text-white">
-                        <td className="p-2 font-black tracking-wide" colSpan={15}>GRUPO {g} ({filasPorGrupo(g).length} alumnos)</td>
+                        <td className="p-2 font-black tracking-wide" colSpan={15}>GRUPO {g} ({activasPorGrupo(g).length} alumnos{filasPorGrupo(g).length - activasPorGrupo(g).length ? ` + ${filasPorGrupo(g).length - activasPorGrupo(g).length} bajas` : ""})</td>
                       </tr>
                     )}
                     {filasPorGrupo(g).map((f) => filaAlumnoPub(f))}
                     <tr className="bg-gray-100 font-bold border-y-2 border-gray-300">
-                      <td className="p-2">SUBTOTAL {g} ({filasPorGrupo(g).length})</td>
+                      <td className="p-2">SUBTOTAL {g} ({activasPorGrupo(g).length}{filasPorGrupo(g).length - activasPorGrupo(g).length ? ` + ${filasPorGrupo(g).length - activasPorGrupo(g).length} bajas excl.` : ""})</td>
                       {MESES_REPORTE.map((m) => (
-                        <td key={m.n} className="p-2 text-right">{fmt(filasPorGrupo(g).reduce((s, f) => s + (f.meses[String(m.n)]?.monto || 0), 0))}</td>
+                        <td key={m.n} className="p-2 text-right">{fmt(totMesPub(activasPorGrupo(g), m.n))}</td>
                       ))}
-                      <td className="p-2 text-right">{fmt(totAde(filasPorGrupo(g)))}</td>
-                      <td className="p-2 text-right">{fmt(totRec(filasPorGrupo(g)))}</td>
-                      <td className="p-2 text-right">{fmt(totCobrar(filasPorGrupo(g)))}</td>
+                      <td className="p-2 text-right">{fmt(totAde(activasPorGrupo(g)))}</td>
+                      <td className="p-2 text-right">{fmt(totRec(activasPorGrupo(g)))}</td>
+                      <td className="p-2 text-right">{fmt(totCobrar(activasPorGrupo(g)))}</td>
                     </tr>
                   </Fragment>
                 ))}
               </tbody>
               <tfoot className="bg-gray-50 font-bold border-t-2 border-gray-200">
                 <tr>
-                  <td className="p-2">TOTAL GENERAL ({vista.length})</td>
+                  <td className="p-2">TOTAL GENERAL ({vistaActiva.length}{numBajasVista ? ` + ${numBajasVista} bajas excl.` : ""})</td>
                   {MESES_REPORTE.map((m) => (
-                    <td key={m.n} className="p-2 text-right">{fmt(vista.reduce((s, f) => s + (f.meses[String(m.n)]?.monto || 0), 0))}</td>
+                    <td key={m.n} className="p-2 text-right">{fmt(totMesPub(vistaActiva, m.n))}</td>
                   ))}
-                  <td className="p-2 text-right">{fmt(totAde(vista))}</td>
-                  <td className="p-2 text-right">{fmt(totRec(vista))}</td>
-                  <td className="p-2 text-right">{fmt(totCobrar(vista))}</td>
+                  <td className="p-2 text-right">{fmt(totAde(vistaActiva))}</td>
+                  <td className="p-2 text-right">{fmt(totRec(vistaActiva))}</td>
+                  <td className="p-2 text-right">{fmt(totCobrar(vistaActiva))}</td>
                 </tr>
               </tfoot>
             </table>

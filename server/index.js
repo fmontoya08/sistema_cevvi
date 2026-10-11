@@ -578,6 +578,7 @@ app.get("/api/public/finanzas/reporte", reportePublicLimiter, async (req, res) =
       idx: idx + 1,
       nombre: f.nombre,
       becado: f.becado,
+      baja: !!f.baja,
       matricula: f.matricula,
       grupo: f.grupo,
       meses: f.meses,
@@ -2538,7 +2539,7 @@ async function getCuadriculaPagos(grupo) {
   let becados = new Set();
   try {
     const g = require("./lector-pagos-aislado/grupos");
-      for (const h of ["PSIC-1", "PSIC-2", "PSCI-3", "PSIC-4 y 5", "PSICO-6", "PSICO VIR-6", "PEDA VIR-6", "PEDA-4", "PEDA-5", "PEDA-6"]) {
+      for (const h of HOJAS_PAGOS) {
       for (const a of g.listaAlumnos(undefined, h)) {
         if (esBecaTotal(g.obsDeHoja(h, a.fila))) becados.add(normExcel(a.nombre));
       }
@@ -2589,6 +2590,7 @@ async function getCuadriculaPagos(grupo) {
     }
     const nombre = `${al.apellido_paterno} ${al.apellido_materno || ""} ${al.nombre}`.replace(/\s+/g, " ").trim();
     const becado = becados.has(normExcel(nombre));
+    const baja = getNombresBaja().has(normExcel(nombre));
     if (becado) {
       for (const k of Object.keys(meses)) {
         meses[k].estatus = "pagado";
@@ -2602,6 +2604,7 @@ async function getCuadriculaPagos(grupo) {
       alumno_id: al.id,
       nombre,
       becado,
+      baja,
       matricula: al.matricula || "-",
       grupo: al.grupo,
       meses,
@@ -10507,7 +10510,58 @@ apiRouter.post("/drive/enlace-publico", verifyToken, async (req, res) => {
   const usuarioId = req.user.id;
 
   try {
-    const crypto = require("crypto");
+const crypto = require("crypto");
+
+// Pestañas del Excel de pagos (una por grupo). Fuente única para becados y bajas.
+const HOJAS_PAGOS = ["PSIC-1", "PSIC-2", "PSCI-3", "PSIC-4 y 5", "PSICO-6", "PSICO VIR-6", "PEDA VIR-6", "PEDA-4", "PEDA-5", "PEDA-6"];
+
+let _cacheBajas = null;
+// Nombres en secciones BAJA/BAJAS del Excel que NUNCA aparecen como activos
+// en ninguna pestaña (los duplicados activo-en-una/baja-en-otra cuentan como activos).
+function getNombresBaja() {
+  if (_cacheBajas) return _cacheBajas;
+  const { normalizar: norm } = require("./scripts/import-parse");
+  const XLSX = require("xlsx");
+  const { ARCHIVO_DEFAULT } = require("./lector-pagos-aislado/grupos");
+  const activos = new Set();
+  const bajas = new Set();
+  try {
+    const wb = XLSX.readFile(ARCHIVO_DEFAULT);
+    for (const h of HOJAS_PAGOS) {
+      const ws = wb.Sheets[h];
+      if (!ws || !ws["!ref"]) continue;
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+      let hRow = -1;
+      let nameCol = -1;
+      for (let i = 0; i < Math.min(rows.length, 12); i++) {
+        const idx = (rows[i] || []).findIndex((c) => /NOMBRE\s+DEL\s+ALUMNO/i.test(String(c || "")));
+        if (idx > -1) {
+          hRow = i;
+          nameCol = idx;
+          break;
+        }
+      }
+      if (hRow < 0) continue;
+      let sec = "";
+      for (let i = hRow + 1; i < rows.length; i++) {
+        const n = String((rows[i] || [])[nameCol] || "").trim();
+        if (!n || !/[A-Za-zÁÉÍÓÚÑ]/i.test(n)) continue;
+        if (/NOMBRE\s+DEL\s+ALUMNO/i.test(n)) continue;
+        if (/^FUSIONADOS/i.test(n) || /^\s*BAJAS?\b/i.test(n)) {
+          sec = n;
+          continue;
+        }
+        if (/baja/i.test(sec)) bajas.add(norm(n));
+        else activos.add(norm(n));
+      }
+    }
+  } catch (e) {
+    console.error("Aviso bajas:", e.message);
+  }
+  for (const n of activos) bajas.delete(n);
+  _cacheBajas = bajas;
+  return bajas;
+}
     const token = crypto.randomBytes(32).toString("hex");
 
     let fechaExpiracion = null;
