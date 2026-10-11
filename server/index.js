@@ -251,6 +251,24 @@ async function connectToDatabase() {
       }
     }
     console.log("[MIGRACION] Tablas de clases grabadas verificadas.");
+
+    // Migración: tabla de enlaces compartidos del reporte general de pagos (Caja y Finanzas)
+    // Un enlace = vista pública general (todos los grupos) con token + vigencia, revocable.
+    try {
+      await db.query(`CREATE TABLE IF NOT EXISTS reporte_share_tokens (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        jti VARCHAR(64) NOT NULL UNIQUE,
+        grupo VARCHAR(100) NOT NULL DEFAULT 'todos',
+        creado_por INT DEFAULT NULL,
+        expira_en DATETIME DEFAULT NULL,
+        revocado TINYINT(1) NOT NULL DEFAULT 0,
+        fecha_creacion DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (creado_por) REFERENCES usuarios(id) ON DELETE SET NULL
+      )`);
+      console.log("[MIGRACION] Tabla reporte_share_tokens verificada.");
+    } catch (e) {
+      console.warn("[MIGRACION] Nota reporte_share_tokens:", e.message);
+    }
   } catch (err) {
     console.error("Error al conectar a la base de datos:", err);
     process.exit(1);
@@ -519,6 +537,65 @@ app.get("/api/public/catalogos", async (req, res) => {
   } catch (error) {
     console.error("Error al obtener catálogos públicos:", error);
     res.status(500).send({ message: "Error al cargar listas." });
+  }
+});
+
+// --- REPORTE GENERAL DE PAGOS COMPARTIDO (público, sin login; requiere token con vigencia) ---
+// GET /api/public/finanzas/reporte?token=<jwt> — vista general (todos los grupos), solo lectura.
+const reportePublicLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  message: { message: "Demasiadas consultas. Intenta de nuevo en unos minutos." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.get("/api/public/finanzas/reporte", reportePublicLimiter, async (req, res) => {
+  try {
+    const { token } = req.query;
+    if (!token) return res.status(401).send({ message: "Enlace inválido o expirado." });
+    let decoded;
+    try {
+      decoded = jwt.verify(token, JWT_SECRET);
+    } catch (e) {
+      return res.status(401).send({ message: "Enlace inválido o expirado." });
+    }
+    if (!decoded || decoded.scope !== "pagos-general" || !decoded.jti) {
+      return res.status(401).send({ message: "Enlace inválido o expirado." });
+    }
+    const [rows] = await db.query(
+      "SELECT jti, expira_en, revocado FROM reporte_share_tokens WHERE jti = ? LIMIT 1",
+      [decoded.jti],
+    );
+    if (rows.length === 0 || Number(rows[0].revocado) === 1) {
+      return res.status(401).send({ message: "Enlace inválido o expirado." });
+    }
+    if (rows[0].expira_en && new Date(rows[0].expira_en).getTime() < Date.now()) {
+      return res.status(401).send({ message: "Enlace inválido o expirado." });
+    }
+    const filas = await getCuadriculaPagos("todos");
+    // Vista pública: no se expone el id interno del alumno.
+    const filasPublicas = filas.map((f, idx) => ({
+      idx: idx + 1,
+      nombre: f.nombre,
+      becado: f.becado,
+      matricula: f.matricula,
+      grupo: f.grupo,
+      meses: f.meses,
+      adeudos: f.adeudos,
+      recargos: f.recargos,
+      pagado: f.pagado,
+      pendiente: f.pendiente,
+    }));
+    res.set("Cache-Control", "no-store");
+    res.json({
+      grupo: "todos",
+      filas: filasPublicas,
+      generado_en: new Date().toISOString(),
+      vigencia_hasta: rows[0].expira_en || null,
+    });
+  } catch (error) {
+    console.error("Error en reporte público:", error.message);
+    res.status(500).send({ message: "Error al obtener el reporte." });
   }
 });
 
@@ -2408,6 +2485,135 @@ app.post(
   },
 );
 
+// ==============================================================
+// REPORTE GENERAL DE PAGOS COMPARTIBLE (Caja y Finanzas)
+// Fuente única de la cuadrícula estilo Excel + enlaces públicos con token.
+// ==============================================================
+const crypto = require("crypto");
+
+// Construye las filas de la cuadrícula de pagos (misma lógica para admin y vista pública).
+// grupo: "todos" (general) o nombre de grupo específico.
+async function getCuadriculaPagos(grupo) {
+  const filtro = grupo && grupo !== "todos" ? "AND g.nombre_grupo = ?" : "";
+  const params = grupo && grupo !== "todos" ? [grupo] : [];
+  const [als] = await db.query(
+    `SELECT u.id, u.nombre, u.apellido_paterno, u.apellido_materno, u.matricula,
+            COALESCE(g.nombre_grupo, 'Sin grupo') AS grupo
+      FROM usuarios u LEFT JOIN grupos g ON g.id = u.grupo_id
+      WHERE u.rol = 'alumno' AND u.activo = 1 ${filtro}
+      ORDER BY u.apellido_paterno, u.apellido_materno, u.nombre`,
+    params,
+  );
+  const [movs] = await db.query(
+    `SELECT a.alumno_id, a.monto_a_pagar, a.estatus_pago,
+            MONTH(a.fecha_vencimiento) AS mes, YEAR(a.fecha_vencimiento) AS anio,
+            TRIM(c.nombre_concepto) AS concepto
+      FROM adeudos_alumnos a
+      INNER JOIN conceptos_pago c ON c.id = a.concepto_id
+      INNER JOIN usuarios u ON u.id = a.alumno_id
+      LEFT JOIN grupos g ON g.id = u.grupo_id
+      WHERE u.rol = 'alumno' AND u.activo = 1 AND a.estatus_pago != 'cancelado' ${filtro}`,
+    params,
+  );
+  const rank = (e) => (e === "vencido" ? 0 : e === "pendiente" ? 1 : 2);
+  // Regla de reporte: solo son exigibles los meses vencidos al mes actual.
+  // Los meses futuros se ocultan (no suman). Recargo: $50 por cada adeudo vencido.
+  // Becados del Excel (OBS con BECA total, no parcial de inscripción) se muestran al corriente.
+  const ahora = new Date();
+  const mesActual = ahora.getMonth() + 1;
+  const anioActual = ahora.getFullYear();
+  const RECARGO_ADEUDO = 50;
+  const tipoDe = (concepto) =>
+    /reinscrip/i.test(concepto) ? "REINSC" : /inscrip/i.test(concepto) ? "INSC" : /mensual/i.test(concepto) ? "MENS" : "OTRO";
+  const esExigible = (anio, mes) =>
+    anio < anioActual || (anio === anioActual && mes <= mesActual);
+  // Alumnos becados al 100% según el Excel (solo lectura del archivo local)
+  const { normalizar: normExcel } = require("./scripts/import-parse");
+  // Beca total: "BECADOS 100%" o beca de mensualidad completa
+  // (no parcial: solo-inscripción o "dos mensualidades").
+  const esBecaTotal = (obs) =>
+    /beca/i.test(obs) &&
+    (/100\s*%/.test(obs) ||
+      (/mensual/i.test(obs) && !/dos\s+mens/i.test(obs)));
+  let becados = new Set();
+  try {
+    const g = require("./lector-pagos-aislado/grupos");
+    for (const h of ["PSIC-1", "PSIC-2", "PSCI-3", "PSIC-4", "PSICO-5", "PSICO VIR-6", "PEDA VIR-6", "PEDA-4", "PEDA-5", "PEDA-6"]) {
+      for (const a of g.listaAlumnos(undefined, h)) {
+        if (esBecaTotal(g.obsDeHoja(h, a.fila))) becados.add(normExcel(a.nombre));
+      }
+    }
+  } catch (e) {
+    console.error("Aviso becados:", e.message);
+  }
+  const porAlumno = new Map();
+  for (const m of movs) {
+    if (!porAlumno.has(m.alumno_id)) porAlumno.set(m.alumno_id, []);
+    porAlumno.get(m.alumno_id).push(m);
+  }
+  const filas = als.map((al) => {
+    const meses = {};
+    let adeudos = 0;
+    let pagado = 0;
+    let pendiente = 0;
+    let recargos = 0;
+    for (const m of porAlumno.get(al.id) || []) {
+      const monto = Number(m.monto_a_pagar);
+      if (/^Adeudo \d{4}$/.test(m.concepto)) {
+        if (m.estatus_pago === "pagado") pagado += monto;
+        else {
+          pendiente += monto;
+          adeudos += monto;
+        }
+      } else if (m.anio === 2026 && m.mes >= 2 && m.mes <= 12) {
+        if (!esExigible(m.anio, m.mes) && m.estatus_pago !== "pagado") {
+          continue; // mes futuro: aún no exigible, no se muestra ni suma
+        }
+        const cur = meses[m.mes] || { monto: 0, estatus: "pagado", recargo: 0, items: [] };
+        cur.monto = Math.round((cur.monto + monto) * 100) / 100;
+        cur.items.push({ monto, estatus: m.estatus_pago, tipo: tipoDe(m.concepto) });
+        if (rank(m.estatus_pago) < rank(cur.estatus)) cur.estatus = m.estatus_pago;
+        meses[m.mes] = cur;
+        if (m.estatus_pago === "pagado") pagado += monto;
+        else {
+          pendiente += monto;
+          cur.recargo += RECARGO_ADEUDO;
+          recargos += RECARGO_ADEUDO;
+        }
+      } else if (m.estatus_pago === "pagado") {
+        pagado += monto;
+      } else {
+        pendiente += monto;
+        adeudos += monto;
+      }
+    }
+    const nombre = `${al.apellido_paterno} ${al.apellido_materno || ""} ${al.nombre}`.replace(/\s+/g, " ").trim();
+    const becado = becados.has(normExcel(nombre));
+    if (becado) {
+      for (const k of Object.keys(meses)) {
+        meses[k].estatus = "pagado";
+        meses[k].recargo = 0;
+      }
+      pendiente = 0;
+      adeudos = 0;
+      recargos = 0;
+    }
+    return {
+      alumno_id: al.id,
+      nombre,
+      becado,
+      matricula: al.matricula || "-",
+      grupo: al.grupo,
+      meses,
+      adeudos: Math.round(adeudos * 100) / 100,
+      recargos: Math.round(recargos * 100) / 100,
+      pagado: Math.round(pagado * 100) / 100,
+      pendiente: Math.round(pendiente * 100) / 100,
+    };
+  });
+  return filas;
+}
+
 // --- RUTAS DE ADMIN ---
 const adminRouter = express.Router();
 adminRouter.use(isAdmin); // ¡Importante! 'isAdmin' se aplica a todas las rutas de 'adminRouter'
@@ -2922,127 +3128,61 @@ adminRouter.get("/finanzas/movimientos", async (req, res) => {
 adminRouter.get("/finanzas/cuadricula", async (req, res) => {
   try {
     const { grupo } = req.query;
-    const filtro = grupo && grupo !== "todos" ? "AND g.nombre_grupo = ?" : "";
-    const params = grupo && grupo !== "todos" ? [grupo] : [];
-    const [als] = await db.query(
-      `SELECT u.id, u.nombre, u.apellido_paterno, u.apellido_materno, u.matricula,
-              COALESCE(g.nombre_grupo, 'Sin grupo') AS grupo
-       FROM usuarios u LEFT JOIN grupos g ON g.id = u.grupo_id
-       WHERE u.rol = 'alumno' AND u.activo = 1 ${filtro}
-       ORDER BY u.apellido_paterno, u.apellido_materno, u.nombre`,
-      params,
-    );
-    const [movs] = await db.query(
-      `SELECT a.alumno_id, a.monto_a_pagar, a.estatus_pago,
-              MONTH(a.fecha_vencimiento) AS mes, YEAR(a.fecha_vencimiento) AS anio,
-              TRIM(c.nombre_concepto) AS concepto
-       FROM adeudos_alumnos a
-       INNER JOIN conceptos_pago c ON c.id = a.concepto_id
-       INNER JOIN usuarios u ON u.id = a.alumno_id
-       LEFT JOIN grupos g ON g.id = u.grupo_id
-       WHERE u.rol = 'alumno' AND u.activo = 1 AND a.estatus_pago != 'cancelado' ${filtro}`,
-      params,
-    );
-    const rank = (e) => (e === "vencido" ? 0 : e === "pendiente" ? 1 : 2);
-    // Regla de reporte: solo son exigibles los meses vencidos al mes actual.
-    // Los meses futuros se ocultan (no suman). Recargo: $50 por cada adeudo vencido.
-    // Becados del Excel (OBS con BECA total, no parcial de inscripción) se muestran al corriente.
-    const ahora = new Date();
-    const mesActual = ahora.getMonth() + 1;
-    const anioActual = ahora.getFullYear();
-    const RECARGO_ADEUDO = 50;
-    const tipoDe = (concepto) =>
-      /reinscrip/i.test(concepto) ? "REINSC" : /inscrip/i.test(concepto) ? "INSC" : /mensual/i.test(concepto) ? "MENS" : "OTRO";
-    const esExigible = (anio, mes) =>
-      anio < anioActual || (anio === anioActual && mes <= mesActual);
-    // Alumnos becados al 100% según el Excel (solo lectura del archivo local)
-    const { normalizar: normExcel } = require("./scripts/import-parse");
-    // Beca total: "BECADOS 100%" o beca de mensualidad completa
-    // (no parcial: solo-inscripción o "dos mensualidades").
-    const esBecaTotal = (obs) =>
-      /beca/i.test(obs) &&
-      (/100\s*%/.test(obs) ||
-        (/mensual/i.test(obs) && !/dos\s+mens/i.test(obs)));
-    let becados = new Set();
-    try {
-      const g = require("./lector-pagos-aislado/grupos");
-      for (const h of ["PSIC-1", "PSIC-2", "PSCI-3", "PSIC-4", "PSICO-5", "PSICO VIR-6", "PEDA VIR-6", "PEDA-4", "PEDA-5", "PEDA-6"]) {
-        for (const a of g.listaAlumnos(undefined, h)) {
-          if (esBecaTotal(g.obsDeHoja(h, a.fila))) becados.add(normExcel(a.nombre));
-        }
-      }
-    } catch (e) {
-      console.error("Aviso becados:", e.message);
-    }
-    const porAlumno = new Map();
-    for (const m of movs) {
-      if (!porAlumno.has(m.alumno_id)) porAlumno.set(m.alumno_id, []);
-      porAlumno.get(m.alumno_id).push(m);
-    }
-    const filas = als.map((al) => {
-      const meses = {};
-      let adeudos = 0;
-      let pagado = 0;
-      let pendiente = 0;
-      let recargos = 0;
-      for (const m of porAlumno.get(al.id) || []) {
-        const monto = Number(m.monto_a_pagar);
-        if (/^Adeudo \d{4}$/.test(m.concepto)) {
-          if (m.estatus_pago === "pagado") pagado += monto;
-          else {
-            pendiente += monto;
-            adeudos += monto;
-          }
-        } else if (m.anio === 2026 && m.mes >= 2 && m.mes <= 12) {
-          if (!esExigible(m.anio, m.mes) && m.estatus_pago !== "pagado") {
-            continue; // mes futuro: aún no exigible, no se muestra ni suma
-          }
-          const cur = meses[m.mes] || { monto: 0, estatus: "pagado", recargo: 0, items: [] };
-          cur.monto = Math.round((cur.monto + monto) * 100) / 100;
-          cur.items.push({ monto, estatus: m.estatus_pago, tipo: tipoDe(m.concepto) });
-          if (rank(m.estatus_pago) < rank(cur.estatus)) cur.estatus = m.estatus_pago;
-          meses[m.mes] = cur;
-          if (m.estatus_pago === "pagado") pagado += monto;
-          else {
-            pendiente += monto;
-            cur.recargo += RECARGO_ADEUDO;
-            recargos += RECARGO_ADEUDO;
-          }
-        } else if (m.estatus_pago === "pagado") {
-          pagado += monto;
-        } else {
-          pendiente += monto;
-          adeudos += monto;
-        }
-      }
-      const nombre = `${al.apellido_paterno} ${al.apellido_materno || ""} ${al.nombre}`.replace(/\s+/g, " ").trim();
-      const becado = becados.has(normExcel(nombre));
-      if (becado) {
-        for (const k of Object.keys(meses)) {
-          meses[k].estatus = "pagado";
-          meses[k].recargo = 0;
-        }
-        pendiente = 0;
-        adeudos = 0;
-        recargos = 0;
-      }
-      return {
-        alumno_id: al.id,
-        nombre,
-        becado,
-        matricula: al.matricula || "-",
-        grupo: al.grupo,
-        meses,
-        adeudos: Math.round(adeudos * 100) / 100,
-        recargos: Math.round(recargos * 100) / 100,
-        pagado: Math.round(pagado * 100) / 100,
-        pendiente: Math.round(pendiente * 100) / 100,
-      };
-    });
+    const filas = await getCuadriculaPagos(grupo || "todos");
     res.json({ filas });
   } catch (error) {
     console.error("Error en cuadrícula:", error.message);
     res.status(500).send({ message: "Error al obtener cuadrícula de pagos" });
+  }
+});
+
+// 2B-2. ENLACES COMPARTIDOS DEL REPORTE GENERAL (vista pública general, sin login)
+// El admin genera un enlace con token + vigencia; la página pública muestra todo en general.
+adminRouter.post("/finanzas/share", async (req, res) => {
+  try {
+    const { dias_vigencia } = req.body || {};
+    const dias = dias_vigencia === null || dias_vigencia === undefined ? 30 : Number(dias_vigencia);
+    if (dias_vigencia !== null && dias_vigencia !== undefined && !(dias === 7 || dias === 15 || dias === 30)) {
+      return res.status(400).send({ message: "Vigencia inválida. Usa 7, 15, 30 o sin límite." });
+    }
+    const jti = crypto.randomUUID();
+    const signOpts = {};
+    let expiraEn = null;
+    if (dias_vigencia !== null && dias_vigencia !== undefined) {
+      signOpts.expiresIn = `${dias}d`;
+      expiraEn = new Date(Date.now() + dias * 24 * 60 * 60 * 1000);
+    }
+    const token = jwt.sign({ scope: "pagos-general", grupo: "todos", jti }, JWT_SECRET, signOpts);
+    await db.query(
+      "INSERT INTO reporte_share_tokens (jti, grupo, creado_por, expira_en) VALUES (?, 'todos', ?, ?)",
+      [jti, req.user ? req.user.id : null, expiraEn],
+    );
+    res.json({ token, jti, grupo: "todos", expira_en: expiraEn });
+  } catch (error) {
+    console.error("Error generando enlace compartido:", error.message);
+    res.status(500).send({ message: "Error al generar enlace compartido" });
+  }
+});
+
+adminRouter.get("/finanzas/shares", async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      `SELECT jti, grupo, creado_por, expira_en, revocado, fecha_creacion FROM reporte_share_tokens
+       WHERE grupo = 'todos' ORDER BY fecha_creacion DESC LIMIT 50`,
+    );
+    res.json(rows);
+  } catch (error) {
+    console.error("Error listando enlaces:", error.message);
+    res.status(500).send({ message: "Error al listar enlaces compartidos" });
+  }
+});
+
+adminRouter.delete("/finanzas/share/:jti", async (req, res) => {
+  try {
+    await db.query("UPDATE reporte_share_tokens SET revocado = 1 WHERE jti = ?", [req.params.jti]);
+    res.json({ message: "Enlace revocado" });
+  } catch (error) {
+    res.status(500).send({ message: "Error al revocar enlace" });
   }
 });
 

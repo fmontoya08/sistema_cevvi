@@ -8022,6 +8022,7 @@ const ReportesPagosPage = () => {
   const [grupoSel, setGrupoSel] = useState("todos");
   const [busqueda, setBusqueda] = useState("");
   const [loading, setLoading] = useState(true);
+  const [shareOpen, setShareOpen] = useState(false);
 
   const cargar = useCallback(async (grupo) => {
     try {
@@ -8227,8 +8228,19 @@ const ReportesPagosPage = () => {
           >
             <Download size={16} /> Excel
           </button>
+          <button
+            onClick={() => setShareOpen(true)}
+            className="bg-blue-700 text-white px-5 py-2 rounded-xl font-bold flex items-center gap-2"
+            title="Generar enlace público del reporte general (sin login)"
+          >
+            <LinkIcon size={16} /> Compartir
+          </button>
         </div>
       </div>
+
+      {shareOpen && (
+        <CompartirReporteModal onClose={() => setShareOpen(false)} />
+      )}
 
       {!loading && (
         <div className="no-print grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -8315,6 +8327,396 @@ const ReportesPagosPage = () => {
           </div>
         </div>
       )}
+    </div>
+  );
+};
+
+// --- MODAL COMPARTIR REPORTE GENERAL (enlace público con token + vigencia) ---
+const CompartirReporteModal = ({ onClose }) => {
+  const [dias, setDias] = useState("30");
+  const [generando, setGenerando] = useState(false);
+  const [enlace, setEnlace] = useState("");
+  const [copiado, setCopiado] = useState(false);
+  const [shares, setShares] = useState([]);
+
+  const cargarShares = useCallback(async () => {
+    try {
+      const { data } = await api.get("/admin/finanzas/shares");
+      setShares(data || []);
+    } catch (e) {
+      console.error(e);
+    }
+  }, []);
+
+  useEffect(() => {
+    cargarShares();
+  }, [cargarShares]);
+
+  const generar = async () => {
+    try {
+      setGenerando(true);
+      setCopiado(false);
+      const dias_vigencia = dias === "sin" ? null : Number(dias);
+      const { data } = await api.post("/admin/finanzas/share", { dias_vigencia });
+      setEnlace(`${window.location.origin}/plataforma/ver/pagos/${data.token}`);
+      cargarShares();
+    } catch (e) {
+      alert("Error al generar el enlace.");
+    } finally {
+      setGenerando(false);
+    }
+  };
+
+  const copiar = async () => {
+    try {
+      await navigator.clipboard.writeText(enlace);
+      setCopiado(true);
+    } catch (e) {
+      alert("No se pudo copiar. Selecciona y copia manualmente.");
+    }
+  };
+
+  const revocar = async (jti) => {
+    if (!window.confirm("¿Revocar este enlace? Dejará de funcionar de inmediato.")) return;
+    try {
+      await api.delete(`/admin/finanzas/share/${jti}`);
+      cargarShares();
+    } catch (e) {
+      alert("Error al revocar.");
+    }
+  };
+
+  const fmtFecha = (f) => {
+    if (!f) return "Sin límite";
+    const d = new Date(f);
+    return isNaN(d.getTime()) ? "-" : d.toLocaleDateString("es-MX", { year: "numeric", month: "short", day: "numeric" });
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="flex justify-between items-start">
+          <div>
+            <h3 className="text-xl font-bold text-gray-800">Compartir reporte general</h3>
+            <p className="text-sm text-gray-500 mt-1">
+              Genera un enlace público (sin login) con todo el reporte general: cuadrícula por grupo, resumen contable y alumnos con retraso.
+            </p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700"><X size={20} /></button>
+        </div>
+        <div className="flex gap-2 items-center">
+          <label className="text-sm font-bold text-gray-600">Vigencia:</label>
+          <select value={dias} onChange={(e) => setDias(e.target.value)} className="px-3 py-2 border border-gray-200 rounded-xl text-sm font-bold">
+            <option value="7">7 días</option>
+            <option value="15">15 días</option>
+            <option value="30">30 días</option>
+            <option value="sin">Sin límite</option>
+          </select>
+          <button onClick={generar} disabled={generando} className="bg-blue-700 text-white px-4 py-2 rounded-xl font-bold text-sm disabled:opacity-50">
+            {generando ? "Generando..." : "Generar enlace"}
+          </button>
+        </div>
+        {enlace && (
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
+            <div className="text-xs font-bold text-blue-800 uppercase mb-1">Enlace listo para compartir</div>
+            <div className="text-xs font-mono text-gray-700 break-all select-all">{enlace}</div>
+            <button onClick={copiar} className="mt-2 bg-blue-700 text-white px-4 py-1.5 rounded-lg text-sm font-bold">
+              {copiado ? "¡Copiado!" : "Copiar enlace"}
+            </button>
+          </div>
+        )}
+        <div>
+          <div className="text-sm font-bold text-gray-700 mb-2">Enlaces activos ({shares.filter((s) => !s.revocado).length})</div>
+          {shares.length === 0 ? (
+            <p className="text-sm text-gray-400">Aún no hay enlaces generados.</p>
+          ) : (
+            <div className="space-y-2">
+              {shares.map((s) => (
+                <div key={s.jti} className={`flex justify-between items-center text-sm border rounded-xl px-3 py-2 ${s.revocado ? "bg-gray-50 text-gray-400" : "bg-white"}`}>
+                  <div>
+                    <div className="font-bold">{s.revocado ? "Revocado" : `Vigente hasta ${fmtFecha(s.expira_en)}`}</div>
+                    <div className="text-xs text-gray-400">Creado {fmtFecha(s.fecha_creacion)}</div>
+                  </div>
+                  {!s.revocado && (
+                    <button onClick={() => revocar(s.jti)} className="text-xs font-bold text-red-600 hover:underline">Revocar</button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// --- PÁGINA PÚBLICA: REPORTE GENERAL DE PAGOS (sin login, con token + vigencia) ---
+// Ruta: /ver/pagos/:shareToken — muestra TODO en general: resumen contable,
+// alumnos con retraso y cuadrícula completa por grupo. Solo lectura.
+const PublicReportePagosPage = () => {
+  const { shareToken } = useParams();
+  const [filas, setFilas] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [vigencia, setVigencia] = useState(null);
+  const [busqueda, setBusqueda] = useState("");
+  const [grupoSel, setGrupoSel] = useState("todos");
+
+  useEffect(() => {
+    document.title = "Reporte general de pagos — Siglo XXI";
+    const meta = document.createElement("meta");
+    meta.name = "robots";
+    meta.content = "noindex, nofollow";
+    document.head.appendChild(meta);
+    return () => {
+      document.head.removeChild(meta);
+    };
+  }, []);
+
+  useEffect(() => {
+    const cargar = async () => {
+      try {
+        setLoading(true);
+        // fetch directo (sin interceptor de auth) para no redirigir al login
+        const res = await fetch(`${API_URL}/api/public/finanzas/reporte?token=${encodeURIComponent(shareToken)}`, { cache: "no-store" });
+        if (res.status === 401) {
+          setError("Este enlace es inválido o ha expirado. Solicita un enlace nuevo en Caja y Finanzas.");
+          return;
+        }
+        if (!res.ok) throw new Error("Error al cargar");
+        const data = await res.json();
+        setFilas(data.filas || []);
+        setVigencia(data.vigencia_hasta || null);
+      } catch (e) {
+        setError("No se pudo cargar el reporte. Intenta de nuevo más tarde.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    cargar();
+  }, [shareToken]);
+
+  const fmt = (v) =>
+    v ? "$" + Number(v).toLocaleString("es-MX", { maximumFractionDigits: 0 }) : "-";
+
+  const celdaColor = (c) =>
+    !c
+      ? "text-gray-300"
+      : c.estatus === "pagado"
+        ? "text-green-700 bg-green-50 font-semibold"
+        : c.estatus === "vencido"
+          ? "text-red-700 bg-red-50 font-bold"
+          : "text-amber-700 bg-amber-50 font-semibold";
+
+  const base = filas.filter(
+    (f) =>
+      f.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
+      (f.matricula && f.matricula.includes(busqueda)),
+  );
+  const vista = grupoSel === "todos" ? base : base.filter((f) => f.grupo === grupoSel);
+  const gruposVista = [...new Set(base.map((f) => f.grupo))].sort();
+  const filasPorGrupo = (g) => vista.filter((f) => f.grupo === g);
+
+  const totPag = (l) => l.reduce((s, f) => s + (f.pagado || 0), 0);
+  const totPend = (l) => l.reduce((s, f) => s + (f.pendiente || 0), 0);
+  const totRec = (l) => l.reduce((s, f) => s + (f.recargos || 0), 0);
+  const totAde = (l) => l.reduce((s, f) => s + (f.adeudos || 0), 0);
+  const totCobrar = (l) => totPend(l) + totRec(l);
+
+  const morosos = vista
+    .filter((f) => !f.becado && (f.pendiente || 0) + (f.recargos || 0) > 0)
+    .map((f) => ({
+      ...f,
+      total: (f.pendiente || 0) + (f.recargos || 0),
+      vencido: Object.values(f.meses || {}).some((c) => c.estatus === "vencido"),
+    }))
+    .sort((a, b) => b.total - a.total);
+
+  const pctMorosidad = vista.length ? Math.round((morosos.length / vista.length) * 100) : 0;
+
+  const filaAlumnoPub = (f) => (
+    <tr key={f.idx} className="hover:bg-gray-50/50">
+      <td className="p-2 font-bold text-gray-800 whitespace-nowrap">
+        {f.nombre}
+        {f.becado && (
+          <span className="ml-2 px-2 py-0.5 rounded-full text-[10px] font-black bg-green-600 text-white">BECADO</span>
+        )}
+        <div className="text-[10px] text-gray-400 font-mono font-normal">{f.matricula}</div>
+      </td>
+      {MESES_REPORTE.map((m) => {
+        const c = f.meses[String(m.n)];
+        if (!c) return (<td key={m.n} className="p-2 text-right text-gray-300">-</td>);
+        return (
+          <td key={m.n} className="p-2 text-right" title={c.recargo ? `Recargo por retraso: $${c.recargo}` : undefined}>
+            {(c.items || [{ monto: c.monto, estatus: c.estatus, tipo: "?" }]).map((it, k) => (
+              <div key={k} className={celdaColor(it)}>
+                {fmt(it.monto)}{" "}
+                <span className="text-[9px] font-black px-1 rounded bg-gray-200 text-gray-700">{it.tipo[0]}</span>
+              </div>
+            ))}
+          </td>
+        );
+      })}
+      <td className="p-2 text-right font-bold text-red-700">{f.adeudos ? fmt(f.adeudos) : "-"}</td>
+      <td className="p-2 text-right font-bold text-orange-700">{f.recargos ? fmt(f.recargos) : "-"}</td>
+      <td className="p-2 text-right font-bold">{fmt(f.pendiente + (f.recargos || 0))}</td>
+    </tr>
+  );
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center p-6">
+        <div className="text-gray-500 font-medium">Cargando reporte general de pagos...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center p-6">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 max-w-md w-full p-8 text-center">
+          <div className="text-4xl mb-3">🔒</div>
+          <h1 className="text-xl font-bold text-gray-800">Enlace no disponible</h1>
+          <p className="text-gray-500 text-sm mt-2">{error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-100">
+      <div className="max-w-7xl mx-auto p-4 md:p-6 space-y-6">
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
+          <div className="text-xs font-black uppercase tracking-widest text-[#a72a34]">Centro Universitario Siglo XXI · Caja y Finanzas</div>
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-800 mt-1">Reporte general de pagos</h1>
+          <p className="text-gray-500 text-sm mt-1">
+            Vista general de todos los grupos · {vista.length} alumnos · Solo meses vencidos · Recargo $50 por adeudo vencido · Becados al corriente
+            {vigencia ? ` · Vigente hasta ${new Date(vigencia).toLocaleDateString("es-MX")}` : " · Sin fecha de vencimiento"}
+          </p>
+          <div className="flex gap-2 flex-wrap items-center mt-4">
+            <select value={grupoSel} onChange={(e) => setGrupoSel(e.target.value)} className="px-4 py-2 border border-gray-200 rounded-xl text-sm font-bold">
+              <option value="todos">Todos los grupos</option>
+              {gruposVista.map((g) => (<option key={g} value={g}>{g}</option>))}
+            </select>
+            <input type="text" placeholder="Buscar alumno..." className="px-4 py-2 border border-gray-200 rounded-xl text-sm" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
+            <button onClick={() => window.print()} className="bg-[#a72a34] text-white px-5 py-2 rounded-xl font-bold flex items-center gap-2 text-sm">
+              <Printer size={16} /> Imprimir / PDF
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[
+            { label: "Alumnos", valor: vista.length, cls: "text-gray-800" },
+            { label: "Pagado", valor: fmt(totPag(vista)), cls: "text-green-700" },
+            { label: "Por cobrar", valor: fmt(totCobrar(vista)), cls: "text-[#a72a34]" },
+            { label: "Con retraso", valor: `${morosos.length} (${pctMorosidad}%)`, cls: "text-orange-700" },
+            { label: "Pendiente", valor: fmt(totPend(vista)), cls: "text-amber-700" },
+            { label: "Recargos", valor: fmt(totRec(vista)), cls: "text-orange-700" },
+            { label: "Adeudos", valor: fmt(totAde(vista)), cls: "text-red-700" },
+            { label: "Grupos", valor: gruposVista.length, cls: "text-gray-800" },
+          ].map((t) => (
+            <div key={t.label} className="bg-white p-4 rounded-2xl shadow-sm border border-gray-200">
+              <div className="text-xs text-gray-500 uppercase font-bold">{t.label}</div>
+              <div className={`text-2xl font-black ${t.cls}`}>{t.valor}</div>
+            </div>
+          ))}
+        </div>
+
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+          <div className="p-4 border-b border-gray-100">
+            <div className="font-bold text-gray-800">Alumnos con retraso ({morosos.length})</div>
+            <div className="text-xs text-gray-500">Pendiente + recargos, ordenados de mayor a menor. Tipos: <b>M</b>=Mensualidad · <b>R</b>=Reinscripción · <b>I</b>=Inscripción · <b>O</b>=Otro</div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-gray-50 text-gray-500 uppercase text-xs font-bold border-b border-gray-100">
+                <tr>
+                  <th className="p-3">Alumno</th>
+                  <th className="p-3">Grupo</th>
+                  <th className="p-3">Estatus</th>
+                  <th className="p-3 text-right">Pendiente</th>
+                  <th className="p-3 text-right">Recargos</th>
+                  <th className="p-3 text-right">Total</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {morosos.length === 0 && (
+                  <tr><td colSpan="6" className="p-6 text-center text-gray-400">Sin retrasos. Todos al corriente. 🎉</td></tr>
+                )}
+                {morosos.map((f) => (
+                  <tr key={f.idx} className="hover:bg-gray-50/50">
+                    <td className="p-3 font-bold text-gray-800">{f.nombre}<div className="text-[10px] text-gray-400 font-mono font-normal">{f.matricula}</div></td>
+                    <td className="p-3 text-gray-600">{f.grupo}</td>
+                    <td className="p-3">
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${f.vencido ? "bg-red-100 text-red-700" : "bg-yellow-100 text-yellow-700"}`}>
+                        {f.vencido ? "Vencido" : "Pendiente"}
+                      </span>
+                    </td>
+                    <td className="p-3 text-right font-semibold">{fmt(f.pendiente)}</td>
+                    <td className="p-3 text-right font-semibold text-orange-700">{f.recargos ? fmt(f.recargos) : "-"}</td>
+                    <td className="p-3 text-right font-black text-[#a72a34]">{fmt(f.total)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+          <div className="p-4 border-b border-gray-100">
+            <div className="font-bold text-gray-800">Cuadrícula general por grupo — {grupoSel === "todos" ? "Todos los grupos" : grupoSel}</div>
+            <div className="text-xs text-gray-500">{vista.length} alumnos · Generado {new Date().toLocaleDateString("es-MX")}</div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead className="bg-gray-50 text-gray-500 uppercase font-bold border-b border-gray-100">
+                <tr>
+                  <th className="p-2">Alumno</th>
+                  {MESES_REPORTE.map((m) => (<th key={m.n} className="p-2 text-right">{m.nombre}</th>))}
+                  <th className="p-2 text-right">Adeudos</th>
+                  <th className="p-2 text-right">Recargos</th>
+                  <th className="p-2 text-right">Total pend.</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {(grupoSel === "todos" ? gruposVista : [grupoSel]).map((g) => (
+                  <Fragment key={g}>
+                    {grupoSel === "todos" && (
+                      <tr className="bg-gray-800 text-white">
+                        <td className="p-2 font-black tracking-wide" colSpan={15}>GRUPO {g} ({filasPorGrupo(g).length} alumnos)</td>
+                      </tr>
+                    )}
+                    {filasPorGrupo(g).map((f) => filaAlumnoPub(f))}
+                    <tr className="bg-gray-100 font-bold border-y-2 border-gray-300">
+                      <td className="p-2">SUBTOTAL {g} ({filasPorGrupo(g).length})</td>
+                      {MESES_REPORTE.map((m) => (
+                        <td key={m.n} className="p-2 text-right">{fmt(filasPorGrupo(g).reduce((s, f) => s + (f.meses[String(m.n)]?.monto || 0), 0))}</td>
+                      ))}
+                      <td className="p-2 text-right">{fmt(totAde(filasPorGrupo(g)))}</td>
+                      <td className="p-2 text-right">{fmt(totRec(filasPorGrupo(g)))}</td>
+                      <td className="p-2 text-right">{fmt(totCobrar(filasPorGrupo(g)))}</td>
+                    </tr>
+                  </Fragment>
+                ))}
+              </tbody>
+              <tfoot className="bg-gray-50 font-bold border-t-2 border-gray-200">
+                <tr>
+                  <td className="p-2">TOTAL GENERAL ({vista.length})</td>
+                  {MESES_REPORTE.map((m) => (
+                    <td key={m.n} className="p-2 text-right">{fmt(vista.reduce((s, f) => s + (f.meses[String(m.n)]?.monto || 0), 0))}</td>
+                  ))}
+                  <td className="p-2 text-right">{fmt(totAde(vista))}</td>
+                  <td className="p-2 text-right">{fmt(totRec(vista))}</td>
+                  <td className="p-2 text-right">{fmt(totCobrar(vista))}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+
+        <p className="text-center text-xs text-gray-400 pb-6">Documento de consulta · Centro Universitario Siglo XXI · Solo lectura</p>
+      </div>
     </div>
   );
 };
@@ -16262,6 +16664,8 @@ function App() {
             path="/registro_control_escolar"
             element={<RegistroControlEscolarPage />}
           />
+          {/* Reporte general de pagos compartido (público, sin login, con token) */}
+          <Route path="/ver/pagos/:shareToken" element={<PublicReportePagosPage />} />
           <Route
             path="/unauthorized"
             element={
