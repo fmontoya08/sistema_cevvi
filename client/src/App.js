@@ -8545,6 +8545,30 @@ const PublicReportePagosPage = () => {
   const totAde = (l) => l.reduce((s, f) => s + (f.adeudos || 0), 0);
   const totCobrar = (l) => totPend(l) + totRec(l);
 
+  // Tarjetas por grupo (siempre sobre todos los grupos, aunque haya filtro/búsqueda)
+  const statsPorGrupo = gruposVista.map((g) => {
+    const t = base.filter((f) => f.grupo === g);
+    const act = t.filter((f) => !f.baja);
+    const alCorriente = act.filter((f) => (f.pendiente || 0) + (f.recargos || 0) === 0).length;
+    return {
+      g,
+      total: act.length,
+      bajas: t.length - act.length,
+      corriente: alCorriente,
+      deuda: act.length - alCorriente,
+      pagado: totPag(act),
+      cobrar: totCobrar(act),
+    };
+  });
+
+  const elegirGrupo = (g) => {
+    setGrupoSel(g);
+    setTimeout(() => {
+      const el = document.getElementById("tabla-grupo");
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 60);
+  };
+
   const morosos = vista
     .filter((f) => !f.becado && !f.baja && (f.pendiente || 0) + (f.recargos || 0) > 0)
     .map((f) => ({
@@ -8649,6 +8673,42 @@ const PublicReportePagosPage = () => {
           ))}
         </div>
 
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4">
+          <div className="font-bold text-gray-800 mb-1">Grupos — toca una tarjeta para ver su tabla</div>
+          <div className="text-xs text-gray-500 mb-3">Al corriente = sin pendiente ni recargos · Bajas excluidas de los montos</div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {statsPorGrupo.map((s) => (
+              <button
+                key={s.g}
+                onClick={() => elegirGrupo(s.g)}
+                className={`text-left rounded-2xl border-2 p-4 transition-shadow hover:shadow-md ${grupoSel === s.g ? "border-[#a72a34] bg-red-50/40" : "border-gray-100 bg-white"}`}
+              >
+                <div className="flex justify-between items-center">
+                  <div className="font-black text-gray-800 truncate">{s.g}</div>
+                  <div className="text-[10px] font-bold text-gray-400 uppercase">{s.total} alumnos</div>
+                </div>
+                <div className="flex gap-2 mt-2">
+                  <span className="px-2 py-0.5 rounded-full text-[11px] font-black bg-green-100 text-green-700">
+                    {s.corriente} al corriente
+                  </span>
+                  <span className={`px-2 py-0.5 rounded-full text-[11px] font-black ${s.deuda ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-500"}`}>
+                    {s.deuda} con deuda
+                  </span>
+                  {s.bajas > 0 && (
+                    <span className="px-2 py-0.5 rounded-full text-[11px] font-black bg-gray-200 text-gray-600">
+                      {s.bajas} bajas
+                    </span>
+                  )}
+                </div>
+                <div className="flex justify-between mt-2 text-sm">
+                  <div><span className="text-[10px] uppercase font-bold text-gray-400">Pagado </span><span className="font-black text-green-700">{fmt(s.pagado)}</span></div>
+                  <div><span className="text-[10px] uppercase font-bold text-gray-400">Por cobrar </span><span className="font-black text-[#a72a34]">{fmt(s.cobrar)}</span></div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
           <div className="p-4 border-b border-gray-100">
             <div className="font-bold text-gray-800">Alumnos con retraso ({morosos.length})</div>
@@ -8689,10 +8749,17 @@ const PublicReportePagosPage = () => {
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-          <div className="p-4 border-b border-gray-100">
-            <div className="font-bold text-gray-800">Cuadrícula general por grupo — {grupoSel === "todos" ? "Todos los grupos" : grupoSel}</div>
-            <div className="text-xs text-gray-500">{vistaActiva.length} alumnos{numBajasVista ? ` + ${numBajasVista} bajas excl.` : ""} · Generado {new Date().toLocaleDateString("es-MX")}</div>
+        <div id="tabla-grupo" className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden scroll-mt-4">
+          <div className="p-4 border-b border-gray-100 flex justify-between items-center gap-2 flex-wrap">
+            <div>
+              <div className="font-bold text-gray-800">Cuadrícula general por grupo — {grupoSel === "todos" ? "Todos los grupos" : grupoSel}</div>
+              <div className="text-xs text-gray-500">{vistaActiva.length} alumnos{numBajasVista ? ` + ${numBajasVista} bajas excl.` : ""} · Generado {new Date().toLocaleDateString("es-MX")}</div>
+            </div>
+            {grupoSel !== "todos" && (
+              <button onClick={() => elegirGrupo("todos")} className="text-xs font-bold text-[#a72a34] hover:underline border border-red-200 rounded-xl px-3 py-1.5">
+                ✕ Ver todos los grupos
+              </button>
+            )}
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-xs">
